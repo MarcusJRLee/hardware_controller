@@ -20,13 +20,13 @@ the approved scope.
 Future changes require a new or superseding decision record. No unresolved
 question currently blocks product code.
 
-## Public repository gate
+## Public repository
 
 Publication decisions are accepted in
 [`0025_public_source_publication.md`](decisions/0025_public_source_publication.md)
 and amended by
 [`0027_individual_publication_ownership.md`](decisions/0027_individual_publication_ownership.md).
-The remaining work is operational:
+The migration was completed on 2026-08-21:
 
 | Decision | Current approval |
 | --- | --- |
@@ -34,10 +34,9 @@ The remaining work is operational:
 | Copyright holder | Marcus John Rice Lee. |
 | Future entity | Longdevity LLC formation and signed ownership transfer are future work, not publication gates. |
 | Contributions | Accept issues; pause external code until separate contributor terms are approved. |
-| Public history | Replace the hosted repository with the same name and one sanitized noreply-authored root commit; retain private history only in an offline bundle. |
+| Public history | Published at the same URL from one sanitized noreply-authored root commit; retained private history only in an external private archive. |
 | Product icon | Use Signal Bridge provisionally and iterate later through a superseding decision. |
-| GitHub controls | Enable branch rules, secret scanning, push protection, dependency alerts, code scanning, and private vulnerability reporting on the replacement repository. |
+| GitHub controls | Verified branch rules, read-only Actions permissions, secret scanning, push protection, dependency alerts, CodeQL, and private vulnerability reporting on the replacement repository. |
 
-Do not make the source repository public until clean history and GitHub
-controls are verified. Public source approval does not approve a signed binary,
-DMG, tag, or GitHub Release.
+The public repository gate was satisfied on 2026-08-21. Public source approval
+does not approve a signed binary, DMG, tag, or GitHub Release.

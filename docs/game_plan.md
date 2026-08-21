@@ -18,7 +18,7 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 | Profiles | Transactional named Profiles with independent per-Device setups and active-Action cleanup. | [`decisions/0014_multi_profile_device_configuration.md`](decisions/0014_multi_profile_device_configuration.md) |
 | Application | Controller, Profiles, and General in one native foreground window with Dock and menu-bar presence. | [`ux_spec.md`](ux_spec.md) |
 | Release | Version 1.4.1 build 17 is installed as an unreleased personal QA candidate; routine installs preserve both values and no release promotion is authorized. | [`decisions/0023_stable_personal_build_metadata.md`](decisions/0023_stable_personal_build_metadata.md) |
-| Public source | PolyForm Noncommercial 1.0.0, Marcus John Rice Lee notice, provisional Signal Bridge identity, paused external code contributions, and a same-name clean-replacement plan. | [`decisions/0025_public_source_publication.md`](decisions/0025_public_source_publication.md), amended by [`decisions/0027_individual_publication_ownership.md`](decisions/0027_individual_publication_ownership.md) |
+| Public source | Published 2026-08-21 from a sanitized root under PolyForm Noncommercial 1.0.0, with the Marcus John Rice Lee notice, provisional Signal Bridge identity, paused external code contributions, and active GitHub security controls. | [`public_repository_migration.md`](public_repository_migration.md), governed by [`decisions/0025_public_source_publication.md`](decisions/0025_public_source_publication.md) and [`decisions/0027_individual_publication_ownership.md`](decisions/0027_individual_publication_ownership.md) |
 
 ## Quality gates
 
@@ -64,7 +64,6 @@ distribution scope:
 | Accessibility | Complete keyboard navigation, VoiceOver spoken-output, increased-contrast, reduced-motion, and large-text review. |
 | Device lifecycle | Exercise long holds, simultaneous Controls, hub reconnect, logout/login, and pointer-passthrough rejection. |
 | Clean account | Rehearse install, permissions, Ollama absence/setup, configuration, relaunch, update, and removal. |
-| Public repository | Complete the clean-root replacement and controls in [`public_repository_migration.md`](public_repository_migration.md). |
 | Future ownership | Form Longdevity LLC, execute a signed copyright assignment, then update the notice and licensing authority through a separate decision and PR. |
 | Public distribution | Add Developer ID signing, notarization, stapling, Gatekeeper, and public-install evidence. |
 
