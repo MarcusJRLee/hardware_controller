@@ -227,7 +227,7 @@ documented in [release validation](docs/release_validation.md).
 | [User guide](docs/user_guide.md) | Installation, setup, use, and troubleshooting. |
 | [Product brief](docs/product_brief.md) | Product scope, domain language, and acceptance stories. |
 | [Game plan](docs/game_plan.md) | Current quality gates and remaining evidence. |
-| [Public repository migration](docs/public_repository_migration.md) | Clean-history replacement and GitHub publication runbook. |
+| [Public repository migration](docs/public_repository_migration.md) | Completed clean-history replacement record and GitHub controls. |
 | [Architecture](docs/architecture.md) | Component, concurrency, persistence, privacy, and failure boundaries. |
 | [Implementation context](CONTEXT.md) | Stable names for deep implementation modules. |
 | [UX specification](docs/ux_spec.md) | Current visual and accessibility behavior. |
@@ -239,5 +239,5 @@ The source is available under the
 separate license from Marcus John Rice Lee. See [`NOTICE`](NOTICE). Public
 visibility does not make this an OSI-approved open-source project. Longdevity
 LLC formation and ownership transfer are planned future work, not publication
-preconditions. A sanitized root commit and GitHub security controls remain
-required before publication.
+preconditions. This repository was published from a sanitized root on
+2026-08-21 with the GitHub controls recorded in the migration document.

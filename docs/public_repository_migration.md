@@ -1,8 +1,10 @@
 # Public repository migration
 
-Keep the existing GitHub repository private until this runbook is complete.
-This replaces it with one repository at the same URL; it does not maintain two
-hosted repositories.
+> **Status:** Completed 2026-08-21 from sanitized root
+> `845c2b6958dd7b1bcf4545add8277787daa10d51`.
+
+This runbook records the completed same-name repository replacement. It does
+not maintain two hosted repositories.
 
 ## Preconditions
 
@@ -192,6 +194,19 @@ After GitHub verification:
 Have Codex perform the local checkout swap after the hosted replacement is
 verified. Do not recursively delete the old checkout by hand while the clean
 root is nested inside it.
+
+## Completion evidence
+
+| Check | Verified result |
+| --- | --- |
+| Repository | Public at `MarcusJRLee/hardware_controller` with sanitized root `845c2b6958dd7b1bcf4545add8277787daa10d51`. |
+| History | The initial public history contains one noreply-authored root; later public changes use the protected pull-request workflow. No private predecessor ref was imported. |
+| Distribution | No tag or GitHub Release was published. |
+| Branch controls | Active `main` rules require pull requests and resolved review threads, allow squash merges only, require linear history, and block deletion and force pushes. |
+| Repository security | Actions permissions are read-only. Dependency alerts, Dependabot security updates, secret scanning, push protection, private vulnerability reporting, and Swift CodeQL default setup are active. |
+| Initial security results | The CodeQL scan succeeded with no code-scanning or secret-scanning alerts. |
+| Source verification | A credential-free clone passed formatting, shell syntax, 320 tests across 49 suites, and `scripts/build_release_test.sh`. |
+| Private state | The predecessor history and private release artifacts remain only in an external private archive. Temporary migration copies were deleted. |
 
 ## Future Longdevity LLC transition
 
