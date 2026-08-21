@@ -1,0 +1,35 @@
+# macOS
+.DS_Store
+
+# Xcode
+DerivedData/
+build/
+dist/
+*.xcarchive
+*.xcresult
+*.xccheckout
+*.xcscmblueprint
+xcuserdata/
+*.xcuserstate
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Local configuration and diagnostics
+.env
+.env.*
+!.env.example
+*.key
+*.mobileprovision
+*.p12
+*.p8
+*.pem
+*.provisionprofile
+*.log
+local/
+
+# IDEs
+.idea/
+.vscode/

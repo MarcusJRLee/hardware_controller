@@ -1,0 +1,243 @@
+# Hardware Controller
+
+Hardware Controller is a native macOS app that turns a VEC Infinity 3 USB foot
+controller into low-latency Actions. Each Control can run Local Dictation,
+Local AI Dictation, an exact keyboard shortcut, or No Action using Hold or
+Toggle behavior.
+
+All configuration and speech content stay on the Mac. Local AI Dictation uses
+Apple's on-device model or a fixed-loopback Ollama service; it never uses cloud
+inference.
+
+## Build and verify
+
+Requirements: Apple silicon, macOS 15 or later, and Xcode 26 or a compatible
+Swift 6 toolchain.
+
+```bash
+swift format lint --recursive --strict \
+  Package.swift Sources Tests
+xcrun clang-format --dry-run --Werror \
+  Sources/HardwareControllerAudioBoundary/audio_engine_exception_boundary.m \
+  Sources/HardwareControllerAudioBoundary/include/audio_engine_exception_boundary.h
+zsh -n scripts/*.sh
+swift test
+swift build -c release --product HardwareController
+scripts/build_release_test.sh
+```
+
+Run the app from source in deterministic demo mode:
+
+```bash
+swift run HardwareController --demo
+```
+
+For a signed local build, create ignored private settings once:
+
+```bash
+cp .env.example .env.local
+# Replace both placeholders in .env.local with your own signing values.
+set -a
+source .env.local
+set +a
+```
+
+Build an app intended for `/Applications` only with that Apple Development
+identity:
+
+```bash
+security find-identity -v -p codesigning
+scripts/build_app.sh
+codesign --verify --deep --strict --verbose=2 \
+  "dist/Hardware Controller.app"
+codesign -dv --verbose=4 "dist/Hardware Controller.app" 2>&1 \
+  | rg '^Authority='
+codesign -dv --verbose=4 "dist/Hardware Controller.app" 2>&1 \
+  | rg "^TeamIdentifier=${HC_EXPECTED_TEAM_ID}$"
+```
+
+Never commit `.env.local`. Quit the running app before replacing the single
+canonical `/Applications/Hardware Controller.app`, then launch that exact
+bundle. Preserve its marketing version and build number during routine local
+iterations. Never install an ad-hoc-signed build.
+
+The application identifier is `com.longdevity.hardwarecontroller`. Profiles
+and preferences use only its matching Application Support directory. The
+pre-public identity transition is complete, so the public snapshot contains no
+predecessor personal namespace. macOS may require Accessibility, Microphone,
+Speech Recognition, and Launch at Login authorization again when the signed
+application identity changes.
+
+## Product identity
+
+Signal Bridge is the provisional public mark: three generic control nodes on a
+near-black surface, joined by one low-latency signal path with an active amber
+center. The menu-bar template uses the same three-node geometry. Neither mark
+copies a supported Device or manufacturer branding. The source raster is
+[`packaging/app_icon_source.png`](packaging/app_icon_source.png).
+
+A source change or version number is not release approval. Do not run
+`scripts/build_release.sh`, create a DMG, tag, GitHub Release, or release record
+without explicit approval for that exact version. The intentionally retained
+accepted-artifact evidence is in
+[release validation](docs/release_validation.md).
+
+## First use
+
+1. Open the canonical Applications copy.
+2. Allow Accessibility and Microphone when requested. macOS 15–25 also
+   requests Speech Recognition.
+3. Connect the VEC Infinity 3 and confirm each physical Control visibly changes
+   state without producing a pointer click.
+4. Configure each Control under **Controller** or its Profile's Device setup.
+5. Focus an editable field, hold or toggle the Control, and speak.
+
+The center Control defaults to Local Dictation in Hold mode. Left and right
+default to No Action. Any configured Control may receive an opt-in exact
+keyboard fallback for use while its Device is disconnected.
+
+See the [user guide](docs/user_guide.md) for Profiles, target behavior,
+recovery, and troubleshooting.
+
+## Dictation Actions
+
+| Action | Result | Model dependency |
+| --- | --- | --- |
+| Local Dictation | Reversible live text where safe, otherwise guarded final text. | Apple on-device speech recognition. |
+| Local AI Dictation | One corrected and automatically formatted result after release. | Apple speech plus Apple On-Device or local Ollama refinement. |
+
+Both Actions reuse the same microphone, recognition, target, permission, and
+delivery boundaries, but retain separate controllers and settings. One
+process-wide coordinator prevents simultaneous microphone ownership. Local AI
+model warm-up begins while the user speaks and never blocks the HID-to-Action
+path.
+
+Local AI Dictation removes fillers, resolves clear self-corrections, corrects
+supported recognition errors, adds punctuation, and chooses paragraphs or
+lists when the target safely supports multiline text. It validates protected
+numbers, URLs, email addresses, paths, code-like tokens, quotations, and
+dictionary terms. A provider error, invalid output, or three-second deadline
+delivers the raw transcript once when the captured target is still safe.
+
+### Apple On-Device
+
+Apple On-Device refinement requires macOS 26, Apple Intelligence enabled, a
+supported locale, and installed model assets. Select it under
+**General → Local AI Dictation**, refresh status, then test the provider. The
+app uses `SystemLanguageModel` locally and does not enable Private Cloud
+Compute.
+
+### Ollama
+
+Install and start Ollama separately, then install the recommended model:
+
+```bash
+ollama pull qwen3.5:4b
+```
+
+Choose **Ollama**, select the installed model, refresh status, and run **Test
+Selected Provider**. The app connects only to
+`http://127.0.0.1:11434`, rejects redirects and proxy routing, excludes cloud
+model tags, and pins the selected local digest. The validated recommendation is
+`qwen3.5:4b` with digest:
+
+```text
+2a654d98e6fba55d452b7043684e9b57a947e393bbffa62485a7aac05ee4eefd
+```
+
+The measured model file is 3.39 GB and its reference resident allocation is
+5.74 GB, above the original 4 GB target. Model choice and measurements are in
+[Local AI model evaluation](docs/local_ai_model_evaluation.md).
+
+Five-minute retention is the default. **Until app quits** is ownership-aware:
+the app unloads a model it started when settings change or the process exits,
+but preserves a model that another local Ollama client already had running.
+
+## Privacy and safety
+
+- Microphone audio, transcripts, nearby context, prompts, and generated text
+  remain in memory and are not logged or persisted.
+- Apple speech recognition is required to run on-device.
+- Ollama traffic is restricted to fixed numeric loopback; no user content is
+  sent to a remote host.
+- Nearby text is off by default. When enabled, the app reads at most a bounded
+  caret window from an approved multiline, nonsecure target for the current
+  session.
+- The app never reads browser URLs, terminal contents, screenshots, whole
+  documents, the pasteboard, or the global keyboard stream.
+- Focus and caret ownership are revalidated before delivery. Secure fields are
+  rejected.
+
+## What ships
+
+- Exact-signature, exclusive IOKit HID input on a user-interactive serial queue.
+- Independent per-Control Bindings, Hold/Toggle semantics, and exact keyboard
+  fallbacks scoped to the active Profile.
+- `SpeechAnalyzer` on macOS 26+ and on-device-required
+  `SFSpeechRecognizer` on macOS 15–25.
+- Adaptive Accessibility and guarded foreground text delivery for native,
+  browser, and validated terminal targets.
+- Apple Foundation Models and optional local Ollama refinement behind one typed
+  provider contract.
+- Atomic, schema-versioned local Profiles and application preferences with
+  explicit migration, corruption recovery, and forward-schema protection.
+- A native Controller, Profiles, and General shell with Dock and menu-bar
+  presence, direct permission recovery, and transient final-only transcript
+  HUD.
+- No accounts, analytics, telemetry, cloud APIs, remote storage, or third-party
+  linked runtime dependencies.
+
+## Opt-in system verification
+
+These checks require the named local resource or foreground target:
+
+```bash
+HC_RUN_MICROPHONE_INTEGRATION=1 swift test \
+  --filter capturesARealAuthorizedMicrophoneBuffer
+
+HC_RUN_MICROPHONE_INTEGRATION=1 swift test \
+  --filter explicitRealMicrophonePreservesTheSystemDefault
+
+HC_RUN_MICROPHONE_ROUTE_INTEGRATION=1 swift test \
+  --filter changesTheRealDefaultInputWithoutCrashing
+
+say -v Samantha -o .build/local_transcription_test.aiff \
+  "Hardware Controller local transcription test."
+HC_SPEECH_AUDIO_FILE="$PWD/.build/local_transcription_test.aiff" \
+  swift test --filter modernBackendRepeatedlyTranscribesLocalAudio
+
+HC_RUN_TEXT_INSERTION_INTEGRATION=1 swift test \
+  --filter insertsTextIntoTheFocusedRealTextField
+
+HC_RUN_LOCAL_AI_MODEL_EVALUATION=1 swift test \
+  --filter LocalAIModelEvaluationTest
+HC_RUN_LOCAL_AI_END_TO_END_BENCHMARK=1 swift test \
+  --filter measuresWarmReleaseToInsertionWithTheRecommendedModel
+```
+
+The web, terminal, foreground-event, and complete speech-to-field commands are
+documented in [release validation](docs/release_validation.md).
+
+## Documentation
+
+| Path | Authority |
+| --- | --- |
+| [License](LICENSE) | PolyForm Noncommercial 1.0.0 terms. |
+| [Required notice](NOTICE) | Marcus John Rice Lee copyright notice required by the license. |
+| [User guide](docs/user_guide.md) | Installation, setup, use, and troubleshooting. |
+| [Product brief](docs/product_brief.md) | Product scope, domain language, and acceptance stories. |
+| [Game plan](docs/game_plan.md) | Current quality gates and remaining evidence. |
+| [Public repository migration](docs/public_repository_migration.md) | Clean-history replacement and GitHub publication runbook. |
+| [Architecture](docs/architecture.md) | Component, concurrency, persistence, privacy, and failure boundaries. |
+| [Implementation context](CONTEXT.md) | Stable names for deep implementation modules. |
+| [UX specification](docs/ux_spec.md) | Current visual and accessibility behavior. |
+| [Infinity 3 evidence](docs/hardware/infinity_3.md) | Device protocol evidence and physical checks. |
+| [Decisions](docs/decisions/) | Durable product and architecture decisions. |
+
+The source is available under the
+[PolyForm Noncommercial License 1.0.0](LICENSE). Commercial use requires a
+separate license from Marcus John Rice Lee. See [`NOTICE`](NOTICE). Public
+visibility does not make this an OSI-approved open-source project. Longdevity
+LLC formation and ownership transfer are planned future work, not publication
+preconditions. A sanitized root commit and GitHub security controls remain
+required before publication.

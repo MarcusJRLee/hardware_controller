@@ -1,0 +1,440 @@
+import HardwareControllerCore
+import SwiftUI
+
+struct LocalAISettingsSection: View {
+  let model: AppModel
+  let preferencesModel: ApplicationPreferencesModel
+
+  @State private var vocabularyEntry = ""
+  @State private var spokenForm = ""
+  @State private var replacement = ""
+
+  var body: some View {
+    Section("Local AI Dictation") {
+      Picker("Provider", selection: providerBinding) {
+        Text("Apple On-Device")
+          .tag(LocalAIProviderKind.appleOnDevice)
+        Text("Ollama")
+          .tag(LocalAIProviderKind.ollama)
+      }
+      .pickerStyle(.segmented)
+
+      if settings.provider == .ollama {
+        Picker("Model", selection: modelBinding) {
+          ForEach(modelOptions) { option in
+            Text(modelTitle(option)).tag(option.name)
+          }
+        }
+
+        Picker("Keep model loaded", selection: retentionBinding) {
+          Text("5 minutes").tag(LocalAIModelRetention.recentUse)
+          Text("Until app quits")
+            .tag(LocalAIModelRetention.processLifetime)
+        }
+        Text(
+          "At quit or model change, Hardware Controller unloads only a model it started; an already-running shared model is left alone."
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      }
+
+      LabeledContent("Status") {
+        HStack(spacing: 6) {
+          Image(systemName: readinessSymbol)
+          Text(readinessDetail)
+        }
+        .foregroundStyle(readinessColor)
+      }
+
+      HStack {
+        Button("Refresh Status") {
+          model.refreshLocalAIReadiness()
+        }
+        Button("Test Selected Provider") {
+          model.testLocalAIProvider()
+        }
+        .disabled(
+          !selectedReadiness.state.canRun
+            || model.localAIProviderTest == .running
+        )
+        if let providerTestDetail {
+          Text(providerTestDetail)
+            .font(.caption)
+            .foregroundStyle(providerTestColor)
+        }
+      }
+
+      if case .modelDigestChanged = selectedReadiness.state,
+        let installedModel = selectedInstalledModel
+      {
+        Button("Approve Installed Digest") {
+          updateSettings {
+            $0.ollamaModel = LocalAIModelSelection(
+              name: installedModel.name,
+              expectedDigest: installedModel.digest
+            )
+          }
+        }
+      }
+
+      Toggle("Use nearby text from the focused field", isOn: contextBinding)
+      Text(
+        "Nearby text is bounded and used only for the current dictation. Single-line and compatibility targets never provide it."
+      )
+      .font(.caption)
+      .foregroundStyle(.secondary)
+
+      DisclosureGroup("Personal dictionary") {
+        VStack(alignment: .leading, spacing: 14) {
+          dictionaryVocabulary
+          Divider()
+          dictionaryReplacements
+        }
+        .padding(.vertical, 8)
+      }
+
+      VStack(alignment: .leading, spacing: 6) {
+        Text("Additional instructions")
+        TextEditor(text: instructionsBinding)
+          .font(.body)
+          .frame(minHeight: 88)
+          .overlay {
+            RoundedRectangle(cornerRadius: 6)
+              .stroke(.quaternary)
+          }
+        Text(
+          "Optional style guidance. Core accuracy, privacy, and prompt-safety rules always remain active."
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      }
+
+      Text(
+        "Speech, context, and model output stay on this Mac. Ollama is contacted only through its fixed localhost endpoint; no cloud inference is used."
+      )
+      .font(.caption)
+      .foregroundStyle(.secondary)
+    }
+  }
+
+  private var dictionaryVocabulary: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Recognition vocabulary")
+        .font(.headline)
+      Text("Names and technical terms that should be recognized accurately.")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      ForEach(settings.dictionary.vocabulary, id: \.self) { entry in
+        HStack {
+          Text(entry)
+          Spacer()
+          Button(role: .destructive) {
+            updateSettings { settings in
+              settings.dictionary.vocabulary.removeAll { $0 == entry }
+            }
+          } label: {
+            Image(systemName: "minus.circle")
+          }
+          .buttonStyle(.borderless)
+          .accessibilityLabel("Remove \(entry)")
+        }
+      }
+      HStack {
+        TextField("Add a name or term", text: $vocabularyEntry)
+          .dictionaryInputField()
+          .accessibilityLabel("Recognition vocabulary entry")
+          .onSubmit(addVocabularyEntry)
+        Button("Add", action: addVocabularyEntry)
+          .buttonStyle(.bordered)
+          .disabled(normalizedVocabularyEntry.isEmpty)
+      }
+    }
+  }
+
+  private var dictionaryReplacements: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Exact replacements")
+        .font(.headline)
+      Text("Replace a spoken form after recognition, before refinement.")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      ForEach(settings.dictionary.replacements) { item in
+        HStack {
+          Text("\(item.spokenForm) → \(item.replacement)")
+          Spacer()
+          Button(role: .destructive) {
+            updateSettings { settings in
+              settings.dictionary.replacements.removeAll {
+                $0.id == item.id
+              }
+            }
+          } label: {
+            Image(systemName: "minus.circle")
+          }
+          .buttonStyle(.borderless)
+          .accessibilityLabel("Remove replacement for \(item.spokenForm)")
+        }
+      }
+      HStack {
+        TextField("Spoken form", text: $spokenForm)
+          .dictionaryInputField()
+          .accessibilityLabel("Spoken form")
+          .onSubmit(addReplacement)
+        Image(systemName: "arrow.right")
+          .foregroundStyle(.secondary)
+        TextField("Replacement", text: $replacement)
+          .dictionaryInputField()
+          .accessibilityLabel("Replacement")
+          .onSubmit(addReplacement)
+        Button("Add", action: addReplacement)
+          .buttonStyle(.bordered)
+          .disabled(
+            normalizedSpokenForm.isEmpty
+              || normalizedReplacement.isEmpty
+          )
+      }
+    }
+  }
+
+  private var settings: LocalAISettings {
+    preferencesModel.localAISettings
+  }
+
+  private var selectedReadiness: LocalAIProviderReadiness {
+    model.localAIReadiness.readiness(for: settings.provider)
+  }
+
+  private var modelOptions: [LocalAIInstalledModel] {
+    var options = selectedReadiness.models
+    if !options.contains(where: { $0.name == settings.ollamaModel.name }) {
+      options.append(
+        LocalAIInstalledModel(
+          name: settings.ollamaModel.name,
+          digest: settings.ollamaModel.expectedDigest ?? "",
+          sizeBytes: 0,
+          isValidated: false,
+          isRecommended:
+            settings.ollamaModel.name
+            == LocalAISettings.defaultRecommendedModelName
+        )
+      )
+    }
+    return options.sorted {
+      if $0.isRecommended != $1.isRecommended {
+        return $0.isRecommended
+      }
+      return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+    }
+  }
+
+  private var selectedInstalledModel: LocalAIInstalledModel? {
+    selectedReadiness.models.first {
+      $0.name == settings.ollamaModel.name
+    }
+  }
+
+  private var providerBinding: SwiftUI.Binding<LocalAIProviderKind> {
+    SwiftUI.Binding(
+      get: { settings.provider },
+      set: { provider in
+        updateSettings { $0.provider = provider }
+      }
+    )
+  }
+
+  private var modelBinding: SwiftUI.Binding<String> {
+    SwiftUI.Binding(
+      get: { settings.ollamaModel.name },
+      set: { name in
+        guard let model = modelOptions.first(where: { $0.name == name }) else {
+          return
+        }
+        updateSettings {
+          $0.ollamaModel = LocalAIModelSelection(
+            name: model.name,
+            expectedDigest: model.digest.isEmpty ? nil : model.digest
+          )
+        }
+      }
+    )
+  }
+
+  private var retentionBinding: SwiftUI.Binding<LocalAIModelRetention> {
+    SwiftUI.Binding(
+      get: { settings.modelRetention },
+      set: { retention in
+        updateSettings { $0.modelRetention = retention }
+      }
+    )
+  }
+
+  private var contextBinding: SwiftUI.Binding<Bool> {
+    SwiftUI.Binding(
+      get: { settings.includeNearbyText },
+      set: { enabled in
+        updateSettings { $0.includeNearbyText = enabled }
+      }
+    )
+  }
+
+  private var instructionsBinding: SwiftUI.Binding<String> {
+    SwiftUI.Binding(
+      get: { settings.additionalInstructions },
+      set: { instructions in
+        guard instructions.count <= 2_000 else {
+          return
+        }
+        updateSettings { $0.additionalInstructions = instructions }
+      }
+    )
+  }
+
+  private var readinessSymbol: String {
+    switch selectedReadiness.state {
+    case .ready:
+      "checkmark.circle.fill"
+    case .checking:
+      "clock"
+    case .unavailable, .modelMissing, .modelDigestChanged:
+      "exclamationmark.triangle.fill"
+    }
+  }
+
+  private var readinessColor: Color {
+    selectedReadiness.state.canRun ? .secondary : StudioDesign.warning
+  }
+
+  private var readinessDetail: String {
+    switch selectedReadiness.state {
+    case .checking:
+      "Checking…"
+    case .ready:
+      "Ready"
+    case .unavailable(let detail):
+      detail
+    case .modelMissing(let name):
+      "Install \(name) in Ollama, then refresh."
+    case .modelDigestChanged:
+      "The model changed. Select it again to approve the installed digest."
+    }
+  }
+
+  private var providerTestDetail: String? {
+    switch model.localAIProviderTest {
+    case .idle:
+      nil
+    case .running:
+      "Testing…"
+    case .passed:
+      "Test passed"
+    case .failed(let failure):
+      "Test failed: \(failure.settingsMessage)"
+    }
+  }
+
+  private var providerTestColor: Color {
+    model.localAIProviderTest == .passed
+      ? StudioDesign.accent : StudioDesign.warning
+  }
+
+  private func modelTitle(_ model: LocalAIInstalledModel) -> String {
+    var suffixes: [String] = []
+    if model.isRecommended {
+      suffixes.append("Recommended")
+    } else if model.isValidated {
+      suffixes.append("Validated")
+    }
+    if model.sizeBytes > 0 {
+      suffixes.append(
+        ByteCountFormatter.string(
+          fromByteCount: Int64(clamping: model.sizeBytes),
+          countStyle: .file
+        )
+      )
+    }
+    return suffixes.isEmpty
+      ? model.name
+      : "\(model.name) — \(suffixes.joined(separator: ", "))"
+  }
+
+  private var normalizedVocabularyEntry: String {
+    vocabularyEntry.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private var normalizedSpokenForm: String {
+    spokenForm.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private var normalizedReplacement: String {
+    replacement.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private func addVocabularyEntry() {
+    let entry = normalizedVocabularyEntry
+    guard !entry.isEmpty else {
+      return
+    }
+    let saved = updateSettings { settings in
+      settings.dictionary.vocabulary.append(entry)
+    }
+    if saved {
+      vocabularyEntry = ""
+    }
+  }
+
+  private func addReplacement() {
+    let spokenForm = normalizedSpokenForm
+    let replacement = normalizedReplacement
+    guard !spokenForm.isEmpty, !replacement.isEmpty else {
+      return
+    }
+    let saved = updateSettings { settings in
+      settings.dictionary.replacements.append(
+        PersonalDictionaryReplacement(
+          spokenForm: spokenForm,
+          replacement: replacement
+        )
+      )
+    }
+    if saved {
+      self.spokenForm = ""
+      self.replacement = ""
+    }
+  }
+
+  @discardableResult
+  private func updateSettings(
+    _ mutation: (inout LocalAISettings) -> Void
+  ) -> Bool {
+    var candidate = settings
+    mutation(&candidate)
+    return preferencesModel.setLocalAISettings(candidate)
+  }
+}
+
+extension View {
+  /// Gives dictionary inputs an explicit editable-field affordance in a Form.
+  fileprivate func dictionaryInputField() -> some View {
+    textFieldStyle(.roundedBorder)
+      .controlSize(.regular)
+  }
+}
+
+extension LocalAIRefinementFailure {
+  fileprivate var settingsMessage: String {
+    switch self {
+    case .providerUnavailable(let detail),
+      .invalidResponse(let detail),
+      .generationFailed(let detail):
+      detail
+    case .modelMissing(let name):
+      "\(name) is not installed."
+    case .modelDigestChanged:
+      "The model digest changed. Select it again."
+    case .timedOut:
+      "The three-second deadline expired."
+    case .requestTooLarge:
+      "The local test request was too large."
+    }
+  }
+}
