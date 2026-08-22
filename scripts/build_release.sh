@@ -70,7 +70,7 @@ verify_entitlements() {
   local key_count
   key_count="$(
     plutil -p "$entitlement_file" \
-      | rg -c '^\s+"[^"]+" =>'
+      | grep -Ec '^[[:space:]]+"[^"]+" =>'
   )"
   [[ "$key_count" == "1" ]] \
     || release_fail "the app must contain exactly one entitlement."
@@ -89,10 +89,10 @@ verify_binary_policy() {
   signature_details="$(codesign -d --verbose=4 "$app_bundle" 2>&1)"
 
   print -r -- "$signature_details" \
-    | rg -q '^Identifier=com\.longdevity\.hardwarecontroller$' \
+    | grep -Eq '^Identifier=com\.longdevity\.hardwarecontroller$' \
     || release_fail "the signed bundle identifier is unexpected."
   print -r -- "$signature_details" \
-    | rg -q '^CodeDirectory .*flags=.*\(runtime\)' \
+    | grep -Eq '^CodeDirectory .*flags=.*\(runtime\)' \
     || release_fail "hardened runtime is not enabled."
   local team_identifier
   team_identifier="$(
@@ -107,7 +107,7 @@ verify_binary_policy() {
   unexpected_libraries="$(
     otool -L "$binary" \
       | awk 'NR > 1 {print $1}' \
-      | rg -v '^(/System/Library/|/usr/lib/)' \
+      | grep -Ev '^(/System/Library/|/usr/lib/)' \
       || true
   )"
   [[ -z "$unexpected_libraries" ]] \
@@ -274,11 +274,11 @@ main() {
   )" == "$build_number" ]] \
     || release_fail "the app build number differs from packaging."
   file "$app_bundle/Contents/MacOS/HardwareController" \
-    | rg -q 'Mach-O 64-bit executable arm64' \
+    | grep -Fq 'Mach-O 64-bit executable arm64' \
     || release_fail "the executable is not thin arm64."
   otool -l "$app_bundle/Contents/MacOS/HardwareController" \
-    | rg -A4 'LC_BUILD_VERSION' \
-    | rg -q 'minos 15\.0' \
+    | grep -A 4 'LC_BUILD_VERSION' \
+    | grep -Eq 'minos 15\.0' \
     || release_fail "the executable minimum is not macOS 15.0."
 
   verify_disk_image_contents "$dmg_path" "$app_bundle"

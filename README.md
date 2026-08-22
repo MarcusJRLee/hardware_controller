@@ -64,9 +64,9 @@ scripts/build_app.sh
 codesign --verify --deep --strict --verbose=2 \
   "dist/Hardware Controller.app"
 codesign -dv --verbose=4 "dist/Hardware Controller.app" 2>&1 \
-  | rg '^Authority='
+  | grep -E '^Authority='
 codesign -dv --verbose=4 "dist/Hardware Controller.app" 2>&1 \
-  | rg "^TeamIdentifier=${HC_EXPECTED_TEAM_ID}$"
+  | grep -E "^TeamIdentifier=${HC_EXPECTED_TEAM_ID}$"
 ```
 
 Never commit `.env.local`. Quit the running app before replacing the single

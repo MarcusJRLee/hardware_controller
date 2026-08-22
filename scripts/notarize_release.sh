@@ -15,10 +15,10 @@ public_release_fail() {
 verify_developer_id_authority() {
   local signature_details="$1"
   print -r -- "$signature_details" \
-    | rg -q '^Authority=Developer ID Application:' \
+    | grep -Eq '^Authority=Developer ID Application:' \
     || public_release_fail "the app is not signed with Developer ID Application."
   print -r -- "$signature_details" \
-    | rg -q '^Timestamp=' \
+    | grep -Eq '^Timestamp=' \
     || public_release_fail "the Developer ID signature has no secure timestamp."
 }
 
@@ -59,11 +59,11 @@ main() {
     || public_release_fail "release evidence is missing."
   local source_commit
   source_commit="$(git rev-parse HEAD)"
-  rg -Fq "| Source commit | \`$source_commit\` |" "$evidence_path" \
+  grep -Fq "| Source commit | \`$source_commit\` |" "$evidence_path" \
     || public_release_fail "release evidence does not match the current commit."
-  rg -Fq "| Marketing version | $release_version |" "$evidence_path" \
+  grep -Fq "| Marketing version | $release_version |" "$evidence_path" \
     || public_release_fail "release evidence does not match the approved version."
-  ! rg -q '^## Notarization evidence$' "$evidence_path" \
+  ! grep -Eq '^## Notarization evidence$' "$evidence_path" \
     || public_release_fail "notarization evidence already exists."
 
   codesign --verify --deep --strict --verbose=2 "$app_bundle"
