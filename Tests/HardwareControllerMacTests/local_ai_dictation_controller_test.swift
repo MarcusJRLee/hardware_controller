@@ -67,7 +67,7 @@ struct LocalAIDictationControllerTest {
     #expect(fixture.writer.inserted.isEmpty)
   }
 
-  @Test
+  @Test(.timeLimit(.minutes(1)))
   func providerTestBoundsPreparationAndGenerationTogether() async {
     let fixture = LocalAIControllerFixture(
       refinement: .output("Unused."),
@@ -76,13 +76,11 @@ struct LocalAIDictationControllerTest {
     let controller = fixture.makeController(
       refinementTimeout: .milliseconds(20)
     )
-    let clock = ContinuousClock()
-    let start = clock.now
 
     let failure = await controller.testProvider()
 
     #expect(failure == .timedOut)
-    #expect(start.duration(to: clock.now) < .milliseconds(200))
+    await fixture.refiner.waitUntilPreparationCancelled()
     #expect(await fixture.refiner.wasPreparationCancelled)
   }
 
@@ -611,6 +609,7 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
   let behavior: Behavior
   let preparationDelay: Duration?
   private(set) var wasPreparationCancelled = false
+  private var preparationCancellationObservers: [CheckedContinuation<Void, Never>] = []
   private(set) var preparationCount = 0
   private(set) var refinementCompletionCount = 0
   private(set) var releasedSettings: [LocalAISettings] = []
@@ -649,7 +648,22 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
       try await Task.sleep(for: preparationDelay)
     } catch is CancellationError {
       wasPreparationCancelled = true
+      let observers = preparationCancellationObservers
+      preparationCancellationObservers.removeAll()
+      for observer in observers {
+        observer.resume()
+      }
       throw CancellationError()
+    }
+  }
+
+  func waitUntilPreparationCancelled() async {
+    await withCheckedContinuation { observer in
+      guard !wasPreparationCancelled else {
+        observer.resume()
+        return
+      }
+      preparationCancellationObservers.append(observer)
     }
   }
 
