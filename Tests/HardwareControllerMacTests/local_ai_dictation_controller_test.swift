@@ -100,7 +100,7 @@ struct LocalAIDictationControllerTest {
     #expect(await fixture.refiner.shutdownCount == 1)
   }
 
-  @Test
+  @Test(.timeLimit(.minutes(1)))
   func shutdownCancelsAnActiveProviderTestBeforeReleasingResources()
     async throws
   {
@@ -125,6 +125,7 @@ struct LocalAIDictationControllerTest {
           "The selected local provider test was canceled."
         )
     )
+    await fixture.refiner.waitUntilPreparationCancelled()
     #expect(await fixture.refiner.wasPreparationCancelled)
     #expect(await fixture.refiner.shutdownCount == 1)
   }
@@ -279,7 +280,7 @@ struct LocalAIDictationControllerTest {
     #expect(await controller.snapshot().fallbackReason == .timedOut)
   }
 
-  @Test
+  @Test(.timeLimit(.minutes(1)))
   func unfinishedPreparationSharesTheRefinementDeadline() async throws {
     let fixture = LocalAIControllerFixture(
       refinement: .output("Too late."),
@@ -297,6 +298,7 @@ struct LocalAIDictationControllerTest {
 
     #expect(fixture.writer.inserted == ["time bounded"])
     #expect(await controller.snapshot().fallbackReason == .timedOut)
+    await fixture.refiner.waitUntilPreparationCancelled()
     #expect(await fixture.refiner.wasPreparationCancelled)
   }
 
