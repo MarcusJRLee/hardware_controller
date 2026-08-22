@@ -51,7 +51,7 @@ diagnostics observe that path but cannot block it.
 | Logging and timing  | Unified Logging, `OSSignposter`, and a monotonic clock.                       |
 | Tests               | Swift Testing plus scripted packaged-UI and Accessibility inspection.        |
 | Dependencies        | Apple frameworks only in the app; Ollama is an optional separately installed local service. |
-| Distribution        | Apple Development-signed personal iterations with private signing configuration; source prepared under PolyForm Noncommercial 1.0.0; metadata changes and release promotion require explicit approval. |
+| Distribution        | Apache License 2.0 source; Apple Development-signed personal iterations; gated Developer ID, notarization, and free-DMG workflow for a future approved public release. |
 
 [`decisions/0001_native_macos_stack.md`](decisions/0001_native_macos_stack.md)
 records the stack rationale.

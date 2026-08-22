@@ -55,8 +55,8 @@ struct HardwareControllerAppTests {
   }
 
   /// Forwards workspace sleep and wake notifications exactly once.
-  @Test
-  func workspaceLifecycleForwardsSleepAndWake() async throws {
+  @Test(.timeLimit(.minutes(1)))
+  func workspaceLifecycleForwardsSleepAndWake() async {
     let application = FakeApplicationLifecycle()
     let notificationCenter = NotificationCenter()
     let coordinator = WorkspaceLifecycleCoordinator(
@@ -70,9 +70,7 @@ struct HardwareControllerAppTests {
       name: NSWorkspace.willSleepNotification,
       object: nil
     )
-    try await waitUntil {
-      application.sleepCount == 1
-    }
+    await application.waitUntilPreparedForSleep()
     notificationCenter.post(
       name: NSWorkspace.didWakeNotification,
       object: nil
@@ -85,7 +83,7 @@ struct HardwareControllerAppTests {
 
   /// Stops forwarding after observation ends.
   @Test
-  func stoppedWorkspaceLifecycleIgnoresNotifications() async throws {
+  func stoppedWorkspaceLifecycleIgnoresNotifications() {
     let application = FakeApplicationLifecycle()
     let notificationCenter = NotificationCenter()
     let coordinator = WorkspaceLifecycleCoordinator(
@@ -103,7 +101,6 @@ struct HardwareControllerAppTests {
       name: NSWorkspace.didWakeNotification,
       object: nil
     )
-    try await Task.sleep(for: .milliseconds(10))
 
     #expect(application.sleepCount == 0)
     #expect(application.wakeCount == 0)
@@ -124,15 +121,32 @@ private final class FakeApplicationLifecycle:
 {
   private(set) var sleepCount = 0
   private(set) var wakeCount = 0
+  private var sleepObservers: [CheckedContinuation<Void, Never>] = []
 
   /// Records one forwarded sleep notification.
   func prepareForSleep() async {
     sleepCount += 1
+    let observers = sleepObservers
+    sleepObservers.removeAll()
+    for observer in observers {
+      observer.resume()
+    }
   }
 
   /// Records one forwarded wake notification.
   func resumeAfterWake() {
     wakeCount += 1
+  }
+
+  /// Waits until the sleep notification reaches the application boundary.
+  func waitUntilPreparedForSleep() async {
+    await withCheckedContinuation { observer in
+      guard sleepCount == 0 else {
+        observer.resume()
+        return
+      }
+      sleepObservers.append(observer)
+    }
   }
 }
 

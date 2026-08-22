@@ -24,8 +24,8 @@ struct ApplicationRuntimeTest {
   }
 
   /// Starts hardware before a slow optional provider readiness check returns.
-  @Test
-  func localAIReadinessNeverDelaysHardwareStartup() async throws {
+  @Test(.timeLimit(.minutes(1)))
+  func localAIReadinessNeverDelaysHardwareStartup() async {
     let fixture = RuntimeFixture(
       blocksLocalAIReadiness: true
     )
@@ -35,9 +35,7 @@ struct ApplicationRuntimeTest {
         snapshotHandler: fixture.snapshots.append
       )
     }
-    try await waitUntil {
-      fixture.process.localAIReadinessIsBlocked
-    }
+    await fixture.process.waitUntilLocalAIReadinessIsBlocked()
 
     #expect(fixture.process.startCount == 1)
     fixture.process.completeLocalAIReadiness()
@@ -827,6 +825,7 @@ private final class FakeApplicationProcess:
   private var preferredMicrophoneUIDStorage: [String?] = []
   private var localAIReadinessStorage = LocalAIReadinessSnapshot.checking
   private var localAIReadinessContinuation: CheckedContinuation<Void, Never>?
+  private var localAIReadinessObservers: [CheckedContinuation<Void, Never>] = []
   private let blocksLocalAIReadiness: Bool
   private var localAIProviderTestContinuation: CheckedContinuation<Void, Never>?
   private let blocksLocalAIProviderTest: Bool
@@ -885,12 +884,24 @@ private final class FakeApplicationProcess:
     set { lock.withLock { localAIReadinessStorage = newValue } }
   }
 
-  var localAIReadinessIsBlocked: Bool {
-    lock.withLock { localAIReadinessContinuation != nil }
-  }
-
   var localAIProviderTestIsBlocked: Bool {
     lock.withLock { localAIProviderTestContinuation != nil }
+  }
+
+  /// Waits until readiness is blocked after hardware startup completes.
+  func waitUntilLocalAIReadinessIsBlocked() async {
+    await withCheckedContinuation { observer in
+      let shouldResume = lock.withLock {
+        guard localAIReadinessContinuation == nil else {
+          return true
+        }
+        localAIReadinessObservers.append(observer)
+        return false
+      }
+      if shouldResume {
+        observer.resume()
+      }
+    }
   }
 
   /// Resumes a deliberately blocked readiness request.
@@ -1000,8 +1011,14 @@ private final class FakeApplicationProcess:
   func localAIReadiness() async -> LocalAIReadinessSnapshot {
     if blocksLocalAIReadiness {
       await withCheckedContinuation { continuation in
-        lock.withLock {
+        let observers = lock.withLock {
           localAIReadinessContinuation = continuation
+          let observers = localAIReadinessObservers
+          localAIReadinessObservers.removeAll()
+          return observers
+        }
+        for observer in observers {
+          observer.resume()
         }
       }
     }

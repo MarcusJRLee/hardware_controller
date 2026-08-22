@@ -2,6 +2,7 @@
 
 > **Status:** Completed 2026-08-21 from sanitized root
 > `845c2b6958dd7b1bcf4545add8277787daa10d51`.
+> GitHub controls last verified 2026-08-22.
 
 This runbook records the completed same-name repository replacement. It does
 not maintain two hosted repositories.
@@ -161,10 +162,12 @@ repository URL before continuing.
 Configure the replacement while it remains private where the account plan
 permits it, then confirm the controls again immediately after publication:
 
-1. Add a `main` ruleset that requires pull requests and blocks force pushes and
-   branch deletion.
-2. Restrict GitHub Actions workflow permissions to read-only unless a specific
-   workflow requires more.
+1. Add a `main` ruleset that requires pull requests, resolved review threads,
+   strict `Verify` and CodeQL checks, and blocks force pushes and branch
+   deletion.
+2. Restrict workflow tokens to read-only, disallow workflow approval of pull
+   requests, allow only GitHub-owned Actions, and require full commit-SHA
+   pinning.
 3. Enable the dependency graph, Dependabot alerts, and Dependabot security
    updates.
 4. Enable CodeQL default setup for Swift.
@@ -202,10 +205,10 @@ root is nested inside it.
 | Repository | Public at `MarcusJRLee/hardware_controller` with sanitized root `845c2b6958dd7b1bcf4545add8277787daa10d51`. |
 | History | The initial public history contains one noreply-authored root; later public changes use the protected pull-request workflow. No private predecessor ref was imported. |
 | Distribution | No tag or GitHub Release was published. |
-| Branch controls | Active `main` rules require pull requests and resolved review threads, allow squash merges only, require linear history, and block deletion and force pushes. |
-| Repository security | Actions permissions are read-only. Dependency alerts, Dependabot security updates, secret scanning, push protection, private vulnerability reporting, and Swift CodeQL default setup are active. |
+| Branch controls | Active `main` rules require pull requests, resolved review threads, linear history, squash merges, and strict current-branch `Verify` and CodeQL checks from their expected GitHub Apps; deletion, force pushes, and bypasses are blocked. |
+| Repository security | Workflow tokens are read-only and cannot approve pull requests. Only GitHub-owned Actions pinned to full commit SHAs are permitted. Dependency alerts, Dependabot security updates, secret scanning, push protection, private vulnerability reporting, and Swift CodeQL default setup are active. |
 | Initial security results | The CodeQL scan succeeded with no code-scanning or secret-scanning alerts. |
-| Source verification | A credential-free clone passed formatting, shell syntax, 320 tests across 49 suites, and `scripts/build_release_test.sh`. |
+| Source verification | A credential-free clone passed `scripts/check.sh`: formatting, shell syntax, 320 tests across 49 suites, release build, release-approval guards, and notarization-policy guards. |
 | Private state | The predecessor history and private release artifacts remain only in an external private archive. Temporary migration copies were deleted. |
 
 ## Future Longdevity LLC transition

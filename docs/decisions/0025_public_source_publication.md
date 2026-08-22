@@ -4,6 +4,8 @@
 - **Date:** 2026-08-20
 - **Ownership amended by:**
   [`0027_individual_publication_ownership.md`](0027_individual_publication_ownership.md)
+- **Licensing and contribution policy superseded by:**
+  [`0028_apache_open_source_and_contributions.md`](0028_apache_open_source_and_contributions.md)
 - **Supersedes:**
   [`0008_infinity_3_iconography.md`](0008_infinity_3_iconography.md)
 - **Builds on:**

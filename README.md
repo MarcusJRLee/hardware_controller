@@ -9,28 +9,41 @@ All configuration and speech content stay on the Mac. Local AI Dictation uses
 Apple's on-device model or a fixed-loopback Ollama service; it never uses cloud
 inference.
 
-## Build and verify
+## Quick start
 
 Requirements: Apple silicon, macOS 15 or later, and Xcode 26 or a compatible
 Swift 6 toolchain.
 
 ```bash
-swift format lint --recursive --strict \
-  Package.swift Sources Tests
-xcrun clang-format --dry-run --Werror \
-  Sources/HardwareControllerAudioBoundary/audio_engine_exception_boundary.m \
-  Sources/HardwareControllerAudioBoundary/include/audio_engine_exception_boundary.h
-zsh -n scripts/*.sh
-swift test
-swift build -c release --product HardwareController
-scripts/build_release_test.sh
-```
-
-Run the app from source in deterministic demo mode:
-
-```bash
+git clone https://github.com/MarcusJRLee/hardware_controller.git
+cd hardware_controller
 swift run HardwareController --demo
 ```
+
+Demo mode is deterministic and requires no foot controller, Apple signing
+identity, or privacy permission.
+
+## Choose a path
+
+| Goal | Start here | Additional requirement |
+| --- | --- | --- |
+| Explore the app | `swift run HardwareController --demo` | None |
+| Contribute | `scripts/check.sh` | Xcode 26 or compatible Swift 6 toolchain |
+| Use real hardware | [Signed hardware build](#signed-hardware-build) | Apple Development identity and supported Device |
+| Install as a nondeveloper | [Public distribution](docs/public_distribution.md) | Notarized public release; not yet available |
+
+## Verify a change
+
+Run the same formatting, build, test, and release-script checks as GitHub:
+
+```bash
+scripts/check.sh
+```
+
+See the [contributor guide](docs/contributor_guide.md) for source ownership,
+test placement, Driver additions, and opt-in system checks.
+
+## Signed hardware build
 
 For a signed local build, create ignored private settings once:
 
@@ -51,9 +64,9 @@ scripts/build_app.sh
 codesign --verify --deep --strict --verbose=2 \
   "dist/Hardware Controller.app"
 codesign -dv --verbose=4 "dist/Hardware Controller.app" 2>&1 \
-  | rg '^Authority='
+  | grep -E '^Authority='
 codesign -dv --verbose=4 "dist/Hardware Controller.app" 2>&1 \
-  | rg "^TeamIdentifier=${HC_EXPECTED_TEAM_ID}$"
+  | grep -E "^TeamIdentifier=${HC_EXPECTED_TEAM_ID}$"
 ```
 
 Never commit `.env.local`. Quit the running app before replacing the single
@@ -222,11 +235,15 @@ documented in [release validation](docs/release_validation.md).
 
 | Path | Authority |
 | --- | --- |
-| [License](LICENSE) | PolyForm Noncommercial 1.0.0 terms. |
-| [Required notice](NOTICE) | Marcus John Rice Lee copyright notice required by the license. |
+| [License](LICENSE) | Apache License 2.0 terms. |
+| [Notice](NOTICE) | Marcus John Rice Lee attribution retained by Apache redistributors. |
+| [Contributing](CONTRIBUTING.md) | Development workflow, privacy rules, and inbound Apache licensing. |
+| [Contributor guide](docs/contributor_guide.md) | Local paths, source ownership, test placement, and Driver work. |
+| [Branding](BRANDING.md) | Canonical-project and modified-build identification. |
 | [User guide](docs/user_guide.md) | Installation, setup, use, and troubleshooting. |
 | [Product brief](docs/product_brief.md) | Product scope, domain language, and acceptance stories. |
 | [Game plan](docs/game_plan.md) | Current quality gates and remaining evidence. |
+| [Public distribution](docs/public_distribution.md) | Gated Developer ID, notarization, and free-DMG runbook. |
 | [Public repository migration](docs/public_repository_migration.md) | Completed clean-history replacement record and GitHub controls. |
 | [Architecture](docs/architecture.md) | Component, concurrency, persistence, privacy, and failure boundaries. |
 | [Implementation context](CONTEXT.md) | Stable names for deep implementation modules. |
@@ -234,10 +251,10 @@ documented in [release validation](docs/release_validation.md).
 | [Infinity 3 evidence](docs/hardware/infinity_3.md) | Device protocol evidence and physical checks. |
 | [Decisions](docs/decisions/) | Durable product and architecture decisions. |
 
-The source is available under the
-[PolyForm Noncommercial License 1.0.0](LICENSE). Commercial use requires a
-separate license from Marcus John Rice Lee. See [`NOTICE`](NOTICE). Public
-visibility does not make this an OSI-approved open-source project. Longdevity
-LLC formation and ownership transfer are planned future work, not publication
-preconditions. This repository was published from a sanitized root on
-2026-08-21 with the GitHub controls recorded in the migration document.
+The project is open source under the [Apache License 2.0](LICENSE). Copyright
+remains with Marcus John Rice Lee; intentional contributions are accepted
+under Apache 2.0 as described in [`CONTRIBUTING.md`](CONTRIBUTING.md). See
+[`NOTICE`](NOTICE) for attribution and [`BRANDING.md`](BRANDING.md) for
+canonical-project identification. Longdevity LLC formation and ownership
+transfer remain future work. Source licensing does not approve or publish a
+binary release.

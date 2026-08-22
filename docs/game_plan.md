@@ -18,7 +18,7 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 | Profiles | Transactional named Profiles with independent per-Device setups and active-Action cleanup. | [`decisions/0014_multi_profile_device_configuration.md`](decisions/0014_multi_profile_device_configuration.md) |
 | Application | Controller, Profiles, and General in one native foreground window with Dock and menu-bar presence. | [`ux_spec.md`](ux_spec.md) |
 | Release | Version 1.4.1 build 17 is installed as an unreleased personal QA candidate; routine installs preserve both values and no release promotion is authorized. | [`decisions/0023_stable_personal_build_metadata.md`](decisions/0023_stable_personal_build_metadata.md) |
-| Public source | Published 2026-08-21 from a sanitized root under PolyForm Noncommercial 1.0.0, with the Marcus John Rice Lee notice, provisional Signal Bridge identity, paused external code contributions, and active GitHub security controls. | [`public_repository_migration.md`](public_repository_migration.md), governed by [`decisions/0025_public_source_publication.md`](decisions/0025_public_source_publication.md) and [`decisions/0027_individual_publication_ownership.md`](decisions/0027_individual_publication_ownership.md) |
+| Public source | Open source under Apache License 2.0 with Marcus John Rice Lee as copyright owner, inbound Apache contributions, provisional Signal Bridge identity, and active GitHub security controls. | [`decisions/0028_apache_open_source_and_contributions.md`](decisions/0028_apache_open_source_and_contributions.md) |
 
 ## Quality gates
 
@@ -65,20 +65,12 @@ distribution scope:
 | Device lifecycle | Exercise long holds, simultaneous Controls, hub reconnect, logout/login, and pointer-passthrough rejection. |
 | Clean account | Rehearse install, permissions, Ollama absence/setup, configuration, relaunch, update, and removal. |
 | Future ownership | Form Longdevity LLC, execute a signed copyright assignment, then update the notice and licensing authority through a separate decision and PR. |
-| Public distribution | Add Developer ID signing, notarization, stapling, Gatekeeper, and public-install evidence. |
+| Public distribution | Obtain Developer ID and notary credentials, then complete the gated free-DMG workflow and clean-install evidence in [`public_distribution.md`](public_distribution.md). |
 
 ## Verification baseline
 
 ```bash
-swift format lint --recursive --strict \
-  Package.swift Sources Tests
-xcrun clang-format --dry-run --Werror \
-  Sources/HardwareControllerAudioBoundary/audio_engine_exception_boundary.m \
-  Sources/HardwareControllerAudioBoundary/include/audio_engine_exception_boundary.h
-zsh -n scripts/*.sh
-swift test
-swift build -c release --product HardwareController
-scripts/build_release_test.sh
+scripts/check.sh
 ```
 
 Run the opt-in model evaluation and controller benchmark when the prompt,
@@ -114,7 +106,7 @@ when their dependencies are available.
 | Local service becomes a remote path | Fix Ollama to numeric loopback, disable redirects/proxies, and reject cloud-only model identities. |
 | UI or inference delays input | Keep HID decoding and Action dispatch off the main actor and outside speech/model work. |
 | Personal artifact is mistaken for a release | Keep install and release promotion explicit and retain private signing evidence outside source control. |
-| Source-visible is mistaken for open source | Name PolyForm Noncommercial 1.0.0 precisely and require a separate commercial license. |
+| Modified build is mistaken for official | Keep canonical-project identification explicit and require official Releases to pass the gated notarization workflow. |
 
 Promote a version only when its intended scope has current automated, physical,
 accessibility, signing, installation, privacy, and performance evidence and the

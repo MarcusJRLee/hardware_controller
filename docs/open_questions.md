@@ -26,14 +26,16 @@ Publication decisions are accepted in
 [`0025_public_source_publication.md`](decisions/0025_public_source_publication.md)
 and amended by
 [`0027_individual_publication_ownership.md`](decisions/0027_individual_publication_ownership.md).
+Licensing and contributions are superseded by
+[`0028_apache_open_source_and_contributions.md`](decisions/0028_apache_open_source_and_contributions.md).
 The migration was completed on 2026-08-21:
 
 | Decision | Current approval |
 | --- | --- |
-| Source license | PolyForm Noncommercial 1.0.0 with the tracked Marcus John Rice Lee notice. |
+| Source license | Apache License 2.0 with the tracked Marcus John Rice Lee notice. |
 | Copyright holder | Marcus John Rice Lee. |
 | Future entity | Longdevity LLC formation and signed ownership transfer are future work, not publication gates. |
-| Contributions | Accept issues; pause external code until separate contributor terms are approved. |
+| Contributions | Welcome issues and pull requests under Apache 2.0 Section 5; contributors retain copyright and no CLA is required. |
 | Public history | Published at the same URL from one sanitized noreply-authored root commit; retained private history only in an external private archive. |
 | Product icon | Use Signal Bridge provisionally and iterate later through a superseding decision. |
 | GitHub controls | Verified branch rules, read-only Actions permissions, secret scanning, push protection, dependency alerts, CodeQL, and private vulnerability reporting on the replacement repository. |

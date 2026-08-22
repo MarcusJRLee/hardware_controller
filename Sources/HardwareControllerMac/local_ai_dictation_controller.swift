@@ -541,8 +541,9 @@ public actor LocalAIDictationController {
     let timeoutTask = Task { [refinementTimeout] in
       do {
         try await Task.sleep(for: refinementTimeout)
-        preparationTask?.cancel()
+        // Publish the timeout before cancellation can resolve the race.
         await race.resolve(.failure(.timedOut))
+        preparationTask?.cancel()
       } catch is CancellationError {
         return
       }

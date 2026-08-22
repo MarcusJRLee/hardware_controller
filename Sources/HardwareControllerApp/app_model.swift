@@ -299,6 +299,12 @@ final class AppModel {
     await runtime.stop()
   }
 
+  /// Joins current presentation intents, then yields to snapshot delivery.
+  func waitForPendingIntents() async {
+    await intentTask?.value
+    await Task.yield()
+  }
+
   /// Ends active process work before system sleep.
   func prepareForSleep() async {
     await runtime.prepareForSleep()
