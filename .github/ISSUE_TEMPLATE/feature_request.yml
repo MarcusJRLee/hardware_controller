@@ -1,0 +1,34 @@
+name: Feature request
+description: Propose one product or contributor-experience change.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the user or contributor problem without prescribing an implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: State the observable result and important edge cases.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Include relevant workflows or alternatives without private data.
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Project boundaries
+      options:
+        - label: I reviewed the product scope and existing decision records.
+          required: true
+        - label: This request contains no credentials, transcripts, serial numbers, private paths, or unsanitized captures.
+          required: true

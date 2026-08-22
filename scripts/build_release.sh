@@ -39,6 +39,16 @@ verify_release_version() {
     || release_fail "CFBundleShortVersionString must use X.Y.Z."
 }
 
+# Requires the privately approved version to match packaged metadata exactly.
+verify_release_approval() {
+  local version="$1"
+  local approved_version="$2"
+  [[ -n "$approved_version" ]] \
+    || release_fail "HC_RELEASE_APPROVED_VERSION must be set explicitly."
+  [[ "$version" == "$approved_version" ]] \
+    || release_fail "the approved version differs from packaging."
+}
+
 # Requires one exact signing Team without embedding maintainer metadata.
 verify_team_identifier() {
   local actual="$1"
@@ -208,6 +218,9 @@ main() {
   )"
   source_commit="$(git rev-parse HEAD)"
   verify_release_version "$release_version"
+  verify_release_approval \
+    "$release_version" \
+    "${HC_RELEASE_APPROVED_VERSION:-}"
 
   local release_tag="v$release_version"
   local dmg_path="dist/Hardware Controller-$release_version.dmg"

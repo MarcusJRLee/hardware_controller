@@ -25,7 +25,7 @@
   <key>NSHighResolutionCapable</key>
   <true/>
   <key>NSHumanReadableCopyright</key>
-  <string>Copyright © 2026 Marcus John Rice Lee. All rights reserved.</string>
+  <string>Copyright © 2026 Marcus John Rice Lee.</string>
   <key>NSMicrophoneUsageDescription</key>
   <string>Hardware Controller uses the microphone while you hold or toggle a control to transcribe your speech.</string>
   <key>NSPrincipalClass</key>

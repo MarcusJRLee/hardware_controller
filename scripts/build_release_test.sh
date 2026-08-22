@@ -21,6 +21,13 @@ test_release_version_validation() {
   expect_failure verify_release_version "1.4.0-beta"
 }
 
+# Verifies the release approval must name the packaged version exactly.
+test_release_approval_validation() {
+  verify_release_approval "1.4.0" "1.4.0"
+  expect_failure verify_release_approval "1.4.0" ""
+  expect_failure verify_release_approval "1.4.0" "1.4.1"
+}
+
 # Verifies exact private Team matching without embedding a real identifier.
 test_team_identifier_validation() {
   verify_team_identifier "EXPECTED123" "EXPECTED123"
@@ -29,5 +36,6 @@ test_team_identifier_validation() {
 }
 
 test_release_version_validation
+test_release_approval_validation
 test_team_identifier_validation
 print "build_release tests passed."

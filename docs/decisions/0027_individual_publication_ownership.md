@@ -4,6 +4,8 @@
 - **Date:** 2026-08-21
 - **Amends:**
   [`0025_public_source_publication.md`](0025_public_source_publication.md)
+- **Licensing and contribution policy superseded by:**
+  [`0028_apache_open_source_and_contributions.md`](0028_apache_open_source_and_contributions.md)
 
 ## Context
 

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Private security report
+    url: https://github.com/MarcusJRLee/hardware_controller/security/advisories/new
+    about: Report vulnerabilities without exposing details in a public issue.
+  - name: Usage and troubleshooting
+    url: https://github.com/MarcusJRLee/hardware_controller/blob/main/docs/user_guide.md
+    about: Check setup, recovery, and troubleshooting guidance before filing a bug.
