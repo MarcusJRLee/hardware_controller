@@ -61,12 +61,14 @@ actor SQLiteVoiceSessionStore {
           target_application_name TEXT,
           delivery_outcome TEXT NOT NULL,
           delivery_failure TEXT,
-          audio_filename TEXT
+          audio_filename TEXT,
+          formatted_document_json TEXT
         );
         CREATE INDEX IF NOT EXISTS voice_sessions_ended_at
         ON voice_sessions(ended_at DESC);
         """
     )
+    try Self.addFormattedDocumentColumnIfNeeded(opened)
   }
 
   func insert(
@@ -79,8 +81,9 @@ actor SQLiteVoiceSessionStore {
         INSERT INTO voice_sessions (
           id, started_at, ended_at, raw_text, edited_text,
           formatted_text, delivered_text, target_application_name,
-          delivery_outcome, delivery_failure, audio_filename
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+          delivery_outcome, delivery_failure, audio_filename,
+          formatted_document_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
         """
       var statement: OpaquePointer?
       guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
@@ -101,6 +104,12 @@ actor SQLiteVoiceSessionStore {
       try bind(document.deliveryOutcome.rawValue, to: 9, in: statement)
       try bind(document.deliveryFailure, to: 10, in: statement)
       try bind(audioURL?.lastPathComponent, to: 11, in: statement)
+      let formattedDocumentJSON = try encodedFormattedDocument(
+        document.formattedDocument,
+        expectedRawText: document.rawText,
+        expectedFormattedText: document.formattedText
+      )
+      try bind(formattedDocumentJSON, to: 12, in: statement)
       guard sqlite3_step(statement) == SQLITE_DONE else {
         throw storageFailure()
       }
@@ -118,7 +127,8 @@ actor SQLiteVoiceSessionStore {
     let sql = """
       SELECT id, started_at, ended_at, raw_text, edited_text,
         formatted_text, delivered_text, target_application_name,
-        delivery_outcome, delivery_failure, audio_filename
+        delivery_outcome, delivery_failure, audio_filename,
+        formatted_document_json
       FROM voice_sessions
       ORDER BY ended_at DESC
       LIMIT ?;
@@ -161,7 +171,12 @@ actor SQLiteVoiceSessionStore {
         deliveredText: text(statement, column: 6),
         targetApplicationName: optionalText(statement, column: 7),
         deliveryOutcome: outcome,
-        deliveryFailure: optionalText(statement, column: 9)
+        deliveryFailure: optionalText(statement, column: 9),
+        formattedDocument: try formattedDocument(
+          from: optionalText(statement, column: 11),
+          expectedRawText: text(statement, column: 3),
+          expectedFormattedText: text(statement, column: 5)
+        )
       )
       let audioFilename = optionalText(statement, column: 10)
       let expectedAudioFilename = "\(id.uuidString).caf"
@@ -229,6 +244,100 @@ actor SQLiteVoiceSessionStore {
   private func storageFailure() -> VoiceSessionHistoryError {
     .storageUnavailable(
       "Voice History could not update its local database."
+    )
+  }
+
+  private func formattedDocument(
+    from json: String?,
+    expectedRawText: String,
+    expectedFormattedText: String
+  ) throws -> VoiceFormattedDocument? {
+    guard let json else {
+      return nil
+    }
+    do {
+      let document = try JSONDecoder().decode(
+        VoiceFormattedDocument.self,
+        from: Data(json.utf8)
+      )
+      guard document.rawText == expectedRawText else {
+        throw VoiceFormattingError.invalidEvidenceReference
+      }
+      let rendered = try VoiceFormattedTextRenderer().render(
+        document,
+        supportsMultiline: true
+      )
+      guard rendered == expectedFormattedText else {
+        throw VoiceFormattingError.invalidBlock
+      }
+      return document
+    } catch {
+      throw VoiceSessionHistoryError.storageUnavailable(
+        "Voice History contains invalid structured formatting."
+      )
+    }
+  }
+
+  private func encodedFormattedDocument(
+    _ document: VoiceFormattedDocument?,
+    expectedRawText: String,
+    expectedFormattedText: String
+  ) throws -> String? {
+    guard let document else {
+      return nil
+    }
+    do {
+      guard document.rawText == expectedRawText else {
+        throw VoiceFormattingError.invalidEvidenceReference
+      }
+      let rendered = try VoiceFormattedTextRenderer().render(
+        document,
+        supportsMultiline: true
+      )
+      guard rendered == expectedFormattedText else {
+        throw VoiceFormattingError.invalidBlock
+      }
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.sortedKeys]
+      return String(decoding: try encoder.encode(document), as: UTF8.self)
+    } catch {
+      throw VoiceSessionHistoryError.storageUnavailable(
+        "Voice History could not store invalid structured formatting."
+      )
+    }
+  }
+
+  private static func addFormattedDocumentColumnIfNeeded(
+    _ database: OpaquePointer
+  ) throws {
+    var statement: OpaquePointer?
+    guard
+      sqlite3_prepare_v2(
+        database,
+        "PRAGMA table_info(voice_sessions);",
+        -1,
+        &statement,
+        nil
+      ) == SQLITE_OK,
+      let statement
+    else {
+      throw VoiceSessionHistoryError.storageUnavailable(
+        "Voice History could not inspect its local database."
+      )
+    }
+    defer { sqlite3_finalize(statement) }
+    while sqlite3_step(statement) == SQLITE_ROW {
+      guard let name = sqlite3_column_text(statement, 1) else {
+        continue
+      }
+      if String(cString: name) == "formatted_document_json" {
+        return
+      }
+    }
+    try execute(
+      database,
+      sql:
+        "ALTER TABLE voice_sessions ADD COLUMN formatted_document_json TEXT;"
     )
   }
 

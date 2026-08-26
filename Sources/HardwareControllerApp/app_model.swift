@@ -82,6 +82,10 @@ final class AppModel {
     localAIReadiness.readiness(for: applicationSnapshot.localAIProvider)
   }
 
+  var localAIStyle: VoiceStyle {
+    applicationSnapshot.localAIStyle
+  }
+
   var localAIProviderTest: LocalAIProviderTestState {
     applicationSnapshot.localAIProviderTest
   }
@@ -213,7 +217,9 @@ final class AppModel {
   }
 
   var canExecuteLocalAIDictation: Bool {
-    canExecuteDictation && selectedLocalAIReadiness.state.canRun
+    canExecuteDictation
+      && (localAIStyle.kind == .verbatim
+        || selectedLocalAIReadiness.state.canRun)
   }
 
   /// Reports whether one configured Action can currently execute.

@@ -46,8 +46,12 @@ automatically formatted result.
 | Momentary | Begin on press and end on release. User-facing copy says “Hold.” |
 | Toggle | Alternate between begin and end on successive presses. |
 | Active Action | An Action that began and has not yet ended. |
-| Refinement provider | A local model boundary that converts finalized recognized text into validated text. |
+| Formatting provider | A local model boundary that converts Edited text evidence into a Formatted document. |
 | Raw transcript | Final on-device speech-recognition text before dictionary replacement or refinement. |
+| Edited transcript | Raw text after deterministic Dictionary replacements or spoken edits. |
+| Formatted document | Validated paragraph and list blocks linked to Raw evidence. |
+| Delivered text | A target-specific plain-text rendering of the Formatted document. |
+| Style | A versioned Natural, Casual Message, Formal, Technical, or Verbatim formatting policy. |
 | Voice trigger | An input adapter that begins, finishes, or cancels the same Voice-session workflow without changing its ASR, formatting, delivery, or History meaning. |
 | Voice chord | The optional machine-wide exact keyboard shortcut dedicated to Voice capture; it is distinct from a Binding keyboard fallback. |
 | Latched capture | A Voice session kept active after two short Voice-chord presses until the next valid double press. |
@@ -87,8 +91,11 @@ failure path.
   independently.
 - Remove fillers and abandoned fragments, resolve clear self-corrections,
   correct supported recognition mistakes, and add punctuation.
-- Choose paragraphs, bullets, or numbered steps automatically only when the
-  captured target supports multiline text safely.
+- Produce validated paragraph, bullet, or numbered-step blocks, then preserve
+  structure for multiline targets or flatten it safely for single-line targets.
+- Apply the selected Natural, Casual Message, Formal, Technical, or Verbatim
+  Style. Casual Message prefers lowercase sentence starts; Verbatim skips
+  generative refinement.
 - Accept machine-wide recognition vocabulary, deterministic exact
   replacements, and optional formatting instructions.
 - Optionally use a bounded caret window from the current nonsecure multiline
@@ -101,8 +108,8 @@ failure path.
 - Deliver refined text once, or raw text once after provider failure, invalid
   output, or a three-second post-release deadline when target ownership remains
   valid.
-- Keep raw and refined recovery text only in the current in-memory state with
-  explicit copy actions.
+- Store local audio plus distinct Raw, Edited, Formatted, and Delivered stages
+  for later History slices; keep current-session copy actions separate.
 
 ### Configuration
 
@@ -116,8 +123,8 @@ failure path.
 - Optionally assign one machine-wide Voice chord under General. Begin on the
   first key-down; release after a hold to finish, or double press to latch and
   double press again to finish. Never enable it automatically.
-- Keep Local AI provider, model/digest, retention, context permission,
-  dictionary, and additional instructions machine-wide under General.
+- Keep Local AI provider, model/digest, retention, Style, context permission,
+  Dictionary, and additional instructions machine-wide under General.
 - Recommend the measured Qwen 3.5 4B Ollama model while allowing explicitly
   selected installed models to remain labeled unvalidated.
 - Persist Profiles and application preferences locally, atomically, and with
@@ -161,7 +168,7 @@ Given a focused editable field and a ready selected provider:
 - provisional recognition appears only in the transient HUD;
 - finish obtains one raw transcript, applies exact replacements, refines,
   validates, and inserts one result;
-- multiline formatting appears only for a target that safely supports it;
+- formatted structure is preserved only for a target that safely supports it;
 - provider absence, digest drift, malformed output, overload, or timeout inserts
   raw text once if the original target remains valid;
 - cancellation, focus change, or caret change discards late model output;

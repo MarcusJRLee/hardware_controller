@@ -119,6 +119,18 @@ validated list blocks. A single-line target receives a safe plain-text rendering
 a multiline target preserves list and paragraph structure. Protected names,
 commands, URLs, code tokens, and Dictionary spellings remain unchanged.
 
+**Current evidence:** General stores one versioned Natural, Casual Message,
+Formal, Technical, or Verbatim Style. The prompt carries the selected Style as
+typed data; Verbatim bypasses model preparation and generation. Validated model
+text becomes evidence-backed paragraph, unordered-list, or ordered-list blocks;
+Verbatim uses an opaque evidence-backed block so its text is not interpreted.
+Sequential ordinal cues normalize to an ordered-list block even when a safe
+model response retains them as prose. One deterministic renderer preserves
+those blocks for multiline targets and
+flattens them for single-line targets. SQLite stores the structured document
+beside distinct Raw, Edited, Formatted, and Delivered text, and migrates M1/M2
+databases without rewriting their rows.
+
 ### M4 — Backtrack explicitly
 
 “Scratch that,” “delete that sentence,” “new paragraph,” list boundaries, and

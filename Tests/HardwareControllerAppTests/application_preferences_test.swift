@@ -126,6 +126,35 @@ struct ApplicationPreferencesStoreTests {
     #expect(result.preferences.voiceTrigger == .default)
   }
 
+  @Test
+  func schemaFourPreservesVoiceTriggerAndDefaultsLegacyStyle() throws {
+    let files = PreferenceFileAccess()
+    let preferences = ApplicationPreferences(
+      localAI: LocalAISettings(provider: .ollama),
+      voiceTrigger: testVoiceTriggerSettings,
+      schemaVersion: 4
+    )
+    let encoded = try JSONEncoder().encode(preferences)
+    var object = try #require(
+      JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+    )
+    var localAI = try #require(object["localAI"] as? [String: Any])
+    localAI.removeValue(forKey: "style")
+    object["localAI"] = localAI
+    files.data = try JSONSerialization.data(withJSONObject: object)
+
+    let result = makeStore(files: files).load()
+
+    #expect(result.issue == nil)
+    #expect(result.preferences.localAI.provider == .ollama)
+    #expect(result.preferences.localAI.style == .natural)
+    #expect(result.preferences.voiceTrigger == testVoiceTriggerSettings)
+    #expect(
+      result.preferences.schemaVersion
+        == ApplicationPreferences.currentSchemaVersion
+    )
+  }
+
   /// Migrates schema 1 presentation preferences to system-default input.
   @Test
   func schemaOneLoadsWithSystemDefaultMicrophone() {
@@ -415,7 +444,8 @@ struct ApplicationPreferencesModelTests {
       ollamaModel: LocalAIModelSelection(
         name: "qwen3.5:9b",
         expectedDigest: "sha256:model"
-      )
+      ),
+      style: .formal
     )
 
     #expect(model.setLocalAISettings(settings))

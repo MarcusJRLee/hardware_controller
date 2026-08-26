@@ -48,6 +48,7 @@ struct ApplicationSnapshot: Equatable, Sendable {
   var localAIDictation: LocalAIDictationSnapshot = .idle
   var localAIReadiness: LocalAIReadinessSnapshot = .checking
   var localAIProvider: LocalAIProviderKind = .appleOnDevice
+  var localAIStyle: VoiceStyle = .natural
   var localAIProviderTest: LocalAIProviderTestState = .idle
   var transcriptionPrepared = false
   var transcriptionPreparationFailure: TranscriptionFailure?
@@ -805,6 +806,7 @@ actor ApplicationRuntime {
         systemState.speechRecognitionPermission,
       transcription: transcription,
       localAIProvider: localAISettings.provider,
+      localAIStyle: localAISettings.style,
       launchAtLogin: systemState.launchAtLogin,
       recoveryNotice: nil
     )
@@ -1468,6 +1470,7 @@ actor ApplicationRuntime {
     localAIProviderTestGeneration &+= 1
     localAISettings = settings
     snapshot.localAIProvider = settings.provider
+    snapshot.localAIStyle = settings.style
     snapshot.localAIProviderTest = .idle
     snapshot.localAIReadiness = .checking
     updateRuntimeAvailability()
@@ -1785,9 +1788,10 @@ actor ApplicationRuntime {
   /// Reports whether permissions and the selected local provider are ready.
   private var canExecuteLocalAIDictation: Bool {
     canExecuteDictation
-      && snapshot.localAIReadiness.readiness(
-        for: localAISettings.provider
-      ).state.canRun
+      && (localAISettings.style.kind == .verbatim
+        || snapshot.localAIReadiness.readiness(
+          for: localAISettings.provider
+        ).state.canRun)
   }
 
   /// Reports whether synthetic shortcuts can currently execute.

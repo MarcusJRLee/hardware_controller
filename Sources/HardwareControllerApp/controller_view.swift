@@ -894,7 +894,10 @@ private struct LocalAITranscriptionStatusView: View {
   }
 
   private var readinessDetail: String {
-    switch model.selectedLocalAIReadiness.state {
+    if model.localAIStyle.kind == .verbatim {
+      return "Ready. Verbatim skips generative formatting."
+    }
+    return switch model.selectedLocalAIReadiness.state {
     case .checking:
       "Checking the selected local provider…"
     case .ready:

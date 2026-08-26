@@ -65,6 +65,7 @@ public struct LocalAISettings: Codable, Equatable, Sendable {
   public var includeNearbyText: Bool
   public var dictionary: PersonalDictionary
   public var additionalInstructions: String
+  public var style: VoiceStyle
 
   public init(
     provider: LocalAIProviderKind = .appleOnDevice,
@@ -74,7 +75,8 @@ public struct LocalAISettings: Codable, Equatable, Sendable {
     modelRetention: LocalAIModelRetention = .recentUse,
     includeNearbyText: Bool = false,
     dictionary: PersonalDictionary = .empty,
-    additionalInstructions: String = ""
+    additionalInstructions: String = "",
+    style: VoiceStyle = .natural
   ) {
     self.provider = provider
     self.ollamaModel = ollamaModel
@@ -82,6 +84,48 @@ public struct LocalAISettings: Codable, Equatable, Sendable {
     self.includeNearbyText = includeNearbyText
     self.dictionary = dictionary
     self.additionalInstructions = additionalInstructions
+    self.style = style
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case provider
+    case ollamaModel
+    case modelRetention
+    case includeNearbyText
+    case dictionary
+    case additionalInstructions
+    case style
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    provider = try container.decode(LocalAIProviderKind.self, forKey: .provider)
+    ollamaModel = try container.decode(
+      LocalAIModelSelection.self,
+      forKey: .ollamaModel
+    )
+    modelRetention = try container.decode(
+      LocalAIModelRetention.self,
+      forKey: .modelRetention
+    )
+    includeNearbyText = try container.decode(Bool.self, forKey: .includeNearbyText)
+    dictionary = try container.decode(PersonalDictionary.self, forKey: .dictionary)
+    additionalInstructions = try container.decode(
+      String.self,
+      forKey: .additionalInstructions
+    )
+    style = try container.decodeIfPresent(VoiceStyle.self, forKey: .style) ?? .natural
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(provider, forKey: .provider)
+    try container.encode(ollamaModel, forKey: .ollamaModel)
+    try container.encode(modelRetention, forKey: .modelRetention)
+    try container.encode(includeNearbyText, forKey: .includeNearbyText)
+    try container.encode(dictionary, forKey: .dictionary)
+    try container.encode(additionalInstructions, forKey: .additionalInstructions)
+    try container.encode(style, forKey: .style)
   }
 
   public static let `default` = LocalAISettings()
@@ -97,10 +141,16 @@ public enum LocalAISettingsValidationError: Error, Equatable, Sendable {
   case invalidReplacement
   case duplicateSpokenForm
   case instructionsTooLong
+  case unsupportedStyleRevision(Int)
 }
 
 extension LocalAISettings {
   public func validate() throws {
+    guard style.revision == VoiceStyle.currentRevision else {
+      throw LocalAISettingsValidationError.unsupportedStyleRevision(
+        style.revision
+      )
+    }
     guard !ollamaModel.name.normalizedLocalAIValue.isEmpty else {
       throw LocalAISettingsValidationError.emptyModelName
     }
@@ -181,19 +231,22 @@ public struct LocalAIRefinementRequest: Equatable, Sendable {
   public let context: LocalAITargetContext
   public let dictionary: PersonalDictionary
   public let additionalInstructions: String
+  public let style: VoiceStyle
 
   public init(
     sessionID: UUID,
     transcript: String,
     context: LocalAITargetContext,
     dictionary: PersonalDictionary,
-    additionalInstructions: String
+    additionalInstructions: String,
+    style: VoiceStyle = .natural
   ) {
     self.sessionID = sessionID
     self.transcript = transcript
     self.context = context
     self.dictionary = dictionary
     self.additionalInstructions = additionalInstructions
+    self.style = style
   }
 }
 

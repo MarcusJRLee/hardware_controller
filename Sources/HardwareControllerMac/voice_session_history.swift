@@ -32,6 +32,9 @@ public struct VoiceSessionHistoryItem: Equatable, Sendable {
   public var editedText: String { document.editedText }
   public var formattedText: String { document.formattedText }
   public var deliveredText: String { document.deliveredText }
+  public var formattedDocument: VoiceFormattedDocument? {
+    document.formattedDocument
+  }
   public var deliveryOutcome: VoiceSessionDeliveryOutcome {
     document.deliveryOutcome
   }

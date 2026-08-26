@@ -139,6 +139,38 @@ struct ApplicationRuntimeTest {
     await fixture.runtime.stop()
   }
 
+  /// Verbatim still needs speech permissions but not a formatting provider.
+  @Test
+  func verbatimStyleDoesNotRequireFormattingProvider() async {
+    let unavailable = LocalAIReadinessSnapshot(
+      apple: LocalAIProviderReadiness(
+        provider: .appleOnDevice,
+        state: .unavailable("Apple Intelligence is disabled.")
+      ),
+      ollama: LocalAIProviderReadiness(
+        provider: .ollama,
+        state: .modelMissing("qwen3.5:4b")
+      )
+    )
+    var settings = LocalAISettings.default
+    settings.provider = .ollama
+    settings.style = .verbatim
+    let fixture = RuntimeFixture(
+      localAIReadiness: unavailable,
+      localAISettings: settings
+    )
+
+    await fixture.runtime.start(
+      snapshotHandler: fixture.snapshots.append
+    )
+
+    #expect(
+      fixture.process.availabilities.last?.localAIDictationAllowed == true
+    )
+    #expect(fixture.snapshots.values.last?.localAIStyle == .verbatim)
+    await fixture.runtime.stop()
+  }
+
   /// Publishes sanitized provider-test progress and success.
   @Test
   func localAIProviderTestPublishesItsResult() async {
@@ -744,6 +776,7 @@ private final class RuntimeFixture {
     loadedIssue: ProfileStoreIssue? = nil,
     loadsProfileOnStart: Bool = false,
     localAIReadiness: LocalAIReadinessSnapshot = .checking,
+    localAISettings: LocalAISettings = .default,
     blocksLocalAIReadiness: Bool = false,
     blocksLocalAIProviderTest: Bool = false,
     systemState: ApplicationSystemState =
@@ -769,6 +802,8 @@ private final class RuntimeFixture {
       speechRecognitionPermission:
         systemState.speechRecognitionPermission,
       transcription: .idle,
+      localAIProvider: localAISettings.provider,
+      localAIStyle: localAISettings.style,
       launchAtLogin: systemState.launchAtLogin
     )
     let process = self.process
@@ -783,6 +818,7 @@ private final class RuntimeFixture {
         saveFails: profileSaveFails
       ),
       system: system,
+      localAISettings: localAISettings,
       loadsProfileOnStart: loadsProfileOnStart,
       processFactory: {
         _,

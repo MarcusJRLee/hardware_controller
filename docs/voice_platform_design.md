@@ -345,6 +345,11 @@ Style resolution order is:
 
 Initial Styles are Natural, Casual Message, Formal, Technical, and Verbatim.
 
+The current macOS M3 baseline implements the machine-wide General selection and
+product-default fallback. Its Swift schema, validator, renderer, and fixtures
+are the conformance source for the later Rust extraction; target-, Profile-,
+surface-, and device-specific overrides remain future resolution inputs.
+
 ## Durable local History and storage caps
 
 Use system SQLite for metadata, transcript stages, and search; store at most one

@@ -23,6 +23,7 @@ public struct VoiceSessionDocument: Codable, Equatable, Sendable {
   public let targetApplicationName: String?
   public let deliveryOutcome: VoiceSessionDeliveryOutcome
   public let deliveryFailure: String?
+  public let formattedDocument: VoiceFormattedDocument?
 
   public init(
     id: UUID,
@@ -34,7 +35,8 @@ public struct VoiceSessionDocument: Codable, Equatable, Sendable {
     deliveredText: String,
     targetApplicationName: String?,
     deliveryOutcome: VoiceSessionDeliveryOutcome,
-    deliveryFailure: String? = nil
+    deliveryFailure: String? = nil,
+    formattedDocument: VoiceFormattedDocument? = nil
   ) {
     self.id = id
     self.startedAt = startedAt
@@ -46,5 +48,6 @@ public struct VoiceSessionDocument: Codable, Equatable, Sendable {
     self.targetApplicationName = targetApplicationName
     self.deliveryOutcome = deliveryOutcome
     self.deliveryFailure = deliveryFailure
+    self.formattedDocument = formattedDocument
   }
 }
