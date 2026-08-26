@@ -40,7 +40,7 @@ diagnostics observe that path but cannot block it.
 | Concern             | Choice                                                                        |
 | ------------------- | ----------------------------------------------------------------------------- |
 | Language            | Swift 6 with strict concurrency.                                              |
-| App UI              | SwiftUI three-destination shell hosted by one AppKit window controller.       |
+| App UI              | SwiftUI four-destination shell hosted by one AppKit window controller.        |
 | Hardware            | IOKit `IOHIDManager` and `IOHIDDevice` APIs.                                  |
 | Synthetic shortcuts | Core Graphics `CGEvent`, guarded by Accessibility trust.                      |
 | Keyboard fallback   | Carbon `RegisterEventHotKey`; exact active-Profile chords only.                |
@@ -238,8 +238,7 @@ Current executors:
   system SQLite store. Existing databases gain nullable structured-document,
   spoken-edit, and typed delivery-failure evidence columns without rewriting
   earlier rows.
-  Cancellation removes its owned artifact. History presentation, timed spans,
-  retention, reconciliation, and user deletion remain later Voice slices.
+  Cancellation removes its owned artifact.
 
 One process-wide `DictationWorkflowCoordinator` serializes commands and cancels
 the other Dictation workflow before beginning a replacement. The Actions keep
@@ -297,8 +296,9 @@ Before every mutation, Accessibility classifies process replacement, secure
 status, and focused-element replacement; the writer separately proves the
 expected caret. A failed lease cannot fall through to another delivery adapter.
 History stores its stable typed reason while the current-session Raw and
-Formatted/Edited copy paths remain explicit. M6 owns user-requested re-delivery
-as a new result.
+Formatted/Edited copy paths remain explicit. User-requested re-delivery waits
+three seconds for a fresh target, rechecks an empty caret, uses the safe writer,
+and appends a new Delivered result instead of mutating capture evidence.
 See [`decisions/0020_local_ai_dictation.md`](decisions/0020_local_ai_dictation.md)
 and
 [`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md).
@@ -392,6 +392,28 @@ future preference schema is preserved and never overwritten. This store uses
 the same atomic-write and corruption-preservation policy because application
 preferences are not work-mode data.
 
+### Voice History store
+
+One actor owns the SQLite connection, schema migration, result validation, and
+session transactions. `voice_sessions` retains capture metadata and the single
+optional CAF path. `voice_results` stores immutable linked results with typed
+stage, origin, Style, model, prompt, structured-document, timed-span, and
+delivery evidence. Legacy session rows receive baseline Raw, Edited, Formatted,
+and Delivered results lazily and transactionally; the original rows are not
+rewritten.
+
+Search joins all result stages and escapes wildcard input. Result reads reject
+invalid stage/origin pairs, contradictory formatting or delivery provenance,
+broken source links, and spans outside measured audio duration. Appending a
+derived result validates its source against the same session. Export copies
+evidence into one atomic open package with streaming SHA-256 file checksums
+without modifying the database.
+
+Deletion first quarantines owned audio, commits metadata removal, then removes
+the quarantine; a failed database commit restores the file. Automatic age,
+byte, count, and low-disk enforcement remains an M7 utility-path responsibility
+and never runs on capture or delivery.
+
 ### Presentation
 
 A main-actor model renders immutable runtime snapshots and forwards user
@@ -399,14 +421,23 @@ intents. UI can miss intermediate animation frames; the runtime and action
 engine cannot miss a hardware transition. Presentation does not own hardware,
 Profile transactions, permission polling, or transcription lifecycle.
 
-One `NavigationSplitView` presents Controller, Profiles, and General. A small
-navigation model owns only destination routing. A separate preference model
+One `NavigationSplitView` presents Controller, History, Profiles, and General.
+A small navigation model owns only destination routing. A separate preference model
 owns app-wide appearance, sidebar visibility, app-local microphone selection,
 transactional Local AI settings, and transactional Voice-trigger settings.
 Controller retains the device-centered
-studio composition; Profiles and General use native lists and forms. General's
+studio composition; History uses a searchable archive and evidence detail;
+Profiles and General use native lists and forms. General's
 Local AI section progressively reveals installed Ollama models and retention,
 provider readiness/test state, bounded context, dictionary, and instructions.
+
+`VoiceHistoryModel` owns presentation state only. `VoiceHistoryService`
+serializes correction, retranscription, reformatting, and re-delivery workflows;
+system adapters isolate AVFAudio, Apple speech, local refinement, target capture,
+text writing, and package export. SQLite remains actor-owned. Every derived
+operation appends a linked immutable `VoiceHistoryResult` carrying its stage,
+origin, source result, Style, provider/model/prompt, structured document, timed
+spans, and delivery outcome where applicable.
 
 Device layout is data supplied by the Driver, allowing the Infinity 3 to render
 three spatial controls while a future device renders a different arrangement

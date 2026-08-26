@@ -179,9 +179,11 @@ but preserves a model that another local Ollama client already had running.
 ## Privacy and safety
 
 - Local Dictation remains memory-only. Local AI Dictation records one local CAF
-  plus Raw, replayable spoken edits, Edited, Formatted, and Delivered text under
-  the app's Application Support directory. History UI and retention enforcement
-  are not implemented yet, so do not use it for sensitive capture.
+  plus immutable Raw, Edited, Formatted, Delivered, and corrected results under
+  the app's Application Support directory. **History** can search, inspect,
+  replay, correct, retranscribe, reformat, retry, export, pin, and delete those
+  sessions. Automatic retention enforcement remains pending; delete sensitive
+  captures manually instead of relying on automatic cleanup.
 - Nearby context, prompts, and model payloads remain memory-only. Speech content
   is never written to logs.
 - Apple speech recognition is required to run on-device.
@@ -209,9 +211,9 @@ but preserves a model that another local Ollama client already had running.
   provider contract.
 - Atomic, schema-versioned local Profiles and application preferences with
   explicit migration, corruption recovery, and forward-schema protection.
-- A native Controller, Profiles, and General shell with Dock and menu-bar
-  presence, direct permission recovery, and transient final-only transcript
-  HUD.
+- A native Controller, History, Profiles, and General shell with Dock and
+  menu-bar presence, searchable local Voice evidence, direct permission
+  recovery, and transient final-only transcript HUD.
 - No accounts, analytics, telemetry, cloud APIs, remote storage, or third-party
   linked runtime dependencies.
 

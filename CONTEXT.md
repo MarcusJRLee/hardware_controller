@@ -11,9 +11,11 @@ identify deep implementation modules without changing that language.
 | Dictation coordinator | Process-wide serial owner that cancels one Dictation workflow before beginning the other. |
 | Local Dictation controller | Existing live-composition workflow. It owns recognition, adaptive target delivery, finalization, and recovery without model refinement. |
 | Local AI Dictation controller | Final-only workflow that composes recognition, starts model preparation during speech, validates refinement, delivers refined or Raw fallback once, and finalizes one Voice session. |
-| Voice session History | Local session document containing separate Raw, Edited, Formatted, and Delivered text plus at most one audio artifact. |
+| Voice session History | Searchable local archive whose session owns at most one audio artifact and an append-only graph of immutable Raw, Edited, Formatted, Delivered, and corrected results. |
 | Audio artifact recorder | Bounded nonblocking tee from immutable capture buffers to an atomically finalized local CAF. |
 | Voice session store | Actor-owned system SQLite connection that serializes local session metadata transactions. |
+| Voice History service | Actor that retranscribes retained audio, reformats reusable text, retries delivery, and appends each outcome as a linked immutable result. |
+| Reusable result | Newest nonempty result selected deterministically from one session for copy, correction, retranscription, reformatting, export, or explicit re-delivery. |
 | Voice trigger | Input adapter that maps physical, exact-chord, or in-app intent into the shared Voice-session contract. |
 | Voice chord | Optional machine-wide exact shortcut dedicated to Voice capture and independent of Binding keyboard fallbacks. |
 | Latched capture | Voice capture kept active after a valid double press until the next valid double press. |

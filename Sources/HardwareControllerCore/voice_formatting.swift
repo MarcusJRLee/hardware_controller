@@ -3,6 +3,7 @@ public enum VoiceStyleKind:
   CaseIterable,
   Codable,
   Equatable,
+  Hashable,
   Sendable
 {
   case natural
@@ -12,7 +13,7 @@ public enum VoiceStyleKind:
   case verbatim
 }
 
-public struct VoiceStyle: Codable, Equatable, Sendable {
+public struct VoiceStyle: Codable, Equatable, Hashable, Sendable {
   public static let currentRevision = 1
 
   public let kind: VoiceStyleKind

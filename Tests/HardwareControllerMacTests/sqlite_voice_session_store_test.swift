@@ -6,6 +6,366 @@ import Testing
 @testable import HardwareControllerMac
 
 struct SQLiteVoiceSessionStoreTest {
+  @Test(
+    .enabled(
+      if: ProcessInfo.processInfo.environment[
+        "HC_RUN_VOICE_HISTORY_BENCHMARK"
+      ] == "1"
+    )
+  )
+  func searchesFiveThousandSessionsWithinTheWarmBudget() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_benchmark_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    var initialized: SQLiteVoiceSessionHistory? =
+      try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    initialized = nil
+    #expect(initialized == nil)
+    var database: OpaquePointer?
+    #expect(
+      sqlite3_open(
+        rootDirectory.appending(path: "history.sqlite3").path,
+        &database
+      ) == SQLITE_OK
+    )
+    let opened = try #require(database)
+    var seed = "BEGIN IMMEDIATE;"
+    for index in 0..<5_000 {
+      let sessionID = UUID().uuidString
+      let resultID = UUID().uuidString
+      let text =
+        index == 4_321
+        ? "distinct needle phrase" : "ordinary session \(index)"
+      seed += """
+        INSERT INTO voice_sessions (
+          id, started_at, ended_at, raw_text, edited_text,
+          formatted_text, delivered_text, delivery_outcome, is_pinned
+        ) VALUES (
+          '\(sessionID)', \(index), \(index + 1), '\(text)', '\(text)',
+          '\(text)', '\(text)', 'inserted', 0
+        );
+        INSERT INTO voice_results (
+          id, session_id, created_at, stage, origin, text
+        ) VALUES (
+          '\(resultID)', '\(sessionID)', \(index + 1),
+          'raw', 'capture', '\(text)'
+        );
+        """
+    }
+    seed += "COMMIT;"
+    #expect(sqlite3_exec(opened, seed, nil, nil, nil) == SQLITE_OK)
+    sqlite3_close(opened)
+    database = nil
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let clock = ContinuousClock()
+    var samples: [Duration] = []
+    var matches: [VoiceSessionHistoryItem] = []
+
+    for _ in 0..<20 {
+      let start = clock.now
+      matches = try await history.searchSessions(
+        query: "needle phrase",
+        limit: 10
+      )
+      samples.append(start.duration(to: clock.now))
+    }
+    let ordered = samples.sorted()
+    let p95 = ordered[18]
+    print("Voice History 5,000-session warm-search p95: \(p95)")
+    #expect(matches.count == 1)
+    #expect(p95 <= .milliseconds(250))
+  }
+
+  @Test
+  func baselineStagesRemainImmutableAndShareOneTimedAudioArtifact()
+    async throws
+  {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_results_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let sessionID = UUID()
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let document = try historyDocument(sessionID: sessionID)
+    history.begin(sessionID: sessionID, startedAt: document.startedAt)
+    history.append(try makeVoiceAudioFixture())
+
+    try await history.complete(document)
+
+    let session = try #require(
+      try await history.session(id: sessionID)
+    )
+    #expect(
+      session.results.map(\.stage) == [
+        .raw, .edited, .formatted, .delivered,
+      ])
+    #expect(session.results[1].sourceResultID == session.results[0].id)
+    #expect(session.results[2].sourceResultID == session.results[1].id)
+    #expect(session.results[3].sourceResultID == session.results[2].id)
+    #expect(session.results[2].style == .technical)
+    #expect(session.results[2].provider == .ollama)
+    #expect(session.results[2].modelIdentifier == "qwen3.5:4b")
+    #expect(session.results[2].promptRevision == 5)
+    #expect(session.audioDurationMilliseconds == 100)
+    #expect(
+      session.results[0].timedSpans
+        == [
+          VoiceHistoryTimedSpan(
+            startMilliseconds: 0,
+            endMilliseconds: 100,
+            text: document.rawText
+          )
+        ]
+    )
+    #expect(session.isPinned == false)
+    #expect(session.audioArtifactURL?.lastPathComponent == "\(sessionID).caf")
+  }
+
+  @Test
+  func searchIncludesEveryStageAndAStoredCorrection() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_search_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let sessionID = UUID()
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let document = try historyDocument(sessionID: sessionID)
+    history.begin(sessionID: sessionID, startedAt: document.startedAt)
+    try await history.complete(document)
+    let stored = try #require(try await history.session(id: sessionID))
+    let source = try #require(stored.results.preferredReusableResult)
+    let correction = VoiceHistoryResult(
+      sessionID: sessionID,
+      createdAt: Date(timeIntervalSince1970: 1_002),
+      stage: .corrected,
+      origin: .correction,
+      text: "Corrected lunar wording.",
+      sourceResultID: source.id
+    )
+
+    try await history.appendResult(correction)
+
+    for query in ["raw nebula", "edited comet", "formatted orbit", "delivered star", "lunar"] {
+      let matches = try await history.searchSessions(
+        query: query,
+        limit: 10
+      )
+      #expect(matches.map(\.id) == [sessionID])
+    }
+    #expect(
+      try await history.searchSessions(query: "not present", limit: 10)
+        .isEmpty
+    )
+    let reopened = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let result = try #require(
+      try await reopened.session(id: sessionID)?.results.last
+    )
+    #expect(result == correction)
+    #expect(
+      try await reopened.session(id: sessionID)?.results.count == 5
+    )
+  }
+
+  @Test
+  func pinPersistsAndDeleteRemovesMetadataAndAudio() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_delete_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let sessionID = UUID()
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let document = try historyDocument(sessionID: sessionID)
+    history.begin(sessionID: sessionID, startedAt: document.startedAt)
+    history.append(try makeVoiceAudioFixture())
+    try await history.complete(document)
+    let audioURL = try #require(
+      try await history.session(id: sessionID)?.audioArtifactURL
+    )
+
+    try await history.setPinned(sessionID: sessionID, isPinned: true)
+
+    let reopened = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    #expect(try await reopened.session(id: sessionID)?.isPinned == true)
+    try await reopened.deleteSession(id: sessionID)
+    #expect(try await reopened.session(id: sessionID) == nil)
+    #expect(!FileManager.default.fileExists(atPath: audioURL.path))
+  }
+
+  @Test
+  func derivedTimingCannotEscapeTheImmutableAudio() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_timing_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let sessionID = UUID()
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let document = try historyDocument(sessionID: sessionID)
+    history.begin(sessionID: sessionID, startedAt: document.startedAt)
+    history.append(try makeVoiceAudioFixture())
+    try await history.complete(document)
+    let source = try #require(
+      try await history.session(id: sessionID)?.results.first
+    )
+    let result = VoiceHistoryResult(
+      sessionID: sessionID,
+      createdAt: Date(timeIntervalSince1970: 1_100),
+      stage: .raw,
+      origin: .retranscription,
+      text: "Too long",
+      sourceResultID: source.id,
+      timedSpans: [
+        VoiceHistoryTimedSpan(
+          startMilliseconds: 0,
+          endMilliseconds: 101,
+          text: "Too long"
+        )
+      ]
+    )
+
+    await #expect(throws: VoiceSessionHistoryError.self) {
+      try await history.appendResult(result)
+    }
+  }
+
+  @Test
+  func contradictoryStoredResultProvenanceIsRejected() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_provenance_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let sessionID = UUID()
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let document = try historyDocument(sessionID: sessionID)
+    history.begin(sessionID: sessionID, startedAt: document.startedAt)
+    try await history.complete(document)
+    _ = try await history.session(id: sessionID)
+    var database: OpaquePointer?
+    #expect(
+      sqlite3_open(
+        rootDirectory.appending(path: "history.sqlite3").path,
+        &database
+      ) == SQLITE_OK
+    )
+    let opened = try #require(database)
+    #expect(
+      sqlite3_exec(
+        opened,
+        "UPDATE voice_results SET origin = 'delivery' WHERE stage = 'raw';",
+        nil,
+        nil,
+        nil
+      ) == SQLITE_OK
+    )
+    sqlite3_close(opened)
+    database = nil
+
+    await #expect(throws: VoiceSessionHistoryError.self) {
+      try await history.session(id: sessionID)
+    }
+  }
+
+  @Test
+  func brokenStoredResultRelationshipIsRejected() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_relationship_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let sessionID = UUID()
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    try await history.complete(try historyDocument(sessionID: sessionID))
+    _ = try await history.session(id: sessionID)
+    var database: OpaquePointer?
+    #expect(
+      sqlite3_open(
+        rootDirectory.appending(path: "history.sqlite3").path,
+        &database
+      ) == SQLITE_OK
+    )
+    let opened = try #require(database)
+    #expect(
+      sqlite3_exec(
+        opened,
+        """
+        UPDATE voice_results
+        SET source_result_id = '\(UUID().uuidString)'
+        WHERE stage = 'edited';
+        """,
+        nil,
+        nil,
+        nil
+      ) == SQLITE_OK
+    )
+    sqlite3_close(opened)
+    database = nil
+
+    await #expect(throws: VoiceSessionHistoryError.self) {
+      try await history.session(id: sessionID)
+    }
+  }
+
+  @Test
+  func deliveredResultWithoutOutcomeIsRejected() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_outcome_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let sessionID = UUID()
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    try await history.complete(try historyDocument(sessionID: sessionID))
+    _ = try await history.session(id: sessionID)
+    var database: OpaquePointer?
+    #expect(
+      sqlite3_open(
+        rootDirectory.appending(path: "history.sqlite3").path,
+        &database
+      ) == SQLITE_OK
+    )
+    let opened = try #require(database)
+    #expect(
+      sqlite3_exec(
+        opened,
+        """
+        UPDATE voice_results
+        SET delivery_outcome = NULL
+        WHERE stage = 'delivered';
+        """,
+        nil,
+        nil,
+        nil
+      ) == SQLITE_OK
+    )
+    sqlite3_close(opened)
+    database = nil
+
+    await #expect(throws: VoiceSessionHistoryError.self) {
+      try await history.session(id: sessionID)
+    }
+  }
+
+  @Test
+  func captureWaitsForAnotherHistoryWriter() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_writer_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let document = try historyDocument(sessionID: UUID())
+    var database: OpaquePointer?
+    #expect(
+      sqlite3_open(
+        rootDirectory.appending(path: "history.sqlite3").path,
+        &database
+      ) == SQLITE_OK
+    )
+    let opened = try #require(database)
+    #expect(
+      sqlite3_exec(opened, "BEGIN IMMEDIATE;", nil, nil, nil) == SQLITE_OK
+    )
+
+    let completion = Task {
+      try await history.complete(document)
+    }
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(sqlite3_exec(opened, "COMMIT;", nil, nil, nil) == SQLITE_OK)
+    sqlite3_close(opened)
+    database = nil
+    try await completion.value
+
+    #expect(try await history.session(id: document.id) != nil)
+  }
+
   @Test
   func storedDocumentIsReadableFromAReopenedHistory() async throws {
     let rootDirectory = FileManager.default.temporaryDirectory
@@ -131,6 +491,61 @@ struct SQLiteVoiceSessionStoreTest {
   }
 
   @Test
+  func legacySessionRemainsSearchableWhenItsAudioIsMissing()
+    async throws
+  {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_missing_audio_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    try FileManager.default.createDirectory(
+      at: rootDirectory,
+      withIntermediateDirectories: true
+    )
+    let sessionID = UUID()
+    var database: OpaquePointer?
+    #expect(
+      sqlite3_open(
+        rootDirectory.appending(path: "history.sqlite3").path,
+        &database
+      ) == SQLITE_OK
+    )
+    let opened = try #require(database)
+    let sql = """
+      CREATE TABLE voice_sessions (
+        id TEXT PRIMARY KEY NOT NULL,
+        started_at REAL NOT NULL,
+        ended_at REAL NOT NULL,
+        raw_text TEXT NOT NULL,
+        edited_text TEXT NOT NULL,
+        formatted_text TEXT NOT NULL,
+        delivered_text TEXT NOT NULL,
+        target_application_name TEXT,
+        delivery_outcome TEXT NOT NULL,
+        delivery_failure TEXT,
+        audio_filename TEXT
+      );
+      INSERT INTO voice_sessions VALUES (
+        '\(sessionID.uuidString)', 1000, 1001, 'raw', 'raw',
+        'Raw.', 'Raw.', 'Notes', 'inserted', NULL,
+        '\(sessionID.uuidString).caf'
+      );
+      """
+    #expect(sqlite3_exec(opened, sql, nil, nil, nil) == SQLITE_OK)
+    sqlite3_close(opened)
+    database = nil
+
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let item = try #require(
+      try await history.searchSessions(query: "Raw", limit: 1).first
+    )
+
+    #expect(item.id == sessionID)
+    #expect(item.audioArtifactURL == nil)
+    #expect(item.results.count == 4)
+    #expect(item.results.first?.timedSpans.isEmpty == true)
+  }
+
+  @Test
   func typedOwnershipFailureSurvivesDatabaseReopen() async throws {
     let rootDirectory = FileManager.default.temporaryDirectory
       .appending(path: "voice_history_ownership_\(UUID().uuidString)")
@@ -253,5 +668,33 @@ struct SQLiteVoiceSessionStoreTest {
       try await history.complete(document)
     }
     #expect(try await history.recentSessions(limit: 1).isEmpty)
+  }
+
+  private func historyDocument(
+    sessionID: UUID
+  ) throws -> VoiceSessionDocument {
+    let rawText = "raw nebula"
+    let editedText = "edited comet"
+    let formattedText = "Formatted orbit."
+    let formattedDocument = try VoiceFormattedDocumentBuilder().build(
+      formattedText: formattedText,
+      rawText: rawText,
+      style: .technical,
+      provider: .ollama,
+      modelIdentifier: "qwen3.5:4b",
+      promptRevision: 5
+    )
+    return VoiceSessionDocument(
+      id: sessionID,
+      startedAt: Date(timeIntervalSince1970: 1_000),
+      endedAt: Date(timeIntervalSince1970: 1_001),
+      rawText: rawText,
+      editedText: editedText,
+      formattedText: formattedText,
+      deliveredText: "Delivered star.",
+      targetApplicationName: "Notes",
+      deliveryOutcome: .inserted,
+      formattedDocument: formattedDocument
+    )
   }
 }

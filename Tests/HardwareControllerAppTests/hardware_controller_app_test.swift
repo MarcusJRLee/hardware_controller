@@ -35,11 +35,16 @@ struct HardwareControllerAppTests {
       isDemoMode: true,
       appearanceApplier: FakeApplicationAppearanceApplier()
     )
+    let history = VoiceHistoryPresentation(
+      arguments: ["HardwareController", "--demo"],
+      localAISettings: .default
+    )
     let hostingController = NSHostingController(
       rootView: ApplicationShellView(
         model: model,
         navigation: navigation,
-        preferencesModel: preferences
+        preferencesModel: preferences,
+        historyModel: history.model
       )
     )
     let window = NSWindow(contentViewController: hostingController)
@@ -50,6 +55,8 @@ struct HardwareControllerAppTests {
     try await waitUntil { window.title == "Hardware Controller" }
     navigation.select(.profiles)
     try await waitUntil { window.title == "Profiles" }
+    navigation.select(.history)
+    try await waitUntil { window.title == "History" }
     navigation.select(.controller)
     try await waitUntil { window.title == "Controller" }
   }

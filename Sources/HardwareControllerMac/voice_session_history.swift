@@ -9,6 +9,8 @@ public enum VoiceSessionHistoryError:
   Sendable
 {
   case invalidLimit
+  case invalidResult(String)
+  case sessionNotFound
   case storageUnavailable(String)
   case audioUnavailable(String)
 
@@ -16,6 +18,10 @@ public enum VoiceSessionHistoryError:
     switch self {
     case .invalidLimit:
       "History queries require a limit from 1 through 1,000."
+    case .invalidResult(let detail):
+      detail
+    case .sessionNotFound:
+      "The Voice History session no longer exists."
     case .storageUnavailable(let detail),
       .audioUnavailable(let detail):
       detail
@@ -23,9 +29,30 @@ public enum VoiceSessionHistoryError:
   }
 }
 
-public struct VoiceSessionHistoryItem: Equatable, Sendable {
+public struct VoiceSessionHistoryItem:
+  Equatable,
+  Identifiable,
+  Sendable
+{
   public let document: VoiceSessionDocument
   public let audioArtifactURL: URL?
+  public let audioDurationMilliseconds: Int64?
+  public let isPinned: Bool
+  public let results: [VoiceHistoryResult]
+
+  public init(
+    document: VoiceSessionDocument,
+    audioArtifactURL: URL?,
+    audioDurationMilliseconds: Int64? = nil,
+    isPinned: Bool = false,
+    results: [VoiceHistoryResult] = []
+  ) {
+    self.document = document
+    self.audioArtifactURL = audioArtifactURL
+    self.audioDurationMilliseconds = audioDurationMilliseconds
+    self.isPinned = isPinned
+    self.results = results
+  }
 
   public var id: UUID { document.id }
   public var rawText: String { document.rawText }
@@ -38,6 +65,22 @@ public struct VoiceSessionHistoryItem: Equatable, Sendable {
   public var deliveryOutcome: VoiceSessionDeliveryOutcome {
     document.deliveryOutcome
   }
+}
+
+public protocol VoiceSessionHistoryAccessing: Sendable {
+  func recentSessions(limit: Int) async throws
+    -> [VoiceSessionHistoryItem]
+
+  func searchSessions(query: String, limit: Int) async throws
+    -> [VoiceSessionHistoryItem]
+
+  func session(id: UUID) async throws -> VoiceSessionHistoryItem?
+
+  func appendResult(_ result: VoiceHistoryResult) async throws
+
+  func setPinned(sessionID: UUID, isPinned: Bool) async throws
+
+  func deleteSession(id: UUID) async throws
 }
 
 public protocol VoiceSessionHistoryRecording: Sendable {
@@ -66,7 +109,8 @@ public struct DiscardingVoiceSessionHistory:
 }
 
 public struct UnavailableVoiceSessionHistory:
-  VoiceSessionHistoryRecording
+  VoiceSessionHistoryRecording,
+  VoiceSessionHistoryAccessing
 {
   private let failure: VoiceSessionHistoryError
 
@@ -82,10 +126,39 @@ public struct UnavailableVoiceSessionHistory:
   }
 
   public func cancel(sessionID: UUID) async {}
+
+  public func recentSessions(limit: Int) async throws
+    -> [VoiceSessionHistoryItem]
+  {
+    throw failure
+  }
+
+  public func searchSessions(query: String, limit: Int) async throws
+    -> [VoiceSessionHistoryItem]
+  {
+    throw failure
+  }
+
+  public func session(id: UUID) async throws -> VoiceSessionHistoryItem? {
+    throw failure
+  }
+
+  public func appendResult(_ result: VoiceHistoryResult) async throws {
+    throw failure
+  }
+
+  public func setPinned(sessionID: UUID, isPinned: Bool) async throws {
+    throw failure
+  }
+
+  public func deleteSession(id: UUID) async throws {
+    throw failure
+  }
 }
 
 public final class SQLiteVoiceSessionHistory:
   VoiceSessionHistoryRecording,
+  VoiceSessionHistoryAccessing,
   Sendable
 {
   private struct ActiveRecording {
@@ -182,5 +255,36 @@ public final class SQLiteVoiceSessionHistory:
     limit: Int
   ) async throws -> [VoiceSessionHistoryItem] {
     try await store.recentSessions(limit: limit)
+  }
+
+  public func searchSessions(
+    query: String,
+    limit: Int
+  ) async throws -> [VoiceSessionHistoryItem] {
+    try await store.searchSessions(query: query, limit: limit)
+  }
+
+  public func session(id: UUID) async throws
+    -> VoiceSessionHistoryItem?
+  {
+    try await store.session(id: id)
+  }
+
+  public func appendResult(_ result: VoiceHistoryResult) async throws {
+    try await store.appendResult(result)
+  }
+
+  public func setPinned(
+    sessionID: UUID,
+    isPinned: Bool
+  ) async throws {
+    try await store.setPinned(
+      sessionID: sessionID,
+      isPinned: isPinned
+    )
+  }
+
+  public func deleteSession(id: UUID) async throws {
+    try await store.deleteSession(id: id)
   }
 }

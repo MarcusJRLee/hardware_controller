@@ -12,6 +12,8 @@ struct ApplicationNavigationModelTests {
 
     model.select(.profiles)
     #expect(model.selectedDestination == .profiles)
+    model.select(.history)
+    #expect(model.selectedDestination == .history)
     model.select(.general)
     #expect(model.selectedDestination == .general)
   }
@@ -22,6 +24,10 @@ struct ApplicationNavigationModelTests {
     #expect(
       ApplicationNavigationModel(arguments: ["--ui-profiles"])
         .selectedDestination == .profiles
+    )
+    #expect(
+      ApplicationNavigationModel(arguments: ["--ui-history"])
+        .selectedDestination == .history
     )
     #expect(
       ApplicationNavigationModel(arguments: ["--ui-general"])

@@ -141,8 +141,11 @@ failure path.
 
 - A normal foreground Mac app with Dock, application-menu, and menu-bar
   presence.
-- One window with Controller, Profiles, and General in an expanded-by-default
-  native sidebar.
+- One window with Controller, History, Profiles, and General in an
+  expanded-by-default native sidebar.
+- Searchable local History with immutable result evidence, timed audio,
+  correction, retranscription, reformatting, explicit re-delivery, export,
+  pinning, and deletion.
 - Immediate physical state, active-Profile state, independent Action
   readiness, and direct permission/provider recovery.
 - A click-through transcript HUD only while an active target cannot display
@@ -246,8 +249,8 @@ The accepted local-first Voice program supersedes these boundaries one tested
 vertical slice at a time. M1 persists Local AI Dictation audio and distinct
 final text stages; M2 adds the independent hold/latch Voice chord; M3 adds
 versioned Styles and structured formatting; M4 adds typed replayable spoken
-edits. History UI, retention enforcement, the portable engine, and iOS remain
-pending. See
+edits; M5 preserves target ownership; M6 adds searchable, reusable History.
+Retention enforcement, the portable engine, and iOS remain pending. See
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 [`voice_platform_design.md`](voice_platform_design.md), and
 [`voice_cujs.md`](voice_cujs.md).

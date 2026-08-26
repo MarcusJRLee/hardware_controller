@@ -3,6 +3,7 @@ import Observation
 /// Identifies one durable application-window destination.
 enum AppDestination: String, CaseIterable, Hashable, Identifiable {
   case controller
+  case history
   case profiles
   case general
 
@@ -13,6 +14,8 @@ enum AppDestination: String, CaseIterable, Hashable, Identifiable {
     switch self {
     case .controller:
       "Controller"
+    case .history:
+      "History"
     case .profiles:
       "Profiles"
     case .general:
@@ -25,6 +28,8 @@ enum AppDestination: String, CaseIterable, Hashable, Identifiable {
     switch self {
     case .controller:
       "slider.horizontal.3"
+    case .history:
+      "waveform"
     case .profiles:
       "person.crop.rectangle.stack"
     case .general:
@@ -43,6 +48,8 @@ final class ApplicationNavigationModel {
   init(arguments: [String] = []) {
     if arguments.contains("--ui-general") {
       selectedDestination = .general
+    } else if arguments.contains("--ui-history") {
+      selectedDestination = .history
     } else if arguments.contains("--ui-profiles") {
       selectedDestination = .profiles
     } else {
