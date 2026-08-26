@@ -482,6 +482,8 @@ extension LocalAIRefinementFailure {
       .invalidResponse(let detail),
       .generationFailed(let detail):
       detail
+    case .remoteProviderRejected:
+      "Remote-capable providers are disabled in local-only mode."
     case .modelMissing(let name):
       "\(name) is not installed."
     case .modelDigestChanged:

@@ -5,6 +5,36 @@ public enum LocalAIProviderKind: String, CaseIterable, Codable, Sendable {
   case ollama
 }
 
+/// Declares the furthest boundary a provider can cross with Voice content.
+public enum LocalAIProviderLocality: Equatable, Sendable {
+  case inProcess
+  case fixedLoopback
+  case remoteCapable
+
+  public var permitsContentInLocalOnlyMode: Bool {
+    switch self {
+    case .inProcess, .fixedLoopback:
+      true
+    case .remoteCapable:
+      false
+    }
+  }
+}
+
+/// Makes provider identity and locality mandatory at the adapter boundary.
+public struct LocalAIProviderCapability: Equatable, Sendable {
+  public let provider: LocalAIProviderKind
+  public let locality: LocalAIProviderLocality
+
+  public init(
+    provider: LocalAIProviderKind,
+    locality: LocalAIProviderLocality
+  ) {
+    self.provider = provider
+    self.locality = locality
+  }
+}
+
 public enum LocalAIModelRetention: String, CaseIterable, Codable, Sendable {
   case recentUse
   case processLifetime
@@ -280,6 +310,7 @@ public struct LocalAIRefinementResponse: Equatable, Sendable {
 
 public enum LocalAIRefinementFailure: Error, Equatable, Sendable {
   case providerUnavailable(String)
+  case remoteProviderRejected
   case modelMissing(String)
   case modelDigestChanged(expected: String, actual: String)
   case timedOut

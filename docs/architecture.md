@@ -248,6 +248,11 @@ composed rather than copied.
 
 Local AI providers implement `TranscriptRefining`:
 
+- Every adapter declares one immutable `LocalAIProviderCapability` containing
+  provider identity and `inProcess`, `fixedLoopback`, or `remoteCapable`
+  locality. `LocalAIRefinementRouter` validates the declared and returned
+  identities. In local-only mode it rejects `remoteCapable` before readiness,
+  preparation, refinement, release, or shutdown can invoke that adapter.
 - `AppleFoundationModelRefiner` availability-gates macOS 26,
   `SystemLanguageModel`, locale, Apple Intelligence, and installed assets. It
   uses greedy typed generation and no Private Cloud Compute path.
@@ -564,6 +569,8 @@ macOS 26+ speech uses installed `SpeechAnalyzer` assets; macOS 15–25 sets
 refinement uses only the on-device system model. Ollama uses an ephemeral
 URLSession with fixed numeric loopback, no proxy dictionary, no redirects, and
 no cache. The app never falls back to server recognition or remote inference.
+Apple declares in-process locality and Ollama declares fixed-loopback locality;
+the router fails closed on any remote-capable or identity-mismatched adapter.
 It reserves only configured exact fallback chords and never reads the global
 keyboard event stream.
 
@@ -582,12 +589,16 @@ keyboard event stream.
   the typed reason for Local AI, and expose explicit copy recovery.
 - Buffered event delivery failure: do not replay through Accessibility or the
   pasteboard; retain final text for explicit recovery.
-- Recognition failure: publish locale, asset, permission, audio, conversion, or
-  recognition failure without persisting audio or partial text.
+- Recognition failure: publish the typed locale, asset, permission, audio,
+  conversion, or recognition failure and never mutate the target. Local AI
+  finalizes any captured audio into History with delivery not attempted; a
+  failure before the first buffer has no audio to retain. Local Dictation keeps
+  its existing in-memory-only behavior.
 - Local AI provider failure: distinguish provider absence, missing model,
-  digest drift, timeout, overload, malformed output, validation rejection, and
-  delivery failure. Deliver Edited text once only when target revalidation passes;
-  discard late output after cancellation or timeout.
+  digest drift, prohibited remote capability, timeout, overload, malformed
+  output, validation rejection, and delivery failure. Deliver Edited text once
+  only when target revalidation passes; discard late output after cancellation
+  or timeout.
 - App-local microphone unavailable: retain the saved UID, use the current
   system default, and restore the saved Device automatically after reconnect.
 - Microphone configuration change: fail the active Dictation once, discard its

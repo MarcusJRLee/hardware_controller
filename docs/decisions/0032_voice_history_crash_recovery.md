@@ -59,6 +59,6 @@ retranscription, expiration restore/discard, recovered-audio expiry, full-disk
 audio failure, malformed-row isolation, unreadable artifacts, and physical
 database preservation. Presentation and export tests cover empty-result
 selection, sanitized recovery copy, and revision-3 provenance. The current
-corpus passes 469 tests in 71 suites; 5,000-session warm search p95 is 2.639 ms
+corpus passes 475 tests in 71 suites; 5,000-session warm search p95 is 2.639 ms
 against the 250 ms requirement. Signed packaged-UI checks cover light, dark,
 increased-contrast, reduced-motion, large-text, and keyboard-navigation modes.

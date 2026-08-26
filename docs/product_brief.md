@@ -47,6 +47,7 @@ automatically formatted result.
 | Toggle | Alternate between begin and end on successive presses. |
 | Active Action | An Action that began and has not yet ended. |
 | Formatting provider | A local model boundary that converts Edited text evidence into a Formatted document. |
+| Provider locality | The declared furthest boundary a model adapter can cross with Voice content: in-process, fixed loopback, or remote-capable. |
 | Raw transcript | Final on-device speech-recognition text before Dictionary replacement, spoken edits, or refinement. |
 | Edited transcript | Raw text after deterministic spoken edits and Dictionary replacements. |
 | Spoken edit | A typed, source-evidenced deterministic operation applied before formatting. |
@@ -128,6 +129,12 @@ failure path.
 - Reconcile interrupted app-owned audio into truthful Recovery sessions before
   retention. Never invent transcript text; preserve playback and local
   retranscription for 24 hours unless pinned.
+- Reject a remote-capable Formatting provider before invoking any adapter
+  method. When local formatting fails, deliver deterministic Edited text only
+  after target revalidation.
+- If recognition fails after capture produced audio, retain the CAF and a
+  truthful failed History item with delivery marked not attempted. Never mutate
+  the target.
 
 ### Configuration
 
@@ -239,6 +246,8 @@ Given a configured Voice chord and ready Local AI Dictation:
   15–25.
 - An unavailable Apple model or Ollama service/model/digest blocks only Local
   AI Dictation for the selected provider.
+- A remote-capable provider is unavailable in local-only mode and receives no
+  readiness, lifecycle, transcript, context, or History call.
 - Provider testing uses a fixed sanitized phrase and never starts the
   microphone or reads a target.
 
@@ -264,8 +273,9 @@ final text stages; M2 adds the independent hold/latch Voice chord; M3 adds
 versioned Styles and structured formatting; M4 adds typed replayable spoken
 edits; M5 preserves target ownership; M6 adds searchable, reusable History.
 M7 bounds retained audio by age, bytes, count, and low disk while protecting
-active, pinned, and sole recovery artifacts. The portable engine and iOS remain
-pending. See
+active, pinned, and sole recovery artifacts. M8 reconciles crash artifacts and
+isolates corruption. M9 enforces provider locality and retains captured audio
+after ASR failure. The portable engine and iOS remain pending. See
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 [`voice_platform_design.md`](voice_platform_design.md), and
 [`voice_cujs.md`](voice_cujs.md).

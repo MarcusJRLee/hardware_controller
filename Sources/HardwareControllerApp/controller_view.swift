@@ -1216,6 +1216,8 @@ extension LocalAIRefinementFailure {
     switch self {
     case .providerUnavailable(let detail):
       detail
+    case .remoteProviderRejected:
+      "Remote-capable providers are disabled in local-only mode."
     case .modelMissing(let name):
       "The selected model \(name) is not installed."
     case .modelDigestChanged:

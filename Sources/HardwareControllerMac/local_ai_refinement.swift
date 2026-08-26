@@ -2,6 +2,8 @@ import Foundation
 import HardwareControllerCore
 
 public protocol TranscriptRefining: Sendable {
+  var capability: LocalAIProviderCapability { get }
+
   func readiness(
     settings: LocalAISettings,
     locale: Locale

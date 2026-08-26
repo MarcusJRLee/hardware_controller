@@ -1,6 +1,6 @@
 # 0029: Local Voice platform expansion
 
-- **Status:** Accepted; macOS M1–M4 and the M5 ownership guard implemented
+- **Status:** Accepted; macOS M1–M9 implemented
 - **Date:** 2026-08-25
 - **Amends:**
   [`0001_native_macos_stack.md`](0001_native_macos_stack.md),
@@ -192,3 +192,10 @@ owned audio. M7 subsequently delivered automatic quota enforcement under
 [decision 0031](0031_bounded_voice_history_audio.md). M8 partial, orphan,
 quarantine, row-corruption, and database-corruption recovery is implemented by
 [decision 0032](0032_voice_history_crash_recovery.md).
+
+M9 makes provider locality mandatory under
+[decision 0033](0033_local_only_voice_enforcement.md). The router rejects a
+remote-capable adapter before invoking it, validates provider identity, and
+preserves deterministic Edited fallback. Recognition failure after capture
+finalizes playable audio with delivery not attempted and never mutates the
+target.

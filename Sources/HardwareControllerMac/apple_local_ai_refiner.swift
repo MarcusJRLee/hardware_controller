@@ -6,6 +6,10 @@ import HardwareControllerCore
 #endif
 
 public actor AppleFoundationModelRefiner: TranscriptRefining {
+  public nonisolated let capability = LocalAIProviderCapability(
+    provider: .appleOnDevice,
+    locality: .inProcess
+  )
   private let promptBuilder: VersionedLocalAIPromptBuilder
 
   private var preparedSessionStorage: AnyObject?

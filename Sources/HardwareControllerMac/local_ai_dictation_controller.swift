@@ -799,7 +799,7 @@ public actor LocalAIDictationController {
       formattedText: state.refinedText,
       deliveredText: "",
       targetApplicationName: state.targetApplicationName,
-      deliveryOutcome: .failed,
+      deliveryOutcome: .notAttempted,
       deliveryFailure: failure.localizedDescription,
       formattedDocument: activeFormattedDocument
     )
