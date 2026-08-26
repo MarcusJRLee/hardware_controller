@@ -94,4 +94,17 @@ struct LocalAIDictationTests {
     #expect(snapshot.hasRecoverableRawText)
     #expect(snapshot.hasRecoverableRefinedText)
   }
+
+  @Test
+  func localOnlyModePermitsOnlyInProcessAndFixedLoopbackProviders() {
+    #expect(
+      LocalAIProviderLocality.inProcess.permitsContentInLocalOnlyMode
+    )
+    #expect(
+      LocalAIProviderLocality.fixedLoopback.permitsContentInLocalOnlyMode
+    )
+    #expect(
+      !LocalAIProviderLocality.remoteCapable.permitsContentInLocalOnlyMode
+    )
+  }
 }

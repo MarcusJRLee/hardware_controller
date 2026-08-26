@@ -86,6 +86,48 @@ struct LocalAIDictationControllerTest {
     #expect(try AVAudioFile(forReading: audioURL).length > 0)
   }
 
+  @Test
+  func asrLossKeepsRecoverableAudioWithoutModifyingTarget() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_asr_loss_\(UUID().uuidString)")
+    defer {
+      try? FileManager.default.removeItem(at: rootDirectory)
+    }
+    let history = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory
+    )
+    let fixture = LocalAIControllerFixture(
+      refinement: .output("Never generated.")
+    )
+    let controller = fixture.makeController(history: history)
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.microphone.emit(try makeVoiceAudioFixture())
+    try await localAIWaitUntil {
+      fixture.session.appendCount == 1
+    }
+    fixture.session.fail(
+      SpeechRecognitionBackendError.modelUnavailable
+    )
+    try await localAIWaitUntil {
+      await controller.snapshot().phase == .failed
+    }
+
+    let sessions = try await history.recentSessions(limit: 10)
+    let session = try #require(sessions.first)
+    #expect(sessions.count == 1)
+    #expect(session.rawText.isEmpty)
+    #expect(session.editedText.isEmpty)
+    #expect(session.formattedText.isEmpty)
+    #expect(session.deliveredText.isEmpty)
+    #expect(session.deliveryOutcome == .notAttempted)
+    #expect(fixture.writer.inserted.isEmpty)
+    #expect(await fixture.refiner.requests.isEmpty)
+    let audioURL = try #require(session.audioArtifactURL)
+    #expect(try AVAudioFile(forReading: audioURL).length > 0)
+  }
+
   @Test(
     .enabled(
       if:
@@ -557,6 +599,45 @@ struct LocalAIDictationControllerTest {
   }
 
   @Test
+  func remoteCapableFormatterFallsBackWithoutReceivingVoiceContent()
+    async throws
+  {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_remote_fallback_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let remote = RemoteCapableRefinerProbe()
+    let router = LocalAIRefinementRouter(ollama: remote)
+    let fixture = LocalAIControllerFixture(refinement: .output("Unused."))
+    var settings = LocalAISettings.default
+    settings.provider = .ollama
+    let controller = fixture.makeController(
+      settings: settings,
+      refiner: router,
+      history: history
+    )
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.microphone.emit(try makeVoiceAudioFixture())
+    fixture.session.emit(.committed("keep this content local"))
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    let item = try #require(
+      try await history.recentSessions(limit: 1).first
+    )
+    #expect(fixture.writer.inserted == ["keep this content local"])
+    #expect(await remote.invocationCount == 0)
+    #expect(item.formattedText == "keep this content local")
+    #expect(item.deliveredText == "keep this content local")
+    #expect(item.deliveryOutcome == .inserted)
+    #expect(await controller.snapshot().fallbackReason == .remoteProviderRejected)
+    let audioURL = try #require(item.audioArtifactURL)
+    #expect(try AVAudioFile(forReading: audioURL).length > 0)
+  }
+
+  @Test
   func editedFallbackFlattensOnlyForASingleLineTarget() async throws {
     let fixture = LocalAIControllerFixture(
       refinement: .failure(.providerUnavailable("No formatter."))
@@ -897,8 +978,10 @@ private final class LocalAIFakeRecognitionSession:
   SpeechRecognitionSession,
   @unchecked Sendable
 {
+  private let lock = NSLock()
   let updates: AsyncThrowingStream<TranscriptRevision, any Error>
   private let continuation: AsyncThrowingStream<TranscriptRevision, any Error>.Continuation
+  private var appends = 0
 
   init() {
     (updates, continuation) = AsyncThrowingStream.makeStream()
@@ -908,7 +991,17 @@ private final class LocalAIFakeRecognitionSession:
     continuation.yield(revision)
   }
 
-  func append(_ audio: CapturedAudioBuffer) async throws {}
+  var appendCount: Int {
+    lock.withLock { appends }
+  }
+
+  func fail(_ error: any Error) {
+    continuation.finish(throwing: error)
+  }
+
+  func append(_ audio: CapturedAudioBuffer) async throws {
+    lock.withLock { appends += 1 }
+  }
 
   func finish() async throws {
     continuation.finish()
@@ -1088,6 +1181,49 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
 
   func shutdown() {
     shutdownCount += 1
+  }
+}
+
+private actor RemoteCapableRefinerProbe: TranscriptRefining {
+  nonisolated let capability = LocalAIProviderCapability(
+    provider: .ollama,
+    locality: .remoteCapable
+  )
+  private(set) var invocationCount = 0
+
+  func readiness(
+    settings: LocalAISettings,
+    locale: Locale
+  ) -> LocalAIProviderReadiness {
+    invocationCount += 1
+    return LocalAIProviderReadiness(
+      provider: .ollama,
+      state: .ready
+    )
+  }
+
+  func prepare(settings: LocalAISettings) {
+    invocationCount += 1
+  }
+
+  func refine(
+    _ request: LocalAIRefinementRequest,
+    settings: LocalAISettings
+  ) -> LocalAIRefinementResponse {
+    invocationCount += 1
+    return LocalAIRefinementResponse(
+      text: request.transcript,
+      provider: .ollama,
+      modelIdentifier: "remote-probe"
+    )
+  }
+
+  func release(settings: LocalAISettings) {
+    invocationCount += 1
+  }
+
+  func shutdown() {
+    invocationCount += 1
   }
 }
 

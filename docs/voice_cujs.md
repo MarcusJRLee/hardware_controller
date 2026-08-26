@@ -217,7 +217,7 @@ stale unreferenced audio is removed. Malformed rows are isolated, a physically
 corrupt SQLite family is preserved before clean storage opens, and audio
 finalization failure stores completed text before surfacing its typed failure.
 Deterministic planner, real CAF/SQLite, export, retention, corruption, and
-presentation tests cover the journey. The current corpus passes 469 tests in 71
+presentation tests cover the journey. The current corpus passes 475 tests in 71
 suites, including a retention-first recovery ordering regression.
 
 ### M9 — Remain local and degrade honestly
@@ -227,6 +227,17 @@ capable provider is rejected before content transfer. When formatting is
 unavailable or misses its deadline, validated Raw/Edited text is delivered under
 the declared fallback policy. When ASR is unavailable, audio remains recoverable
 and the target is not modified.
+
+**Current evidence:** every formatting adapter declares typed provider identity
+and locality. The router admits only in-process and fixed numeric-loopback
+providers, validates response identity, and invokes no method on a remote-
+capable adapter. A production-controller acceptance test rejects such an
+adapter, inserts deterministic Edited fallback once, and stores playable audio.
+A separate real CAF/SQLite test fails ASR after a captured buffer, performs no
+formatting or target mutation, and stores empty text stages with delivery not
+attempted and playable audio. Existing deadline, provider-unavailable,
+validation, late-output, and target-revalidation tests cover the other fallback
+branches. The complete 475-test/71-suite host corpus passes.
 
 ### M10 — Share one session behavior across triggers
 
