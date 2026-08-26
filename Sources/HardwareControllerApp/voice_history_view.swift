@@ -198,7 +198,7 @@ struct VoiceHistoryView: View {
         .font(.headline)
 
       if session.audioArtifactURL == nil {
-        Text("Audio is unavailable; transcript evidence remains searchable.")
+        Text(audioAvailabilityText(session))
           .foregroundStyle(.secondary)
       } else {
         let spans = session.results
@@ -244,6 +244,25 @@ struct VoiceHistoryView: View {
     }
     .padding(18)
     .studioCard()
+  }
+
+  private func audioAvailabilityText(
+    _ session: VoiceSessionHistoryItem
+  ) -> String {
+    let prefix: String
+    switch session.audioExpirationReason {
+    case .ageLimit:
+      prefix = "Audio expired after reaching its age limit."
+    case .artifactLimit:
+      prefix = "Audio expired after reaching the recording limit."
+    case .byteLimit:
+      prefix = "Audio expired after reaching the storage-size limit."
+    case .lowDisk:
+      prefix = "Audio expired to recover low disk space."
+    case nil:
+      prefix = "Audio is unavailable."
+    }
+    return "\(prefix) Transcript evidence remains searchable."
   }
 
   private func resultCard(

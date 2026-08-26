@@ -826,6 +826,7 @@ private final class RuntimeFixture {
         _,
         _,
         _,
+        _,
         relay in
         process.install(relay)
         return process

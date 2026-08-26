@@ -39,6 +39,7 @@ final class VoiceHistoryModel {
   var isPlaying: Bool { playbackState.isPlaying }
 
   @ObservationIgnored private let history: any VoiceSessionHistoryAccessing
+  @ObservationIgnored private let retentionManager: (any VoiceSessionHistoryRetentionManaging)?
   @ObservationIgnored private let service: any VoiceHistoryServicing
   @ObservationIgnored private let exporter: any VoiceHistoryExporting
   @ObservationIgnored private let player: any VoiceHistoryAudioPlaying
@@ -48,10 +49,12 @@ final class VoiceHistoryModel {
   init(
     history: any VoiceSessionHistoryAccessing,
     service: any VoiceHistoryServicing,
+    retentionManager: (any VoiceSessionHistoryRetentionManaging)? = nil,
     exporter: any VoiceHistoryExporting = VoiceHistoryExporter(),
     player: (any VoiceHistoryAudioPlaying)? = nil
   ) {
     self.history = history
+    self.retentionManager = retentionManager
     self.service = service
     self.exporter = exporter
     let playbackState = VoiceHistoryPlaybackState()
@@ -96,6 +99,11 @@ final class VoiceHistoryModel {
       }
       sessions = loadedSessions
       reconcileSelection()
+      if let report = retentionManager?.latestRetentionReport(),
+        !report.issues.isEmpty
+      {
+        errorMessage = retentionIssueMessage(report.issues)
+      }
     } catch {
       guard generation == loadGeneration else {
         return
@@ -251,6 +259,32 @@ final class VoiceHistoryModel {
     notice = nil
   }
 
+  func applyRetention(_ settings: VoiceHistoryRetentionSettings) async {
+    guard let retentionManager else {
+      return
+    }
+    do {
+      let report = try await retentionManager.setRetentionSettings(settings)
+      await load()
+      if report.issues.isEmpty {
+        if report.expired.isEmpty {
+          notice = "Voice History storage limits updated."
+        } else if report.expired.count == 1 {
+          notice =
+            "Voice History storage limits updated; 1 audio recording expired."
+        } else {
+          notice =
+            "Voice History storage limits updated; \(report.expired.count) audio recordings expired."
+        }
+      } else {
+        errorMessage =
+          "Storage limits were saved, but some protected or unavailable audio could not be reclaimed."
+      }
+    } catch {
+      errorMessage = message(for: error)
+    }
+  }
+
   private func perform(
     _ operation: VoiceHistoryWork,
     action: () async throws -> Void
@@ -337,6 +371,45 @@ final class VoiceHistoryModel {
       return error.localizedDescription
     }
   }
+
+  private func retentionIssueMessage(
+    _ issues: [VoiceHistoryRetentionIssue]
+  ) -> String {
+    if issues.contains(where: {
+      if case .lowDiskShortfall = $0 { true } else { false }
+    }) {
+      return
+        "Low disk space remains. Pinned or recovery audio was protected from automatic removal."
+    }
+    if issues.contains(where: {
+      switch $0 {
+      case .byteLimitUnmet, .artifactLimitUnmet:
+        true
+      default:
+        false
+      }
+    }) {
+      return
+        "Voice History exceeds a storage limit because pinned or recovery audio was protected."
+    }
+    if issues.contains(where: {
+      switch $0 {
+      case .missingArtifact, .unreadableArtifactSize, .removalFailed:
+        true
+      default:
+        false
+      }
+    }) {
+      return
+        "Some retained audio could not be inspected or fully removed. Other History remains available."
+    }
+    if let issue = issues.first,
+      case .maintenanceUnavailable(let detail) = issue
+    {
+      return "Voice History cleanup could not finish: \(detail)"
+    }
+    return "Voice History cleanup could not finish."
+  }
 }
 
 /// Composes one query/action graph for the app window without sharing UI state.
@@ -349,22 +422,21 @@ struct VoiceHistoryPresentation {
     arguments: [String],
     localAISettings: LocalAISettings
   ) {
-    let history: any VoiceSessionHistoryAccessing
-    if arguments.contains("--demo") {
-      history = DemoVoiceSessionHistory()
-    } else {
-      do {
-        history = try SQLiteVoiceSessionHistory.applicationSupportHistory()
-      } catch let failure as VoiceSessionHistoryError {
-        history = UnavailableVoiceSessionHistory(failure: failure)
-      } catch {
-        history = UnavailableVoiceSessionHistory(
-          failure: .storageUnavailable(
-            "Voice History could not open its local storage."
-          )
-        )
-      }
-    }
+    self.init(
+      arguments: arguments,
+      localAISettings: localAISettings,
+      history: Self.makeHistory(
+        arguments: arguments,
+        retentionSettings: .macOSDefault
+      )
+    )
+  }
+
+  init(
+    arguments: [String],
+    localAISettings: LocalAISettings,
+    history: any VoiceSessionHistoryManaging
+  ) {
     let reformatter = LocalAIVoiceHistoryReformatter(
       settings: localAISettings
     )
@@ -376,13 +448,36 @@ struct VoiceHistoryPresentation {
         transcriber: AppleVoiceHistoryAudioTranscriber(),
         reformatter: reformatter,
         redeliverer: FocusedVoiceHistoryRedeliverer()
-      )
+      ),
+      retentionManager: history
     )
+  }
+
+  static func makeHistory(
+    arguments: [String],
+    retentionSettings: VoiceHistoryRetentionSettings
+  ) -> any VoiceSessionHistoryManaging {
+    if arguments.contains("--demo") {
+      return DemoVoiceSessionHistory()
+    }
+    do {
+      return try SQLiteVoiceSessionHistory.applicationSupportHistory(
+        retentionSettings: retentionSettings
+      )
+    } catch let failure as VoiceSessionHistoryError {
+      return UnavailableVoiceSessionHistory(failure: failure)
+    } catch {
+      return UnavailableVoiceSessionHistory(
+        failure: .storageUnavailable(
+          "Voice History could not open its local storage."
+        )
+      )
+    }
   }
 }
 
 /// Supplies deterministic no-write History rows for packaged UI verification.
-private actor DemoVoiceSessionHistory: VoiceSessionHistoryAccessing {
+private actor DemoVoiceSessionHistory: VoiceSessionHistoryManaging {
   private var items: [VoiceSessionHistoryItem]
 
   init() {
@@ -405,7 +500,8 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryAccessing {
         raw: "send the revised plan tomorrow",
         formatted: "send the revised plan tomorrow.",
         style: .casualMessage,
-        pinned: false
+        pinned: false,
+        audioExpirationReason: .byteLimit
       ),
     ]
   }
@@ -446,6 +542,8 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryAccessing {
       document: item.document,
       audioArtifactURL: item.audioArtifactURL,
       audioDurationMilliseconds: item.audioDurationMilliseconds,
+      audioExpiredAt: item.audioExpiredAt,
+      audioExpirationReason: item.audioExpirationReason,
       isPinned: item.isPinned,
       results: item.results + [result]
     )
@@ -460,6 +558,8 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryAccessing {
       document: item.document,
       audioArtifactURL: item.audioArtifactURL,
       audioDurationMilliseconds: item.audioDurationMilliseconds,
+      audioExpiredAt: item.audioExpiredAt,
+      audioExpirationReason: item.audioExpirationReason,
       isPinned: isPinned,
       results: item.results
     )
@@ -472,6 +572,37 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryAccessing {
     items.removeAll { $0.id == id }
   }
 
+  nonisolated func begin(sessionID: UUID, startedAt: Date) {}
+  nonisolated func append(_ audio: CapturedAudioBuffer) {}
+  func complete(_ document: VoiceSessionDocument) async throws {}
+  func cancel(sessionID: UUID) async {}
+
+  func setRetentionSettings(
+    _ settings: VoiceHistoryRetentionSettings
+  ) async throws -> VoiceHistoryRetentionReport {
+    VoiceHistoryRetentionReport(
+      completedAt: Date(),
+      expired: [],
+      issues: []
+    )
+  }
+
+  func reclaimForLowDisk(bytes: Int64) async throws
+    -> VoiceHistoryRetentionReport
+  {
+    VoiceHistoryRetentionReport(
+      completedAt: Date(),
+      expired: [],
+      issues: []
+    )
+  }
+
+  nonisolated func latestRetentionReport()
+    -> VoiceHistoryRetentionReport?
+  {
+    nil
+  }
+
   private nonisolated static func item(
     id: UUID,
     endedAt: Date,
@@ -479,7 +610,8 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryAccessing {
     raw: String,
     formatted: String,
     style: VoiceStyle,
-    pinned: Bool
+    pinned: Bool,
+    audioExpirationReason: VoiceHistoryAudioExpirationReason? = nil
   ) -> VoiceSessionHistoryItem {
     let rawID = UUID()
     let formattedID = UUID()
@@ -498,6 +630,8 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryAccessing {
       document: document,
       audioArtifactURL: nil,
       audioDurationMilliseconds: 18_000,
+      audioExpiredAt: audioExpirationReason.map { _ in endedAt },
+      audioExpirationReason: audioExpirationReason,
       isPinned: pinned,
       results: [
         VoiceHistoryResult(

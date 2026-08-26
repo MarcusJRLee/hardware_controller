@@ -29,7 +29,10 @@ actor SQLiteVoiceSessionStore {
 
   private var database: OpaquePointer { handle.pointer }
 
-  init(databaseURL: URL, audioDirectory: URL) throws {
+  init(
+    databaseURL: URL,
+    audioDirectory: URL
+  ) throws {
     var opened: OpaquePointer?
     let result = sqlite3_open_v2(
       databaseURL.path,
@@ -74,7 +77,9 @@ actor SQLiteVoiceSessionStore {
           spoken_edits_json TEXT,
           delivery_failure_reason TEXT,
           audio_duration_ms INTEGER,
-          is_pinned INTEGER NOT NULL DEFAULT 0
+          is_pinned INTEGER NOT NULL DEFAULT 0,
+          audio_expired_at REAL,
+          audio_expiration_reason TEXT
         );
         CREATE TABLE IF NOT EXISTS voice_results (
           id TEXT PRIMARY KEY NOT NULL,
@@ -128,6 +133,16 @@ actor SQLiteVoiceSessionStore {
       opened,
       name: "is_pinned",
       definition: "INTEGER NOT NULL DEFAULT 0"
+    )
+    try Self.addColumnIfNeeded(
+      opened,
+      name: "audio_expired_at",
+      definition: "REAL"
+    )
+    try Self.addColumnIfNeeded(
+      opened,
+      name: "audio_expiration_reason",
+      definition: "TEXT"
     )
     try Self.addColumnIfNeeded(
       opened,
@@ -402,7 +417,8 @@ actor SQLiteVoiceSessionStore {
         formatted_text, delivered_text, target_application_name,
         delivery_outcome, delivery_failure, audio_filename,
         formatted_document_json, spoken_edits_json,
-        delivery_failure_reason, audio_duration_ms, is_pinned
+        delivery_failure_reason, audio_duration_ms, is_pinned,
+        audio_expired_at, audio_expiration_reason
       FROM voice_sessions
       \(whereClause)
       ORDER BY ended_at DESC
@@ -484,9 +500,20 @@ actor SQLiteVoiceSessionStore {
     }
     let duration = optionalInt64(statement, column: 14)
     let pinnedValue = sqlite3_column_int(statement, 15)
+    let audioExpiredAt = optionalDouble(statement, column: 16).map {
+      Date(timeIntervalSince1970: $0)
+    }
+    let audioExpirationReason = try optionalAudioExpirationReason(
+      optionalText(statement, column: 17)
+    )
     guard
       duration.map({ $0 > 0 }) ?? true,
-      pinnedValue == 0 || pinnedValue == 1
+      pinnedValue == 0 || pinnedValue == 1,
+      (audioExpiredAt == nil) == (audioExpirationReason == nil),
+      audioFilename == nil || audioExpiredAt == nil,
+      audioExpiredAt.map({
+        $0.timeIntervalSince1970.isFinite && $0 >= document.endedAt
+      }) ?? true
     else {
       throw VoiceSessionHistoryError.storageUnavailable(
         "Voice History contains invalid archive metadata."
@@ -509,6 +536,8 @@ actor SQLiteVoiceSessionStore {
       document: document,
       audioArtifactURL: availableAudioURL,
       audioDurationMilliseconds: duration,
+      audioExpiredAt: audioExpiredAt,
+      audioExpirationReason: audioExpirationReason,
       isPinned: pinnedValue == 1,
       results: storedResults
     )
@@ -1138,6 +1167,31 @@ actor SQLiteVoiceSessionStore {
       return nil
     }
     return sqlite3_column_int64(statement, column)
+  }
+
+  private func optionalDouble(
+    _ statement: OpaquePointer,
+    column: Int32
+  ) -> Double? {
+    guard sqlite3_column_type(statement, column) != SQLITE_NULL else {
+      return nil
+    }
+    return sqlite3_column_double(statement, column)
+  }
+
+  private func optionalAudioExpirationReason(
+    _ rawValue: String?
+  ) throws -> VoiceHistoryAudioExpirationReason? {
+    guard let rawValue else {
+      return nil
+    }
+    guard let reason = VoiceHistoryAudioExpirationReason(rawValue: rawValue)
+    else {
+      throw VoiceSessionHistoryError.storageUnavailable(
+        "Voice History contains an invalid audio expiration reason."
+      )
+    }
+    return reason
   }
 
   private func optionalUUID(_ value: String?) throws -> UUID? {

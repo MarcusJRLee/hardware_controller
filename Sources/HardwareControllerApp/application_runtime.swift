@@ -343,6 +343,8 @@ private final class LiveApplicationProcess:
     showsDemoPressedState: Bool,
     preferredMicrophoneUID: String?,
     localAISettings: LocalAISettings,
+    voiceSessionHistory providedHistory:
+      (any VoiceSessionHistoryRecording)?,
     eventRelay: ApplicationProcessEventRelay
   ) {
     self.isDemoMode = isDemoMode
@@ -376,16 +378,20 @@ private final class LiveApplicationProcess:
     self.transcriptionController = transcriptionController
 
     let history: any VoiceSessionHistoryRecording
-    do {
-      history = try SQLiteVoiceSessionHistory.applicationSupportHistory()
-    } catch let failure as VoiceSessionHistoryError {
-      history = UnavailableVoiceSessionHistory(failure: failure)
-    } catch {
-      history = UnavailableVoiceSessionHistory(
-        failure: .storageUnavailable(
-          "Voice History could not open its local storage."
+    if let providedHistory {
+      history = providedHistory
+    } else {
+      do {
+        history = try SQLiteVoiceSessionHistory.applicationSupportHistory()
+      } catch let failure as VoiceSessionHistoryError {
+        history = UnavailableVoiceSessionHistory(failure: failure)
+      } catch {
+        history = UnavailableVoiceSessionHistory(
+          failure: .storageUnavailable(
+            "Voice History could not open its local storage."
+          )
         )
-      )
+      }
     }
 
     let localAIDictationController = LocalAIDictationController(
@@ -758,7 +764,8 @@ actor ApplicationRuntime {
       (any ProfilePersisting)? = nil,
     preferredMicrophoneUID: String? = nil,
     localAISettings: LocalAISettings = .default,
-    voiceTriggerSettings: VoiceTriggerSettings = .default
+    voiceTriggerSettings: VoiceTriggerSettings = .default,
+    voiceSessionHistory: (any VoiceSessionHistoryRecording)? = nil
   ) -> ApplicationRuntime {
     let isDemoMode = arguments.contains("--demo")
     let showsDemoPressedState =
@@ -821,6 +828,7 @@ actor ApplicationRuntime {
       preferredMicrophoneUID: preferredMicrophoneUID,
       localAISettings: localAISettings,
       voiceTriggerSettings: voiceTriggerSettings,
+      voiceSessionHistory: voiceSessionHistory,
       loadsProfileOnStart: !isDemoMode
     )
   }
@@ -915,6 +923,7 @@ actor ApplicationRuntime {
     preferredMicrophoneUID: String? = nil,
     localAISettings: LocalAISettings = .default,
     voiceTriggerSettings: VoiceTriggerSettings = .default,
+    voiceSessionHistory: (any VoiceSessionHistoryRecording)? = nil,
     loadsProfileOnStart: Bool = false,
     processFactory:
       @Sendable (
@@ -923,6 +932,7 @@ actor ApplicationRuntime {
         Bool,
         String?,
         LocalAISettings,
+        (any VoiceSessionHistoryRecording)?,
         ApplicationProcessEventRelay
       ) -> any ApplicationProcessControlling = {
         profile,
@@ -930,6 +940,7 @@ actor ApplicationRuntime {
         showsDemoPressedState,
         preferredMicrophoneUID,
         localAISettings,
+        voiceSessionHistory,
         eventRelay in
         LiveApplicationProcess(
           profile: profile,
@@ -937,6 +948,7 @@ actor ApplicationRuntime {
           showsDemoPressedState: showsDemoPressedState,
           preferredMicrophoneUID: preferredMicrophoneUID,
           localAISettings: localAISettings,
+          voiceSessionHistory: voiceSessionHistory,
           eventRelay: eventRelay
         )
       }
@@ -950,6 +962,7 @@ actor ApplicationRuntime {
       showsDemoPressedState,
       preferredMicrophoneUID,
       localAISettings,
+      voiceSessionHistory,
       eventRelay
     )
 

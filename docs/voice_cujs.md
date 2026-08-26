@@ -194,6 +194,13 @@ retains transcript metadata; and records an Audio-expired reason. Derived cache
 eviction does not change History. `Unlimited`, zero retained audio, low-disk
 cleanup, corrupt sizes, and concurrent finalization have explicit results.
 
+Implemented evidence: one portable planner owns validation and deterministic
+selection; separate SQLite session and retention actors share one injected
+History service; preference schema 6 exposes independent macOS controls; and
+database-reopen tests cover startup/post-finalization enforcement, protected
+recovery audio, missing or invalid sizes, low disk, concurrent finalization,
+search preservation, expiration provenance, and revision-2 export.
+
 ### M8 — Recover from interruption and crash
 
 A crash or process kill during capture leaves at most one partial artifact.

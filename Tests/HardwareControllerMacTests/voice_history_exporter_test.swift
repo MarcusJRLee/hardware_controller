@@ -59,11 +59,13 @@ struct VoiceHistoryExporterTest {
       VoiceHistoryExportChecksums.self,
       from: checksumData
     )
-    #expect(manifest.schemaRevision == 1)
+    #expect(manifest.schemaRevision == 2)
     #expect(manifest.document == document)
     #expect(manifest.results.count == 4)
     #expect(manifest.audioFilename == "audio.caf")
     #expect(manifest.audioDurationMilliseconds == 100)
+    #expect(manifest.audioExpiredAt == nil)
+    #expect(manifest.audioExpirationReason == nil)
     #expect(checksums.algorithm == "SHA-256")
     #expect(
       checksums.files["session.json"]
@@ -78,5 +80,60 @@ struct VoiceHistoryExporterTest {
       )
     )
     #expect(try await history.session(id: sessionID) == session)
+  }
+
+  @Test
+  func exportPreservesAudioExpirationEvidenceWithoutAudio() async throws {
+    let root = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_expired_export_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let source = root.appending(path: "source")
+    let history = try SQLiteVoiceSessionHistory(
+      rootDirectory: source,
+      retentionSettings: .unlimited
+    )
+    let sessionID = UUID()
+    let document = VoiceSessionDocument(
+      id: sessionID,
+      startedAt: Date(),
+      endedAt: Date(),
+      rawText: "raw",
+      editedText: "raw",
+      formattedText: "Raw.",
+      deliveredText: "Raw.",
+      targetApplicationName: "Notes",
+      deliveryOutcome: .inserted
+    )
+    history.begin(sessionID: sessionID, startedAt: document.startedAt)
+    history.append(try makeVoiceAudioFixture())
+    try await history.complete(document)
+    _ = try await history.setRetentionSettings(
+      VoiceHistoryRetentionSettings(
+        maximumAgeDays: nil,
+        maximumAudioBytes: nil,
+        maximumArtifactCount: 0
+      )
+    )
+    let session = try #require(try await history.session(id: sessionID))
+    let destination = root.appending(path: "expired.voice_history")
+
+    try await VoiceHistoryExporter().export(session, to: destination)
+
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    let manifest = try decoder.decode(
+      VoiceHistoryExportSession.self,
+      from: Data(
+        contentsOf: destination.appending(path: "session.json")
+      )
+    )
+    #expect(manifest.audioFilename == nil)
+    #expect(manifest.audioExpiredAt != nil)
+    #expect(manifest.audioExpirationReason == .artifactLimit)
+    #expect(
+      !FileManager.default.fileExists(
+        atPath: destination.appending(path: "audio.caf").path
+      )
+    )
   }
 }

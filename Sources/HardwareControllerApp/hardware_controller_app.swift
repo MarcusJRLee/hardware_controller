@@ -147,16 +147,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       isDemoMode: arguments.contains("--demo"),
       appearanceApplier: appearanceAdapter
     )
+    let voiceSessionHistory = VoiceHistoryPresentation.makeHistory(
+      arguments: arguments,
+      retentionSettings: preferencesModel.voiceHistoryRetention
+    )
     let model = AppModel(
       arguments: arguments,
       preferredMicrophoneUID:
         preferencesModel.preferredMicrophone?.id,
       localAISettings: preferencesModel.localAISettings,
-      voiceTriggerSettings: preferencesModel.voiceTriggerSettings
+      voiceTriggerSettings: preferencesModel.voiceTriggerSettings,
+      voiceSessionHistory: voiceSessionHistory
     )
     let historyPresentation = VoiceHistoryPresentation(
       arguments: arguments,
-      localAISettings: preferencesModel.localAISettings
+      localAISettings: preferencesModel.localAISettings,
+      history: voiceSessionHistory
     )
     self.model = model
     navigation = ApplicationNavigationModel(arguments: arguments)
@@ -179,6 +185,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     preferencesModel.setVoiceTriggerSettingsHandler {
       [weak model] settings in
       model?.setVoiceTriggerSettings(settings)
+    }
+    preferencesModel.setVoiceHistoryRetentionHandler {
+      [weak historyModel] settings in
+      Task { @MainActor in
+        await historyModel?.applyRetention(settings)
+      }
     }
   }
 

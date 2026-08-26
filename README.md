@@ -182,8 +182,11 @@ but preserves a model that another local Ollama client already had running.
   plus immutable Raw, Edited, Formatted, Delivered, and corrected results under
   the app's Application Support directory. **History** can search, inspect,
   replay, correct, retranscribe, reformat, retry, export, pin, and delete those
-  sessions. Automatic retention enforcement remains pending; delete sensitive
-  captures manually instead of relying on automatic cleanup.
+  sessions. **General → Voice History storage** independently caps audio age,
+  total bytes, and recording count; defaults are 90 days, 2 GiB, or 5,000
+  recordings, whichever is reached first. `Unlimited` and no-retained-audio
+  choices are explicit. Cleanup keeps transcripts searchable and protects
+  active, pinned, and sole recovery audio.
 - Nearby context, prompts, and model payloads remain memory-only. Speech content
   is never written to logs.
 - Apple speech recognition is required to run on-device.

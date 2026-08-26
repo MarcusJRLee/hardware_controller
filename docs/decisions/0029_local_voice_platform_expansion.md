@@ -188,4 +188,6 @@ Search spans every stage; provenance and timed spans remain inspectable; and
 correction, retranscription, reformatting, and explicit delayed re-delivery
 append linked results. Export writes an open versioned package, pinning protects
 future audio retention, and transactional deletion removes the session and its
-owned audio. M7 still owns automatic quota enforcement and crash reconciliation.
+owned audio. M7 subsequently delivered automatic quota enforcement under
+[decision 0031](0031_bounded_voice_history_audio.md); M8 retains partial and
+orphan crash reconciliation.

@@ -47,8 +47,8 @@ transactionally, quarantining the file until the database commit succeeds.
 - Capture and delivery stay independent from History presentation and storage
   latency.
 - Earlier evidence remains inspectable after every correction or rerun.
-- Automatic retention, low-disk eviction, and startup reconciliation remain M7
-  work and cannot be inferred from the presence of pinning.
+- Decision [0031](0031_bounded_voice_history_audio.md) now owns automatic
+  quota and low-disk expiration. M8 still owns partial and orphan reconciliation.
 - Exported packages are portable evidence, not a second mutable database.
 
 ## Evidence
