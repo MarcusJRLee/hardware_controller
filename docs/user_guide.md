@@ -35,7 +35,7 @@ may request Accessibility, Microphone, Speech Recognition, or Launch at Login
 authorization again for a newly signed identity.
 
 Opening the app manually presents or raises Controller. The left sidebar opens
-expanded with Controller, Profiles, and General and can be collapsed with the
+expanded with Controller, History, Profiles, and General and can be collapsed with the
 native toolbar control. Hardware Controller appears in the Dock while running.
 The pedal-shaped menu-bar item switches Profiles, opens each destination,
 controls Launch at Login, and quits the app.
@@ -149,10 +149,11 @@ automatic insertion stops, recognized final text stays visible, and
 clipboard.
 
 Starting a new session clears the previous presentation transcript. Local
-Dictation audio and text remain memory-only. On the M1 development branch,
-Local AI Dictation stores one local CAF and its final text stages under the
-app's Application Support directory; History UI and automatic retention are
-not implemented yet. Speech content is never logged.
+Dictation audio and text remain memory-only. Local AI Dictation stores one local
+CAF and immutable final text results under the app's Application Support
+directory. **History** makes those sessions searchable and reusable. Automatic
+retention enforcement is not implemented yet, so delete sensitive or unwanted
+captures manually. Speech content is never logged.
 
 ## Configure Local AI Dictation
 
@@ -249,8 +250,31 @@ Local AI requires an empty text cursor when capture begins. If the target
 application, secure status, focused field, or cursor changes before delivery,
 automatic insertion stops without switching to another delivery method. The
 audio and final text remain in local History with the reason, and Controller's
-copy actions remain available. History re-delivery is added with the M6 History
-interface; it will always be an explicit action that creates a new result.
+copy actions remain available. History re-delivery is always explicit and
+creates a new result, including when the attempt fails.
+
+## Use Voice History
+
+1. Open **History** from the sidebar or menu-bar item. Search matches Raw,
+   Edited, Formatted, Delivered, and corrected results.
+2. Select a session, then choose any result to inspect its source, Style,
+   provider/model/prompt, structured-document, timing, and delivery evidence.
+3. Choose a timed span to play its bounded portion of retained audio. A session
+   remains searchable when audio is unavailable.
+4. Edit **Correction**, then choose **Save Correction**. This appends a new
+   corrected result; it never changes prior evidence.
+5. Choose **Retranscribe** to rerun local Apple speech against retained audio,
+   or choose a Style and **Reformat** to run the current local refinement path.
+6. Choose **Copy** for explicit clipboard recovery. For insertion, choose
+   **Insert in 3 Seconds**, focus a nonsecure empty caret in the destination,
+   and wait. The app captures that fresh target after the delay and records the
+   success or typed failure as a new Delivered result.
+7. Choose **Export** to write a `.voice_history` package containing versioned
+   `session.json`, streaming SHA-256 `checksums.json`, and, when retained, one
+   `audio.caf`. Export does not mutate the stored session.
+8. Pin important audio against future automatic quota eviction. **Delete**
+   transactionally removes the selected session and its owned local audio;
+   storage-level deletion is not a promise of secure SSD erasure.
 
 ## Configure keyboard shortcuts
 

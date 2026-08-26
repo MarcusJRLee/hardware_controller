@@ -388,6 +388,12 @@ versioned `session.json`, optional audio, transcript stages, and checksums.
 Deletion removes the owned record and files. Product copy must not promise
 secure erasure from SSD wear-leveling, filesystem snapshots, or device backups.
 
+The current M6 macOS baseline stores linked immutable results in SQLite,
+searches every text stage, plays bounded timed CAF spans, and supports explicit
+correction, retranscription, reformatting, re-delivery, export, pinning, and
+transactional deletion. M7 owns automatic quota enforcement, low-water
+eviction, expiration reasons, and startup reconciliation.
+
 ## Privacy and security
 
 Local-only is a product invariant:

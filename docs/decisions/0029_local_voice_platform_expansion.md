@@ -179,5 +179,13 @@ focused-element replacement, and caret movement. Any invalidation withholds
 automatic insertion, retains the final text and audio, and stores a stable
 typed reason beside the human-readable failure. Existing History databases add
 the nullable reason column without rewriting prior sessions. Copy recovery is
-available immediately; explicit History re-delivery remains part of M6 and
-creates a new result rather than mutating the failed one.
+available immediately. M6 adds explicit History re-delivery as a new result
+rather than mutating the failed one.
+
+M6 adds History as the fourth destination in the existing macOS window. Each
+session owns at most one CAF and an append-only graph of immutable results.
+Search spans every stage; provenance and timed spans remain inspectable; and
+correction, retranscription, reformatting, and explicit delayed re-delivery
+append linked results. Export writes an open versioned package, pinning protects
+future audio retention, and transactional deletion removes the session and its
+owned audio. M7 still owns automatic quota enforcement and crash reconciliation.

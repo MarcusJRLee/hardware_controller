@@ -14,21 +14,22 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 | Actions | No Action, Local Dictation, Local AI Dictation, and Keyboard Shortcut with independent Hold and Toggle Bindings. | [`product_brief.md`](product_brief.md) |
 | Local Dictation | On-device Apple recognition, adaptive live/final delivery, bounded finalization, and app-local microphone selection. | [`architecture.md`](architecture.md#action-registry-and-executors) |
 | Local AI Dictation | Apple or fixed-loopback Ollama text refinement, spoken edits, Dictionary, bounded context, validation, and deterministic Edited fallback. | [`decisions/0020_local_ai_dictation.md`](decisions/0020_local_ai_dictation.md) |
-| Voice M1 tracer | Local AI Dictation tees immutable audio off the capture path, inserts once, and atomically stores one CAF plus separate final text stages in SQLite. History UI, timed spans, retention, and recovery remain pending. | [`voice_cujs.md`](voice_cujs.md#m1--hold-to-dictate-and-recover) |
+| Voice M1 tracer | Local AI Dictation tees immutable audio off the capture path, inserts once, and atomically stores one CAF plus separate final text stages in SQLite. | [`voice_cujs.md`](voice_cujs.md#m1--hold-to-dictate-and-recover) |
 | Voice M2 trigger | One opt-in machine-wide exact chord starts Local AI Dictation immediately, supports hold or double-press latch, finishes once, cancels on interruption, and reports reservation conflicts. | [`voice_cujs.md`](voice_cujs.md#m2--latch-a-long-prompt) |
 | Voice M3 formatting | Five versioned Styles produce validated evidence-backed paragraph/list blocks; one renderer preserves multiline structure or safely flattens it, and Verbatim skips the model. | [`voice_cujs.md`](voice_cujs.md#m3--format-for-purpose) |
 | Voice M4 spoken edits | Exact backtrack, paragraph, numbered-list, and literal commands produce persisted replayable operations before formatting; ambiguous or inapplicable phrases remain text. | [`voice_cujs.md`](voice_cujs.md#m4--backtrack-explicitly) |
-| Voice M5 ownership guard | Local AI preserves its captured route, rejects nonempty or changed carets, distinguishes process/secure/focus/caret invalidation, withholds later mutations, and stores a typed reason. Explicit History re-delivery remains in M6. | [`voice_cujs.md`](voice_cujs.md#m5--preserve-ownership-when-the-target-changes) |
+| Voice M5 ownership guard | Local AI preserves its captured route, rejects nonempty or changed carets, distinguishes process/secure/focus/caret invalidation, withholds later mutations, and stores a typed reason. | [`voice_cujs.md`](voice_cujs.md#m5--preserve-ownership-when-the-target-changes) |
+| Voice M6 History | A fourth native destination searches every text stage, exposes immutable provenance and timed audio, and appends corrections, retranscriptions, reformats, and explicit re-delivery outcomes without rewriting earlier results. Export, pin, and transactional delete are available. | [`voice_cujs.md`](voice_cujs.md#m6--browse-and-reuse-history) |
 | Model recommendation | Qwen 3.5 4B is digest-pinned from the fixed evaluation corpus. | [`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md) |
 | Profiles | Transactional named Profiles with independent per-Device setups and active-Action cleanup. | [`decisions/0014_multi_profile_device_configuration.md`](decisions/0014_multi_profile_device_configuration.md) |
-| Application | Controller, Profiles, and General in one native foreground window with Dock and menu-bar presence. | [`ux_spec.md`](ux_spec.md) |
+| Application | Controller, History, Profiles, and General in one native foreground window with Dock and menu-bar presence. | [`ux_spec.md`](ux_spec.md) |
 | Release | Version 1.4.1 build 17 is installed as an unreleased personal QA candidate; routine installs preserve both values and no release promotion is authorized. | [`decisions/0023_stable_personal_build_metadata.md`](decisions/0023_stable_personal_build_metadata.md) |
 | Public source | Open source under Apache License 2.0 with Marcus John Rice Lee as copyright owner, inbound Apache contributions, provisional Signal Bridge identity, and active GitHub security controls. | [`decisions/0028_apache_open_source_and_contributions.md`](decisions/0028_apache_open_source_and_contributions.md) |
 
 ## Approved next program
 
-The local Voice expansion is accepted; macOS M1–M4 and the M5 ownership guard
-are implemented across the current stacked branches. macOS and iOS are the active
+The local Voice expansion is accepted; macOS M1–M6 are implemented across the
+current stacked branches. macOS and iOS are the active
 roadmap; Android, Windows, and Linux remain architectural line-of-sight
 platforms; web and mobile web are deferred. The acceptance and execution
 authorities are:
@@ -49,7 +50,7 @@ promotion.
 
 | Gate | Contract | Current automated evidence |
 | --- | --- | --- |
-| HID dispatch | p50 ≤ 3 ms, p95 ≤ 8 ms, p99 ≤ 15 ms, max ≤ 30 ms across 10,000 transitions; no loss or duplication. | p50 0.013 ms, p95 0.024 ms, p99 0.046 ms, max 0.257 ms; 10,000 ordered dispatches. |
+| HID dispatch | p50 ≤ 3 ms, p95 ≤ 8 ms, p99 ≤ 15 ms, max ≤ 30 ms across 10,000 transitions; no loss or duplication. | p50 0.015 ms, p95 0.045 ms, p99 0.084 ms, max 0.201 ms; 10,000 ordered dispatches. |
 | Microphone activation | Warm maximum ≤ 250 ms. | p50 48.118 ms, p95/p99/max 87.050 ms across five starts; one-time preparation 149.539 ms. |
 | Local AI semantic safety | No accepted provider output may corrupt protected content; invalid output falls back to Edited text once. | Fixed 17-case corpus plus spoken-edit, replay, Style, structured-block, renderer, controller, and migration tests. |
 | Local AI refinement | Warm raw-final-to-refined p95 ≤ 1 s on the reference Mac. | Prompt-5 Qwen 3.5 4B p95 0.908 s. |

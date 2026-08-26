@@ -88,6 +88,9 @@ struct HardwareControllerApp: App {
         openController: {
           appDelegate.showApplicationWindow(.controller)
         },
+        openHistory: {
+          appDelegate.showApplicationWindow(.history)
+        },
         manageProfiles: {
           appDelegate.showApplicationWindow(.profiles)
         },
@@ -124,10 +127,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   let model: AppModel
   let navigation: ApplicationNavigationModel
   let preferencesModel: ApplicationPreferencesModel
+  let historyModel: VoiceHistoryModel
 
   private var isLoginItemLaunch = false
   private var applicationWindowController: NSWindowController?
   private let appearanceAdapter: AppKitApplicationAppearanceAdapter
+  private let historyReformatter: LocalAIVoiceHistoryReformatter
   private let terminationCoordinator =
     AppTerminationCoordinator()
   private lazy var workspaceLifecycle =
@@ -149,17 +154,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       localAISettings: preferencesModel.localAISettings,
       voiceTriggerSettings: preferencesModel.voiceTriggerSettings
     )
+    let historyPresentation = VoiceHistoryPresentation(
+      arguments: arguments,
+      localAISettings: preferencesModel.localAISettings
+    )
     self.model = model
     navigation = ApplicationNavigationModel(arguments: arguments)
     self.appearanceAdapter = appearanceAdapter
     self.preferencesModel = preferencesModel
+    historyModel = historyPresentation.model
+    historyReformatter = historyPresentation.reformatter
     super.init()
     preferencesModel.setMicrophoneSelectionHandler {
       [weak model] uniqueID in
       model?.setPreferredMicrophoneUID(uniqueID)
     }
-    preferencesModel.setLocalAISettingsHandler { [weak model] settings in
+    preferencesModel.setLocalAISettingsHandler {
+      [weak model, historyReformatter] settings in
       model?.setLocalAISettings(settings)
+      Task {
+        await historyReformatter.setSettings(settings)
+      }
     }
     preferencesModel.setVoiceTriggerSettingsHandler {
       [weak model] settings in
@@ -182,7 +197,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       AppLaunchPresentation.activationPolicy
     )
     model.start()
-
     if AppLaunchPresentation.shouldPresentApplicationWindow(
       arguments: ProcessInfo.processInfo.arguments,
       isLoginItemLaunch: isLoginItemLaunch
@@ -207,9 +221,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationShouldTerminate(
     _ sender: NSApplication
   ) -> NSApplication.TerminateReply {
-    terminationCoordinator.requestTermination(
-      shutdown: { [model] in
-        await model.stop()
+    historyModel.stopPlayback()
+    return terminationCoordinator.requestTermination(
+      shutdown: { [model, historyReformatter] in
+        async let applicationShutdown: Void = model.stop()
+        async let historyShutdown: Void = historyReformatter.shutdown()
+        _ = await (applicationShutdown, historyShutdown)
       },
       reply: {
         sender.reply(
@@ -252,7 +269,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       ApplicationShellView(
         model: model,
         navigation: navigation,
-        preferencesModel: preferencesModel
+        preferencesModel: preferencesModel,
+        historyModel: historyModel
       )
     )
     guard model.isDemoMode else {
@@ -302,6 +320,7 @@ func configureApplicationWindow(_ window: NSWindow) {
 private struct MenuBarContent: View {
   let model: AppModel
   let openController: () -> Void
+  let openHistory: () -> Void
   let manageProfiles: () -> Void
   let openSettings: () -> Void
 
@@ -346,6 +365,10 @@ private struct MenuBarContent: View {
 
       Button("Open Controller…") {
         openController()
+      }
+
+      Button("Open Voice History…") {
+        openHistory()
       }
 
       Button("Manage Profiles…") {

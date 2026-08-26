@@ -175,6 +175,17 @@ mutating earlier stages; and independently retranscribes, reformats, exports,
 pins, or deletes the session. Re-running a stage creates a new result linked to
 the same immutable audio.
 
+**Current evidence:** History is a fourth native destination backed by actor-
+owned SQLite. It searches every result stage, exposes provenance and bounded
+timed spans, appends correction/retranscription/reformat/re-delivery results,
+exports a versioned package with at most one CAF, and transactionally deletes
+the session and owned audio. Re-delivery captures a fresh empty caret only after
+the explicit three-second delay and records failed attempts. Migration lazily
+backfills immutable baseline results without rewriting session rows. Unit,
+database-reopen, corrupted-evidence, 5,000-session search, model, export,
+playback, and signed packaged-UI checks cover the journey; measured warm search
+p95 is 2.484 ms against the 250 ms requirement.
+
 ### M7 — Bound storage without surprise
 
 When age, byte, or artifact-count quota is exceeded, cleanup skips active, pinned,

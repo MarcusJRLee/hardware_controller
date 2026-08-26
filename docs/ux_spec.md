@@ -12,8 +12,9 @@ opened, it should answer three questions immediately:
 2. What will each physical Control do?
 3. Is an Action active right now?
 
-Profiles and General answer two secondary questions without crowding
-Controller: which work mode is active, and where application preferences live.
+History, Profiles, and General answer secondary questions without crowding
+Controller: what was captured, which work mode is active, and where application
+preferences live.
 
 Color is reserved for active state, required attention, and errors. Typography,
 spacing, motion, and control position carry the rest of the hierarchy.
@@ -35,13 +36,13 @@ surface.
 | Dictation active  | Immediate but non-distracting active treatment.                   |
 | Error             | Persistent marker until the state is understood or resolved.      |
 
-The menu contains Device status, an active Profile picker, Controller,
+The menu contains Device status, an active Profile picker, Controller, History,
 Profiles, Settings, launch-at-login state, and Quit. It does not duplicate the
 complete application window.
 
 ### Application window
 
-One native sidebar contains exactly Controller, Profiles, and General. It opens
+One native sidebar contains exactly Controller, History, Profiles, and General. It opens
 expanded, collapses through the native toolbar control, and remembers only its
 visibility. Manual launch opens Controller; Settings and Command–Comma open
 General in the same window.
@@ -59,6 +60,11 @@ Controller uses one Device card with:
 Selecting a Control opens its configuration without navigating away from Device
 context. A generic list is available for assistive technology and Devices whose
 layout metadata is absent.
+
+History uses a searchable session list and selected-result evidence view. It
+keeps prior results immutable, makes correction and stage reruns explicit, and
+uses one delayed action for safe re-delivery to a fresh target. Destructive
+deletion is visually distinct from reuse actions.
 
 Profiles uses a stable Profile list and selected-Profile editor. Active state
 is separate from selection. General uses native form sections for Appearance,

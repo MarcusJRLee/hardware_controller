@@ -5,6 +5,7 @@ struct ApplicationShellView: View {
   @Bindable var navigation: ApplicationNavigationModel
   let model: AppModel
   let preferencesModel: ApplicationPreferencesModel
+  let historyModel: VoiceHistoryModel
 
   @State private var columnVisibility: NavigationSplitViewVisibility
 
@@ -12,11 +13,13 @@ struct ApplicationShellView: View {
   init(
     model: AppModel,
     navigation: ApplicationNavigationModel,
-    preferencesModel: ApplicationPreferencesModel
+    preferencesModel: ApplicationPreferencesModel,
+    historyModel: VoiceHistoryModel
   ) {
     self.model = model
     self.navigation = navigation
     self.preferencesModel = preferencesModel
+    self.historyModel = historyModel
     _columnVisibility = State(
       initialValue:
         preferencesModel.sidebarVisibility == .collapsed
@@ -100,6 +103,8 @@ struct ApplicationShellView: View {
         model: model,
         manageProfiles: { navigation.select(.profiles) }
       )
+    case .history:
+      VoiceHistoryView(model: historyModel)
     case .profiles:
       ProfilesView(model: model)
     case .general:
