@@ -81,6 +81,7 @@ struct LocalAIDictationControllerTest {
     #expect(session.formattedText == "Keep this revised plan.")
     #expect(session.deliveredText.isEmpty)
     #expect(session.deliveryOutcome == .failed)
+    #expect(session.document.deliveryFailureReason == .focusChanged)
     let audioURL = try #require(session.audioArtifactURL)
     #expect(try AVAudioFile(forReading: audioURL).length > 0)
   }
@@ -143,6 +144,27 @@ struct LocalAIDictationControllerTest {
 
     #expect(failure == nil)
     #expect(fixture.microphone.startCount == 0)
+    #expect(fixture.writer.inserted.isEmpty)
+  }
+
+  @Test
+  func nonemptyCapturedSelectionNeverStartsAudioOrFormatting() async {
+    let fixture = LocalAIControllerFixture(
+      refinement: .output("Never use this")
+    )
+    let controller = fixture.makeController(
+      selectedRange: FocusedTextRange(location: 4, length: 2)
+    )
+
+    await controller.handle(.begin)
+
+    let snapshot = await controller.snapshot()
+    #expect(snapshot.phase == .failed)
+    #expect(
+      snapshot.failure == .transcription(.noFocusedTextField)
+    )
+    #expect(fixture.microphone.startCount == 0)
+    #expect(await fixture.refiner.preparationCount == 0)
     #expect(fixture.writer.inserted.isEmpty)
   }
 
@@ -697,6 +719,10 @@ private final class LocalAIControllerFixture: @unchecked Sendable {
     authorization: any TranscriptionAuthorizationProviding =
       LocalAIFixedAuthorization(),
     supportsMultilineText: Bool = true,
+    selectedRange: FocusedTextRange? = FocusedTextRange(
+      location: 0,
+      length: 0
+    ),
     history: any VoiceSessionHistoryRecording =
       DiscardingVoiceSessionHistory(),
     now: @escaping @Sendable () -> Date = { Date() }
@@ -705,7 +731,8 @@ private final class LocalAIControllerFixture: @unchecked Sendable {
       factory: factory,
       microphone: microphone,
       targeter: LocalAIFixedTargeter(
-        supportsMultilineText: supportsMultilineText
+        supportsMultilineText: supportsMultilineText,
+        selectedRange: selectedRange
       ),
       writer: writer,
       authorization: authorization,
@@ -785,9 +812,17 @@ private struct LocalAIFixedAuthorization:
 
 private struct LocalAIFixedTargeter: FocusedTextTargeting {
   let supportsMultilineText: Bool
+  let selectedRange: FocusedTextRange?
 
-  init(supportsMultilineText: Bool = true) {
+  init(
+    supportsMultilineText: Bool = true,
+    selectedRange: FocusedTextRange? = FocusedTextRange(
+      location: 0,
+      length: 0
+    )
+  ) {
     self.supportsMultilineText = supportsMultilineText
+    self.selectedRange = selectedRange
   }
 
   func capture() throws -> FocusedTextTarget {
@@ -798,6 +833,7 @@ private struct LocalAIFixedTargeter: FocusedTextTargeting {
       applicationBundleIdentifier: "com.apple.Notes",
       role: kAXTextAreaRole as String,
       supportsMultilineText: supportsMultilineText,
+      selectedRange: selectedRange,
       deliveryCapability: .finalOnly
     )
   }

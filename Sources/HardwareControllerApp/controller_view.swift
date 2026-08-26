@@ -1120,6 +1120,8 @@ extension TranscriptionFailure {
       "For safety, transcription is never inserted into password fields."
     case .focusChanged:
       "The focused field changed, so insertion stopped safely."
+    case .processChanged:
+      "The target application changed, so insertion stopped safely."
     case .caretChanged:
       "The text cursor moved, so live insertion stopped safely."
     case .audioUnavailable(let message):

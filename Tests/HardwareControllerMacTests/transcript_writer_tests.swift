@@ -76,7 +76,7 @@ struct TranscriptWriterTests {
   @Test
   func writerRechecksFocusBeforeEveryChunk() throws {
     let targeter = FocusSequenceTargeter(
-      results: [true, false]
+      failures: [nil, .focusChanged]
     )
     let inserter = RecordingTextInserter()
     let writer = SafeTranscriptWriter(
@@ -95,7 +95,7 @@ struct TranscriptWriterTests {
   @Test
   func failedSelectedTextInsertionStopsWriting() throws {
     let targeter = FocusSequenceTargeter(
-      results: [true, true]
+      failures: [nil, nil]
     )
     let inserter = RecordingTextInserter(
       failureIndex: 1
@@ -113,6 +113,47 @@ struct TranscriptWriterTests {
   }
 
   @Test
+  func guardedDeliveryRejectsAMovedCaretBeforeMutation() throws {
+    let target = try makeTarget(
+      selectedRange: FocusedTextRange(location: 12, length: 0)
+    ).guardedDeliveryCopy()
+    let inserter = RecordingRangeEditor(
+      selectedRange: FocusedTextRange(location: 13, length: 0)
+    )
+    let writer = SafeTranscriptWriter(
+      targeter: FocusSequenceTargeter(failures: [nil]),
+      inserter: inserter
+    )
+
+    #expect(throws: TranscriptionFailure.caretChanged) {
+      try writer.insert("Never insert", into: target)
+    }
+    #expect(inserter.inserted.isEmpty)
+  }
+
+  @Test
+  func guardedDeliveryRechecksOwnershipAndCaretPerChunk() throws {
+    let target = try makeTarget(
+      selectedRange: FocusedTextRange(location: 12, length: 0)
+    ).guardedDeliveryCopy()
+    let inserter = RecordingRangeEditor(
+      selectedRange: FocusedTextRange(location: 12, length: 0)
+    )
+    let writer = SafeTranscriptWriter(
+      targeter: FocusSequenceTargeter(
+        failures: [nil, .processChanged]
+      ),
+      inserter: inserter,
+      maximumUTF16UnitsPerInsertion: 4
+    )
+
+    #expect(throws: TranscriptionFailure.processChanged) {
+      try writer.insert("abcdefgh", into: target)
+    }
+    #expect(inserter.inserted == ["abcd"])
+  }
+
+  @Test
   func liveReplacementChecksCaretAndSelectsOwnedRange()
     throws
   {
@@ -123,7 +164,7 @@ struct TranscriptWriterTests {
       )
     )
     let writer = SafeTranscriptWriter(
-      targeter: FocusSequenceTargeter(results: [true]),
+      targeter: FocusSequenceTargeter(failures: [nil]),
       inserter: inserter
     )
 
@@ -157,7 +198,7 @@ struct TranscriptWriterTests {
       )
     )
     let writer = SafeTranscriptWriter(
-      targeter: FocusSequenceTargeter(results: [true]),
+      targeter: FocusSequenceTargeter(failures: [nil]),
       inserter: inserter
     )
 
@@ -240,11 +281,14 @@ struct TranscriptWriterTests {
     #expect((value as? String)?.contains(marker) == true)
   }
 
-  private func makeTarget() -> FocusedTextTarget {
+  private func makeTarget(
+    selectedRange: FocusedTextRange? = nil
+  ) -> FocusedTextTarget {
     FocusedTextTarget(
       element: AXUIElementCreateSystemWide(),
       processIdentifier: 42,
-      applicationName: "Notes"
+      applicationName: "Notes",
+      selectedRange: selectedRange
     )
   }
 }
@@ -311,10 +355,10 @@ private final class FocusSequenceTargeter:
   @unchecked Sendable
 {
   private let lock = NSLock()
-  private var results: [Bool]
+  private var failures: [FocusedTextTargetOwnershipFailure?]
 
-  init(results: [Bool]) {
-    self.results = results
+  init(failures: [FocusedTextTargetOwnershipFailure?]) {
+    self.failures = failures
   }
 
   func capture() throws -> FocusedTextTarget {
@@ -324,8 +368,14 @@ private final class FocusSequenceTargeter:
   func isStillFocused(
     _ target: FocusedTextTarget
   ) -> Bool {
+    ownershipFailure(for: target) == nil
+  }
+
+  func ownershipFailure(
+    for target: FocusedTextTarget
+  ) -> FocusedTextTargetOwnershipFailure? {
     lock.withLock {
-      results.isEmpty ? false : results.removeFirst()
+      failures.isEmpty ? .focusChanged : failures.removeFirst()
     }
   }
 }

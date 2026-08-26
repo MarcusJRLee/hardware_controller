@@ -1,6 +1,6 @@
 # 0029: Local Voice platform expansion
 
-- **Status:** Accepted; macOS M1–M4 implemented
+- **Status:** Accepted; macOS M1–M4 and the M5 ownership guard implemented
 - **Date:** 2026-08-25
 - **Amends:**
   [`0001_native_macos_stack.md`](0001_native_macos_stack.md),
@@ -171,3 +171,13 @@ Ambiguous, near-match, and structurally inapplicable commands remain literal.
 This amends the earlier Raw-only fallback wording: Raw remains recoverable, but
 the one automatic fallback delivery uses deterministic Edited text whenever
 that stage exists.
+
+The M5 ownership guard requires Local AI to capture an empty caret without
+discarding the target's native, web, or terminal delivery route. Before every
+mutation it distinguishes target-process replacement, secure-state change,
+focused-element replacement, and caret movement. Any invalidation withholds
+automatic insertion, retains the final text and audio, and stores a stable
+typed reason beside the human-readable failure. Existing History databases add
+the nullable reason column without rewriting prior sessions. Copy recovery is
+available immediately; explicit History re-delivery remains part of M6 and
+creates a new result rather than mutating the failed one.

@@ -63,7 +63,8 @@ actor SQLiteVoiceSessionStore {
           delivery_failure TEXT,
           audio_filename TEXT,
           formatted_document_json TEXT,
-          spoken_edits_json TEXT
+          spoken_edits_json TEXT,
+          delivery_failure_reason TEXT
         );
         CREATE INDEX IF NOT EXISTS voice_sessions_ended_at
         ON voice_sessions(ended_at DESC);
@@ -79,12 +80,18 @@ actor SQLiteVoiceSessionStore {
       name: "spoken_edits_json",
       definition: "TEXT"
     )
+    try Self.addColumnIfNeeded(
+      opened,
+      name: "delivery_failure_reason",
+      definition: "TEXT"
+    )
   }
 
   func insert(
     _ document: VoiceSessionDocument,
     audioURL: URL?
   ) throws {
+    try validateDeliveryEvidence(document)
     try Self.execute(database, sql: "BEGIN IMMEDIATE;")
     do {
       let sql = """
@@ -92,8 +99,9 @@ actor SQLiteVoiceSessionStore {
           id, started_at, ended_at, raw_text, edited_text,
           formatted_text, delivered_text, target_application_name,
           delivery_outcome, delivery_failure, audio_filename,
-          formatted_document_json, spoken_edits_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+          formatted_document_json, spoken_edits_json,
+          delivery_failure_reason
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
         """
       var statement: OpaquePointer?
       guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
@@ -124,6 +132,11 @@ actor SQLiteVoiceSessionStore {
         document.spokenEdits
       )
       try bind(spokenEditsJSON, to: 13, in: statement)
+      try bind(
+        document.deliveryFailureReason?.rawValue,
+        to: 14,
+        in: statement
+      )
       guard sqlite3_step(statement) == SQLITE_DONE else {
         throw storageFailure()
       }
@@ -142,7 +155,8 @@ actor SQLiteVoiceSessionStore {
       SELECT id, started_at, ended_at, raw_text, edited_text,
         formatted_text, delivered_text, target_application_name,
         delivery_outcome, delivery_failure, audio_filename,
-        formatted_document_json, spoken_edits_json
+        formatted_document_json, spoken_edits_json,
+        delivery_failure_reason
       FROM voice_sessions
       ORDER BY ended_at DESC
       LIMIT ?;
@@ -175,6 +189,9 @@ actor SQLiteVoiceSessionStore {
           "Voice History contains an invalid session record."
         )
       }
+      let failureReason = try deliveryFailureReason(
+        from: optionalText(statement, column: 13)
+      )
       let document = VoiceSessionDocument(
         id: id,
         startedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 1)),
@@ -186,6 +203,7 @@ actor SQLiteVoiceSessionStore {
         targetApplicationName: optionalText(statement, column: 7),
         deliveryOutcome: outcome,
         deliveryFailure: optionalText(statement, column: 9),
+        deliveryFailureReason: failureReason,
         formattedDocument: try formattedDocument(
           from: optionalText(statement, column: 11),
           expectedRawText: text(statement, column: 3),
@@ -195,6 +213,7 @@ actor SQLiteVoiceSessionStore {
           from: optionalText(statement, column: 12)
         )
       )
+      try validateDeliveryEvidence(document)
       let audioFilename = optionalText(statement, column: 10)
       let expectedAudioFilename = "\(id.uuidString).caf"
       guard
@@ -262,6 +281,41 @@ actor SQLiteVoiceSessionStore {
     .storageUnavailable(
       "Voice History could not update its local database."
     )
+  }
+
+  private func deliveryFailureReason(
+    from rawValue: String?
+  ) throws -> VoiceSessionDeliveryFailureReason? {
+    guard let rawValue else {
+      return nil
+    }
+    guard
+      let reason = VoiceSessionDeliveryFailureReason(
+        rawValue: rawValue
+      )
+    else {
+      throw VoiceSessionHistoryError.storageUnavailable(
+        "Voice History contains an invalid delivery failure reason."
+      )
+    }
+    return reason
+  }
+
+  private func validateDeliveryEvidence(
+    _ document: VoiceSessionDocument
+  ) throws {
+    guard document.deliveryFailureReason != nil else {
+      return
+    }
+    guard
+      document.deliveryOutcome == .failed,
+      document.deliveryFailure != nil,
+      document.deliveredText.isEmpty
+    else {
+      throw VoiceSessionHistoryError.storageUnavailable(
+        "Voice History contains contradictory delivery evidence."
+      )
+    }
   }
 
   private func formattedDocument(
