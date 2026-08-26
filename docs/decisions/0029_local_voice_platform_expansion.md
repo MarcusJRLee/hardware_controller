@@ -189,5 +189,6 @@ correction, retranscription, reformatting, and explicit delayed re-delivery
 append linked results. Export writes an open versioned package, pinning protects
 future audio retention, and transactional deletion removes the session and its
 owned audio. M7 subsequently delivered automatic quota enforcement under
-[decision 0031](0031_bounded_voice_history_audio.md); M8 retains partial and
-orphan crash reconciliation.
+[decision 0031](0031_bounded_voice_history_audio.md). M8 partial, orphan,
+quarantine, row-corruption, and database-corruption recovery is implemented by
+[decision 0032](0032_voice_history_crash_recovery.md).

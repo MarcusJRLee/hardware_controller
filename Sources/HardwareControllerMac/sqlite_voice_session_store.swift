@@ -15,6 +15,12 @@ private final class SQLiteDatabaseHandle: @unchecked Sendable {
   }
 }
 
+struct SQLiteVoiceHistoryRecoveryDescriptor: Sendable {
+  let id: UUID
+  let audioFilename: String?
+  let audioExpirationReason: VoiceHistoryAudioExpirationReason?
+}
+
 /// Owns the single serialized SQLite connection for Voice session metadata.
 actor SQLiteVoiceSessionStore {
   /// SQLite uses the -1 sentinel to copy bound text before Swift releases it.
@@ -26,6 +32,7 @@ actor SQLiteVoiceSessionStore {
   private let handle: SQLiteDatabaseHandle
   private let audioDirectory: URL
   private var didBackfillResults = false
+  private var invalidSessionRecordCount = 0
 
   private var database: OpaquePointer { handle.pointer }
 
@@ -79,7 +86,9 @@ actor SQLiteVoiceSessionStore {
           audio_duration_ms INTEGER,
           is_pinned INTEGER NOT NULL DEFAULT 0,
           audio_expired_at REAL,
-          audio_expiration_reason TEXT
+          audio_expiration_reason TEXT,
+          recovery_kind TEXT,
+          recovered_at REAL
         );
         CREATE TABLE IF NOT EXISTS voice_results (
           id TEXT PRIMARY KEY NOT NULL,
@@ -146,6 +155,16 @@ actor SQLiteVoiceSessionStore {
     )
     try Self.addColumnIfNeeded(
       opened,
+      name: "recovery_kind",
+      definition: "TEXT"
+    )
+    try Self.addColumnIfNeeded(
+      opened,
+      name: "recovered_at",
+      definition: "REAL"
+    )
+    try Self.addColumnIfNeeded(
+      opened,
       table: "voice_results",
       name: "delivery_outcome",
       definition: "TEXT"
@@ -166,7 +185,9 @@ actor SQLiteVoiceSessionStore {
 
   func insert(
     _ document: VoiceSessionDocument,
-    audioURL: URL?
+    audioURL: URL?,
+    recoveryKind: VoiceHistoryRecoveryKind? = nil,
+    recoveredAt: Date? = nil
   ) throws {
     try ensureResultsBackfilled()
     try validateDeliveryEvidence(document)
@@ -181,8 +202,9 @@ actor SQLiteVoiceSessionStore {
           formatted_text, delivered_text, target_application_name,
           delivery_outcome, delivery_failure, audio_filename,
           formatted_document_json, spoken_edits_json,
-          delivery_failure_reason, audio_duration_ms, is_pinned
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0);
+          delivery_failure_reason, audio_duration_ms, is_pinned,
+          recovery_kind, recovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?);
         """
       var statement: OpaquePointer?
       guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
@@ -227,6 +249,17 @@ actor SQLiteVoiceSessionStore {
       } else {
         sqlite3_bind_null(statement, 15)
       }
+      try bind(recoveryKind?.rawValue, to: 16, in: statement)
+      if let recoveredAt {
+        sqlite3_bind_double(statement, 17, recoveredAt.timeIntervalSince1970)
+      } else {
+        sqlite3_bind_null(statement, 17)
+      }
+      guard (recoveryKind == nil) == (recoveredAt == nil) else {
+        throw VoiceSessionHistoryError.storageUnavailable(
+          "Voice History contains incomplete recovery evidence."
+        )
+      }
       guard sqlite3_step(statement) == SQLITE_DONE else {
         throw storageFailure()
       }
@@ -241,6 +274,83 @@ actor SQLiteVoiceSessionStore {
       try? Self.execute(database, sql: "ROLLBACK;")
       throw error
     }
+  }
+
+  func insertRecoveredSession(
+    id: UUID,
+    audioURL: URL,
+    kind: VoiceHistoryRecoveryKind,
+    recoveredAt: Date,
+    artifactModifiedAt: Date
+  ) throws {
+    let endedAt = min(artifactModifiedAt, recoveredAt)
+    let startedAt = endedAt.addingTimeInterval(-1)
+    try insert(
+      VoiceSessionDocument(
+        id: id,
+        startedAt: startedAt,
+        endedAt: endedAt,
+        rawText: "",
+        editedText: "",
+        formattedText: "",
+        deliveredText: "",
+        targetApplicationName: nil,
+        deliveryOutcome: .notAttempted
+      ),
+      audioURL: audioURL,
+      recoveryKind: kind,
+      recoveredAt: recoveredAt
+    )
+  }
+
+  func recoveryDescriptors() throws
+    -> [SQLiteVoiceHistoryRecoveryDescriptor]
+  {
+    let sql = """
+      SELECT id, audio_filename, audio_expiration_reason
+      FROM voice_sessions
+      ORDER BY id ASC;
+      """
+    var statement: OpaquePointer?
+    guard
+      sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
+      let statement
+    else {
+      throw storageFailure()
+    }
+    defer { sqlite3_finalize(statement) }
+    var descriptors: [SQLiteVoiceHistoryRecoveryDescriptor] = []
+    while true {
+      let result = sqlite3_step(statement)
+      guard result != SQLITE_DONE else {
+        return descriptors
+      }
+      guard result == SQLITE_ROW else {
+        throw storageFailure()
+      }
+      guard let id = UUID(uuidString: text(statement, column: 0)) else {
+        invalidSessionRecordCount += 1
+        continue
+      }
+      do {
+        descriptors.append(
+          SQLiteVoiceHistoryRecoveryDescriptor(
+            id: id,
+            audioFilename: optionalText(statement, column: 1),
+            audioExpirationReason: try optionalAudioExpirationReason(
+              optionalText(statement, column: 2)
+            )
+          )
+        )
+      } catch {
+        invalidSessionRecordCount += 1
+      }
+    }
+  }
+
+  func consumeInvalidSessionRecordCount() -> Int {
+    defer { invalidSessionRecordCount = 0 }
+    return invalidSessionRecordCount
   }
 
   func recentSessions(limit: Int) throws -> [VoiceSessionHistoryItem] {
@@ -418,11 +528,11 @@ actor SQLiteVoiceSessionStore {
         delivery_outcome, delivery_failure, audio_filename,
         formatted_document_json, spoken_edits_json,
         delivery_failure_reason, audio_duration_ms, is_pinned,
-        audio_expired_at, audio_expiration_reason
+        audio_expired_at, audio_expiration_reason, recovery_kind,
+        recovered_at
       FROM voice_sessions
       \(whereClause)
-      ORDER BY ended_at DESC
-      LIMIT ?;
+      ORDER BY ended_at DESC;
       """
     var statement: OpaquePointer?
     guard
@@ -435,8 +545,6 @@ actor SQLiteVoiceSessionStore {
     for (offset, value) in bindings.enumerated() {
       try bind(value, to: Int32(offset + 1), in: statement)
     }
-    sqlite3_bind_int(statement, Int32(bindings.count + 1), Int32(limit))
-
     var items: [VoiceSessionHistoryItem] = []
     while true {
       let result = sqlite3_step(statement)
@@ -446,7 +554,18 @@ actor SQLiteVoiceSessionStore {
       guard result == SQLITE_ROW else {
         throw storageFailure()
       }
-      items.append(try historyItem(from: statement))
+      do {
+        items.append(try historyItem(from: statement))
+        if items.count == limit {
+          return items
+        }
+      } catch {
+        let code = sqlite3_errcode(database) & 0xFF
+        guard code == SQLITE_OK || code == SQLITE_ROW || code == SQLITE_DONE else {
+          throw error
+        }
+        invalidSessionRecordCount += 1
+      }
     }
   }
 
@@ -506,11 +625,21 @@ actor SQLiteVoiceSessionStore {
     let audioExpirationReason = try optionalAudioExpirationReason(
       optionalText(statement, column: 17)
     )
+    let recoveryKind = try optionalRecoveryKind(
+      optionalText(statement, column: 18)
+    )
+    let recoveredAt = optionalDouble(statement, column: 19).map {
+      Date(timeIntervalSince1970: $0)
+    }
     guard
       duration.map({ $0 > 0 }) ?? true,
       pinnedValue == 0 || pinnedValue == 1,
       (audioExpiredAt == nil) == (audioExpirationReason == nil),
       audioFilename == nil || audioExpiredAt == nil,
+      (recoveryKind == nil) == (recoveredAt == nil),
+      recoveredAt.map({
+        $0.timeIntervalSince1970.isFinite && $0 >= document.endedAt
+      }) ?? true,
       audioExpiredAt.map({
         $0.timeIntervalSince1970.isFinite && $0 >= document.endedAt
       }) ?? true
@@ -538,6 +667,8 @@ actor SQLiteVoiceSessionStore {
       audioDurationMilliseconds: duration,
       audioExpiredAt: audioExpiredAt,
       audioExpirationReason: audioExpirationReason,
+      recoveryKind: recoveryKind,
+      recoveredAt: recoveredAt,
       isPinned: pinnedValue == 1,
       results: storedResults
     )
@@ -1192,6 +1323,20 @@ actor SQLiteVoiceSessionStore {
       )
     }
     return reason
+  }
+
+  private func optionalRecoveryKind(
+    _ rawValue: String?
+  ) throws -> VoiceHistoryRecoveryKind? {
+    guard let rawValue else {
+      return nil
+    }
+    guard let kind = VoiceHistoryRecoveryKind(rawValue: rawValue) else {
+      throw VoiceSessionHistoryError.storageUnavailable(
+        "Voice History contains an invalid recovery kind."
+      )
+    }
+    return kind
   }
 
   private func optionalUUID(_ value: String?) throws -> UUID? {

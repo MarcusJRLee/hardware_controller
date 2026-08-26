@@ -209,6 +209,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       AppLaunchPresentation.activationPolicy
     )
     model.start()
+    Task { [weak historyModel] in
+      await historyModel?.load()
+    }
     if AppLaunchPresentation.shouldPresentApplicationWindow(
       arguments: ProcessInfo.processInfo.arguments,
       isLoginItemLaunch: isLoginItemLaunch

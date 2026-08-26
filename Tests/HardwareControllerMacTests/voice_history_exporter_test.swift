@@ -59,13 +59,15 @@ struct VoiceHistoryExporterTest {
       VoiceHistoryExportChecksums.self,
       from: checksumData
     )
-    #expect(manifest.schemaRevision == 2)
+    #expect(manifest.schemaRevision == 3)
     #expect(manifest.document == document)
     #expect(manifest.results.count == 4)
     #expect(manifest.audioFilename == "audio.caf")
     #expect(manifest.audioDurationMilliseconds == 100)
     #expect(manifest.audioExpiredAt == nil)
     #expect(manifest.audioExpirationReason == nil)
+    #expect(manifest.recoveryKind == nil)
+    #expect(manifest.recoveredAt == nil)
     #expect(checksums.algorithm == "SHA-256")
     #expect(
       checksums.files["session.json"]
@@ -80,6 +82,44 @@ struct VoiceHistoryExporterTest {
       )
     )
     #expect(try await history.session(id: sessionID) == session)
+  }
+
+  @Test
+  func exportPreservesRecoveryProvenance() async throws {
+    let root = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_recovery_export_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let sessionID = UUID()
+    let recoveredAt = Date(timeIntervalSince1970: 2_000)
+    let item = VoiceSessionHistoryItem(
+      document: VoiceSessionDocument(
+        id: sessionID,
+        startedAt: Date(timeIntervalSince1970: 1_000),
+        endedAt: Date(timeIntervalSince1970: 1_001),
+        rawText: "",
+        editedText: "",
+        formattedText: "",
+        deliveredText: "",
+        targetApplicationName: nil,
+        deliveryOutcome: .notAttempted
+      ),
+      audioArtifactURL: nil,
+      audioDurationMilliseconds: 100,
+      recoveryKind: .interruptedCapture,
+      recoveredAt: recoveredAt
+    )
+
+    try await VoiceHistoryExporter().export(item, to: root)
+
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    let manifest = try decoder.decode(
+      VoiceHistoryExportSession.self,
+      from: Data(contentsOf: root.appending(path: "session.json"))
+    )
+    #expect(manifest.schemaRevision == 3)
+    #expect(manifest.recoveryKind == .interruptedCapture)
+    #expect(manifest.recoveredAt == recoveredAt)
   }
 
   @Test

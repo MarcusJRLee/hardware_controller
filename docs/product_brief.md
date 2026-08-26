@@ -59,6 +59,10 @@ automatically formatted result.
 | Retained audio | The optional app-owned CAF linked to one completed Voice session. |
 | Audio expiration | Automatic removal of Retained audio while keeping its session, results, timing metadata, and typed reason. |
 | Voice retention policy | Versioned age, byte, count, pin, recovery, and low-disk rules for Retained audio. |
+| Recovery session | A History session synthesized from readable app-owned audio after interruption; it has typed origin and no invented transcript. |
+| Partial audio | A session-scoped in-progress recording that startup may reconcile after interruption. |
+| Orphan audio | Finalized app-owned audio with no owning History row. |
+| Reconciliation | Deterministic startup repair of partial, orphaned, quarantined, or corrupt Voice History state before retention. |
 | Model residency policy | How long an app-started local formatting model remains loaded; distinct from Voice retention. |
 
 Use `pedal` only for Infinity-specific UI copy. Domain and reusable UI use
@@ -121,6 +125,9 @@ failure path.
   the captured delivery route; never fall through to a replacement adapter.
 - Store local audio plus distinct Raw, Edited, Formatted, and Delivered stages
   for later History slices; keep current-session copy actions separate.
+- Reconcile interrupted app-owned audio into truthful Recovery sessions before
+  retention. Never invent transcript text; preserve playback and local
+  retranscription for 24 hours unless pinned.
 
 ### Configuration
 

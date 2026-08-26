@@ -388,13 +388,17 @@ versioned `session.json`, optional audio, transcript stages, and checksums.
 Deletion removes the owned record and files. Product copy must not promise
 secure erasure from SSD wear-leveling, filesystem snapshots, or device backups.
 
-The current M7 macOS baseline stores linked immutable results in SQLite,
+The current M8 macOS baseline stores linked immutable results in SQLite,
 searches every text stage, plays bounded timed CAF spans, and supports explicit
 correction, retranscription, reformatting, re-delivery, export, pinning, and
 transactional deletion. A portable policy plus dedicated SQLite retention actor
 enforces age, count, byte low-water, and low-disk rules after finalization and at
 startup while preserving searchable transcript metadata and typed expiration
-evidence. M8 owns partial and orphan reconciliation.
+evidence. Startup reconciliation now repairs interrupted expiration, converts
+readable partial and orphan audio into typed Recovery sessions, isolates
+malformed rows, preserves physically corrupt databases, and retains completed
+text when audio finalization fails. Recovery audio remains playable and locally
+retranscribable for 24 hours unless pinned.
 
 ## Privacy and security
 

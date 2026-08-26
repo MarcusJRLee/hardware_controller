@@ -28,11 +28,13 @@ only recovery artifact for a failed or incomplete delivery.
   low-disk request remains visible as typed maintenance evidence.
 - Quarantine the selected CAF, atomically clear its database reference while
   recording expiration time and reason, then remove the quarantine. Restore
-  the original file when the database transaction fails. M8 owns reconciliation
-  if final quarantine removal fails or a prior crash leaves partial/orphan data.
+  the original file when the database transaction fails. Decision
+  [0032](0032_voice_history_crash_recovery.md) owns reconciliation if final
+  quarantine removal fails or a prior crash leaves partial/orphan data.
 - Keep duration, timed spans, immutable text results, search, and export
-  metadata after audio expires. Export schema revision 2 includes optional
-  expiration time and reason.
+  metadata after audio expires. Export schema revision 2 added optional
+  expiration time and reason; decision [0032](0032_voice_history_crash_recovery.md)
+  extends the manifest to revision 3 with Recovery provenance.
 - Use one shared History service for capture, browsing, preferences, and
   maintenance. Run policy and SQLite/file work on actors after finalization and
   at first startup access, outside hardware callbacks, target validation, and

@@ -117,6 +117,11 @@ Dictation and is disabled until you configure it.
 See the [user guide](docs/user_guide.md) for Profiles, target behavior,
 recovery, and troubleshooting.
 
+Voice History repairs app-owned partial, orphan, and interrupted-expiration
+audio at startup before applying storage limits. Recovered audio is marked,
+playable, and locally retranscribable without invented text; unpinned recovery
+audio expires after 24 hours while its History row remains searchable.
+
 ## Dictation Actions
 
 | Action | Result | Model dependency |

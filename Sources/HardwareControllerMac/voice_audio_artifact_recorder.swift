@@ -2,8 +2,18 @@
 import Foundation
 import Synchronization
 
+protocol VoiceAudioArtifactRecording: Sendable {
+  func append(_ audio: CapturedAudioBuffer)
+  func stopRetainingAudio()
+  func finishRetainingAudio() async throws -> URL?
+  func discard() async
+}
+
 /// Serializes bounded audio writes away from capture and delivery executors.
-final class VoiceAudioArtifactRecorder: Sendable {
+final class VoiceAudioArtifactRecorder:
+  VoiceAudioArtifactRecording,
+  Sendable
+{
   private let continuation: AsyncStream<CapturedAudioBuffer>.Continuation
   private let worker: Task<Result<URL?, VoiceSessionHistoryError>, Never>
   private let overflowed = Mutex(false)

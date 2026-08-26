@@ -47,14 +47,15 @@ transactionally, quarantining the file until the database commit succeeds.
 - Capture and delivery stay independent from History presentation and storage
   latency.
 - Earlier evidence remains inspectable after every correction or rerun.
-- Decision [0031](0031_bounded_voice_history_audio.md) now owns automatic
-  quota and low-disk expiration. M8 still owns partial and orphan reconciliation.
+- Decision [0031](0031_bounded_voice_history_audio.md) owns automatic quota and
+  low-disk expiration. Decision [0032](0032_voice_history_crash_recovery.md)
+  owns partial, orphan, quarantine, and corrupt-state reconciliation.
 - Exported packages are portable evidence, not a second mutable database.
 
 ## Evidence
 
 Swift unit and SQLite-reopen tests cover result linking, migrations, search,
-corruption rejection, timed spans, operations, export, playback, and deletion.
+corruption isolation, timed spans, operations, export, playback, and deletion.
 A 5,000-session warm-search benchmark must remain within 250 ms p95. Packaged
 UI checks cover the History route, search, correction, appearance modes, large
 text, increased contrast, and reduced motion.

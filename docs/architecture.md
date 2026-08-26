@@ -404,7 +404,8 @@ rewritten.
 
 Search joins all result stages and escapes wildcard input. Result reads reject
 invalid stage/origin pairs, contradictory formatting or delivery provenance,
-broken source links, and spans outside measured audio duration. Appending a
+broken source links, and spans outside measured audio duration by isolating the
+malformed session row while returning unrelated valid rows. Appending a
 derived result validates its source against the same session. Export copies
 evidence into one atomic open package with streaming SHA-256 file checksums
 without modifying the database.
@@ -417,8 +418,22 @@ versioned preference schema 6 after finalization and on first startup access.
 Age, count, byte-to-90%-low-water, and 1 GiB basic-volume-reserve rules select the
 oldest eligible audio deterministically while excluding active, pinned, and sole
 recovery artifacts. Expiration stores a typed reason and time, removes only the
-CAF, and retains searchable text, timing, and export evidence. M8 remains
-responsible for partial and orphan reconciliation after interruption.
+CAF, and retains searchable text, timing, and export evidence.
+
+One startup reconciliation actor runs before retention. A pure planner maps
+exact app-owned partial, final, and expiration-quarantine names plus database
+evidence to deterministic restore, discard, recover, or stale-unreadable
+actions. Readable orphaned audio becomes a Recovery session with typed kind,
+reconciliation time, four empty baseline stages, `notAttempted` delivery, whole-
+file playback, and local retranscription. Unpinned recovered audio expires after
+24 hours with a typed reason while the session remains searchable.
+
+CAF finalization failure commits completed text without audio before surfacing
+the typed failure. Malformed rows are isolated. A physically corrupt SQLite
+database family is preserved under a unique local recovery filename before a
+clean database is created; permission, coordination, and disk errors are not
+misclassified as corruption. Decision
+[`0032`](decisions/0032_voice_history_crash_recovery.md) owns these boundaries.
 
 ### Presentation
 

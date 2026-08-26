@@ -184,7 +184,7 @@ the explicit three-second delay and records failed attempts. Migration lazily
 backfills immutable baseline results without rewriting session rows. Unit,
 database-reopen, corrupted-evidence, 5,000-session search, model, export,
 playback, and signed packaged-UI checks cover the journey; measured warm search
-p95 is 2.484 ms against the 250 ms requirement.
+p95 is 2.639 ms against the 250 ms requirement.
 
 ### M7 — Bound storage without surprise
 
@@ -207,6 +207,18 @@ A crash or process kill during capture leaves at most one partial artifact.
 Startup reconciles it into a recoverable session or removes it under the partial
 retention rule. Corrupt SQLite state, an orphan audio file, full disk, audio-route
 loss, and model cancellation do not block app launch or lose unrelated sessions.
+
+**Current evidence:** one pure planner and one startup actor reconcile exact
+app-owned partial, orphan, and expiration-quarantine names before retention.
+Readable audio becomes a typed Recovery session with empty immutable evidence,
+whole-file playback, and retranscription; unpinned recovered audio expires after
+24 hours while its session remains. Recent unreadable audio is preserved and
+stale unreferenced audio is removed. Malformed rows are isolated, a physically
+corrupt SQLite family is preserved before clean storage opens, and audio
+finalization failure stores completed text before surfacing its typed failure.
+Deterministic planner, real CAF/SQLite, export, retention, corruption, and
+presentation tests cover the journey. The current corpus passes 469 tests in 71
+suites, including a retention-first recovery ordering regression.
 
 ### M9 — Remain local and degrade honestly
 

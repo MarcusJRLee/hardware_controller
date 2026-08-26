@@ -90,6 +90,18 @@ struct VoiceHistoryModelTest {
     #expect(
       presentation.model.sessions[1].audioExpirationReason == .byteLimit
     )
+    #expect(presentation.model.sessions.count == 3)
+    #expect(
+      presentation.model.sessions[2].recoveryKind == .interruptedCapture
+    )
+    #expect(
+      presentation.model.sessions[2].audioExpirationReason == .recoveryLimit
+    )
+    presentation.model.select(
+      sessionID: presentation.model.sessions[2].id
+    )
+    #expect(presentation.model.selectedResult?.stage == .raw)
+    #expect(presentation.model.selectedResult?.text.isEmpty == true)
   }
 
   @Test
@@ -115,6 +127,32 @@ struct VoiceHistoryModelTest {
     #expect(model.selectedSession?.audioExpirationReason == .artifactLimit)
     #expect(model.selectedSession?.rawText == "searchable raw text")
     #expect(model.notice?.contains("1 audio recording") == true)
+  }
+
+  @Test
+  func loadSurfacesSanitizedRecoveryEvidence() async {
+    let model = VoiceHistoryModel(
+      history: RacingHistoryRepository(),
+      service: HistoryModelServiceStub(),
+      recoveryManager: RecoveryIssueManager()
+    )
+
+    await model.load()
+
+    #expect(
+      model.errorMessage
+        == "A damaged Voice History record was isolated. Other History remains available."
+    )
+  }
+}
+
+private struct RecoveryIssueManager: VoiceSessionHistoryRecoveryManaging {
+  func latestRecoveryReport() -> VoiceHistoryRecoveryReport? {
+    VoiceHistoryRecoveryReport(
+      completedAt: .distantPast,
+      completedActions: [],
+      issues: [.invalidSessionRecord]
+    )
   }
 }
 
