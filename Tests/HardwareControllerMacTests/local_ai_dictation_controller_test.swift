@@ -290,6 +290,106 @@ struct LocalAIDictationControllerTest {
   }
 
   @Test
+  func storesStructuredFormattingAndRendersSingleLineTargetsSafely()
+    async throws
+  {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_formatting_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let fixture = LocalAIControllerFixture(
+      refinement: .output(
+        "Plan.\n\n- Keep Bash.\n- Keep https://example.com."
+      )
+    )
+    var settings = LocalAISettings.default
+    settings.style = .technical
+    let controller = fixture.makeController(
+      settings: settings,
+      supportsMultilineText: false,
+      history: history
+    )
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.session.emit(
+      .committed("plan keep Bash keep https://example.com")
+    )
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    let item = try #require(
+      try await history.recentSessions(limit: 1).first
+    )
+    #expect(
+      item.formattedText
+        == "Plan.\n\n- Keep Bash.\n- Keep https://example.com."
+    )
+    #expect(
+      item.deliveredText
+        == "Plan. Keep Bash.; Keep https://example.com."
+    )
+    #expect(item.formattedDocument?.style == .technical)
+    #expect(item.formattedDocument?.blocks.count == 2)
+    #expect(item.formattedDocument?.validationStatus == .validated)
+  }
+
+  @Test
+  func modelOrdinalProseIsNormalizedBeforeDelivery() async throws {
+    let fixture = LocalAIControllerFixture(
+      refinement: .output(
+        "There are three steps: first, stop the service; second, copy the backup; third, restart the service."
+      )
+    )
+    let controller = fixture.makeController()
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.session.emit(
+      .committed(
+        "there are three steps first stop the service second copy the backup third restart the service"
+      )
+    )
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    #expect(
+      fixture.writer.inserted == [
+        "There are three steps:\n\n1. stop the service\n2. copy the backup\n3. restart the service."
+      ])
+  }
+
+  @Test
+  func verbatimStyleBypassesTheGenerativeModel() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_verbatim_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let fixture = LocalAIControllerFixture(refinement: .output("Changed."))
+    var settings = LocalAISettings.default
+    settings.style = .verbatim
+    let controller = fixture.makeController(
+      settings: settings,
+      history: history
+    )
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.session.emit(.committed("um keep this exactly"))
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    #expect(fixture.writer.inserted == ["um keep this exactly"])
+    #expect(await fixture.refiner.preparationCount == 0)
+    #expect(await fixture.refiner.refinementCompletionCount == 0)
+    let item = try #require(
+      try await history.recentSessions(limit: 1).first
+    )
+    #expect(item.formattedDocument?.style == .verbatim)
+    #expect(item.formattedDocument?.validationStatus == .validated)
+  }
+
+  @Test
   func refinementFailureInsertsRawTranscriptExactlyOnce() async throws {
     let fixture = LocalAIControllerFixture(
       refinement: .failure(.providerUnavailable("Ollama is not running."))
@@ -309,6 +409,22 @@ struct LocalAIDictationControllerTest {
       snapshot.fallbackReason
         == .providerUnavailable("Ollama is not running.")
     )
+  }
+
+  @Test
+  func rawFallbackFlattensOnlyForASingleLineTarget() async throws {
+    let fixture = LocalAIControllerFixture(
+      refinement: .failure(.providerUnavailable("No formatter."))
+    )
+    let controller = fixture.makeController(supportsMultilineText: false)
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.session.emit(.committed("first line\nsecond line"))
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    #expect(fixture.writer.inserted == ["first line second line"])
   }
 
   @Test
@@ -457,6 +573,7 @@ private final class LocalAIControllerFixture: @unchecked Sendable {
     refiner: (any LocalAIRefinementRouting)? = nil,
     authorization: any TranscriptionAuthorizationProviding =
       LocalAIFixedAuthorization(),
+    supportsMultilineText: Bool = true,
     history: any VoiceSessionHistoryRecording =
       DiscardingVoiceSessionHistory(),
     now: @escaping @Sendable () -> Date = { Date() }
@@ -464,7 +581,9 @@ private final class LocalAIControllerFixture: @unchecked Sendable {
     LocalAIDictationController(
       factory: factory,
       microphone: microphone,
-      targeter: LocalAIFixedTargeter(),
+      targeter: LocalAIFixedTargeter(
+        supportsMultilineText: supportsMultilineText
+      ),
       writer: writer,
       authorization: authorization,
       contextCapturer: LocalAIFixedContextCapturer(),
@@ -542,6 +661,12 @@ private struct LocalAIFixedAuthorization:
 }
 
 private struct LocalAIFixedTargeter: FocusedTextTargeting {
+  let supportsMultilineText: Bool
+
+  init(supportsMultilineText: Bool = true) {
+    self.supportsMultilineText = supportsMultilineText
+  }
+
   func capture() throws -> FocusedTextTarget {
     FocusedTextTarget(
       element: AXUIElementCreateSystemWide(),
@@ -549,7 +674,7 @@ private struct LocalAIFixedTargeter: FocusedTextTargeting {
       applicationName: "Notes",
       applicationBundleIdentifier: "com.apple.Notes",
       role: kAXTextAreaRole as String,
-      supportsMultilineText: true,
+      supportsMultilineText: supportsMultilineText,
       deliveryCapability: .finalOnly
     )
   }

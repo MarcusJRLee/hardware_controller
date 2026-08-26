@@ -131,8 +131,10 @@ model warm-up begins while the user speaks and never blocks the HID-to-Action
 path.
 
 Local AI Dictation removes fillers, resolves clear self-corrections, corrects
-supported recognition errors, adds punctuation, and chooses paragraphs or
-lists when the target safely supports multiline text. It validates protected
+supported recognition errors, and applies the selected Natural, Casual
+Message, Formal, Technical, or Verbatim Style. It creates validated paragraph
+and list blocks, then preserves or flattens structure for the target. It
+validates protected
 numbers, URLs, email addresses, paths, code-like tokens, quotations, and
 dictionary terms. A provider error, invalid output, or three-second deadline
 delivers the raw transcript once when the captured target is still safe.

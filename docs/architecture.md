@@ -224,13 +224,17 @@ Current executors:
   microphone and Apple recognition controller in final-only mode. It warms the
   selected provider while speech continues, applies deterministic dictionary
   replacements, sends immutable typed context to one local refiner, validates
-  protected content and semantic bounds, then inserts refined or raw fallback
-  text exactly once. Preparation plus generation share a three-second
+  protected content and semantic bounds, parses evidence-backed paragraph and
+  list blocks, then renders target-safe refined or raw fallback text exactly
+  once. Verbatim Style bypasses provider preparation and generation.
+  Preparation plus generation share a three-second
   post-final-transcript deadline. The deadline race returns without awaiting a
   provider that ignores cancellation; every late result is discarded. A
   bounded nonblocking tee writes immutable capture buffers on a utility task.
   After delivery, the controller atomically finalizes one CAF and commits Raw,
-  Edited, Formatted, and Delivered text to an actor-owned system SQLite store.
+  Edited, Formatted, and Delivered text plus the versioned structured document
+  and model evidence to an actor-owned system SQLite store. Existing databases
+  gain the nullable structured column without rewriting earlier rows.
   Cancellation removes its owned artifact. History presentation, timed spans,
   retention, reconciliation, and user deletion remain later Voice slices.
 
@@ -254,11 +258,17 @@ Local AI providers implement `TranscriptRefining`:
   two-second local deadline; a failed settings-change unload remains owned for
   one shutdown retry.
 
-Prompt revision 4 keeps invariant policy separate from an encoded untrusted
-payload. The payload bounds transcript, locale, Profile, target app identity,
-role, multiline capability, optional nearby text, and dictionary data. Output
-validation rejects empty, oversized, multiline-incompatible, control-bearing,
+Prompt revision 5 keeps invariant policy and centralized Style instructions
+separate from an encoded untrusted payload. The payload bounds transcript,
+locale, Profile, target app identity,
+role, multiline capability, optional nearby text, Dictionary data, Style kind,
+and Style revision. Output validation rejects empty, oversized, control-bearing,
 protected-token-changing, additive, destructive, or context-copying results.
+The typed document builder accepts validated newlines, while the deterministic
+renderer alone decides whether the captured target receives structure or one
+plain line. When both Raw and validated text retain a consecutive
+first/second sequence, the builder conservatively converts the full sequence
+to an ordered-list block and validation runs again on the canonical rendering.
 The sanitized provider test shares the three-second preparation-plus-generation
 deadline; settings changes and shutdown cancel it and suppress stale results.
 See [`decisions/0020_local_ai_dictation.md`](decisions/0020_local_ai_dictation.md)

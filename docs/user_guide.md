@@ -159,22 +159,27 @@ not implemented yet. Speech content is never logged.
 Open **General → Local AI Dictation** before assigning the Action:
 
 1. Choose **Apple On-Device** or **Ollama**.
-2. For Ollama, start the local service and install the recommended model:
+2. Choose **Natural**, **Casual Message**, **Formal**, **Technical**, or
+   **Verbatim** under **Style**. Verbatim uses recognition and exact Dictionary
+   replacements but skips the generative model. Casual Message prefers
+   lowercase sentence starts while preserving required proper-name and
+   Dictionary capitalization.
+3. For Ollama, start the local service and install the recommended model:
 
    ```bash
    ollama pull qwen3.5:4b
    ```
 
-3. Choose an installed model and **5 minutes** or **Until app quits** retention.
+4. Choose an installed model and **5 minutes** or **Until app quits** retention.
    On model change or quit, the app unloads a model it started. It leaves a
    model that was already running for another local Ollama client untouched.
-4. Choose **Refresh Status**, then **Test Selected Provider**. The test uses a
+5. Choose **Refresh Status**, then **Test Selected Provider**. The test uses a
    fixed sanitized phrase without microphone or focused-field access.
-5. Optionally expand **Personal dictionary**. Type a recognition term into its
+6. Optionally expand **Personal dictionary**. Type a recognition term into its
    outlined field and choose **Add**, or fill both outlined replacement fields
    before choosing **Add**. You can also enable nearby-text context or provide
    formatting instructions.
-6. Assign **Local AI Dictation** to a Control under Controller or Profiles.
+7. Assign **Local AI Dictation** to a Control under Controller or Profiles.
 
 Apple On-Device requires macOS 26, Apple Intelligence enabled, a supported
 locale, and installed model assets. It never enables Private Cloud Compute.
@@ -185,8 +190,9 @@ resident on the reference Mac.
 
 Recognition vocabulary helps Apple's speech backend identify names and
 technical terms. Exact replacements run deterministically after recognition
-and before the model. Additional instructions can express style preferences,
-but cannot override accuracy, privacy, or prompt-safety rules.
+and before the model. Additional instructions can express workflow-specific
+preferences, but cannot override the selected Style, accuracy, privacy, or
+prompt-safety rules.
 
 Nearby text is off by default. When enabled, the app reads at most a bounded
 window around the caret from an approved multiline, nonsecure Accessibility
@@ -202,13 +208,15 @@ app:
 
 1. finalizes on-device Apple speech recognition;
 2. applies exact dictionary replacements;
-3. corrects and formats text through the selected local provider;
-4. validates meaning, protected terms, target capability, and output shape;
-5. inserts one result into the unchanged target.
+3. corrects and formats text through the selected local provider, unless Style
+   is Verbatim;
+4. validates meaning and protected terms and creates paragraph/list blocks;
+5. renders those blocks for the captured target and inserts one result.
 
-Formatting is automatic. Clear lists or steps become bullets or numbered lists
-only in safe multiline targets; single-line and compatibility targets always
-receive one plain line. There is no Clean/Structured setting.
+Formatting structure is automatic. Clear lists or steps become validated
+bullet or numbered-list blocks. Safe multiline targets retain that structure;
+single-line and compatibility targets receive a deterministic plain line.
+There is no Clean/Structured setting.
 
 Model warm-up begins while you speak. If warm-up plus generation does not
 finish within three seconds after the final raw transcript, or the provider is
@@ -232,7 +240,7 @@ Accessibility but not Microphone or Speech Recognition access.
 The optional Voice chord is machine-wide and independent of Profiles,
 Controls, and Binding keyboard fallbacks. It runs the current Local AI
 Dictation pipeline, including its microphone, Apple on-device recognition,
-selected local refinement provider, safe target delivery, and local M1 session
+selected local Formatting provider, safe target delivery, and local session
 storage.
 
 1. Open **General → Voice capture shortcut**.

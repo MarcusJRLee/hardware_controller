@@ -149,3 +149,12 @@ finish once. One Carbon owner reserves both active-Profile Binding fallbacks
 and this distinct chord. Replacement and lifecycle interruption cancel Voice
 ownership before registration teardown. Application preference schema 4 stores
 the validated settings and migrates earlier schemas with the chord disabled.
+
+M3 advances application preferences to schema 5 and stores one versioned
+Natural, Casual Message, Formal, Technical, or Verbatim Style. Prompt revision
+5 carries Style as typed untrusted payload data and centralizes its bounded
+instructions. Verbatim bypasses the model. The Swift baseline converts
+validated output into evidence-backed paragraph/list blocks, renders structure
+only where the captured target supports it, and stores the encoded document in
+a nullable SQLite column. Earlier schema-4 preferences default to Natural and
+earlier Voice databases retain their rows with no structured document.
