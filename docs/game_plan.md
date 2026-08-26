@@ -20,6 +20,25 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 | Release | Version 1.4.1 build 17 is installed as an unreleased personal QA candidate; routine installs preserve both values and no release promotion is authorized. | [`decisions/0023_stable_personal_build_metadata.md`](decisions/0023_stable_personal_build_metadata.md) |
 | Public source | Open source under Apache License 2.0 with Marcus John Rice Lee as copyright owner, inbound Apache contributions, provisional Signal Bridge identity, and active GitHub security controls. | [`decisions/0028_apache_open_source_and_contributions.md`](decisions/0028_apache_open_source_and_contributions.md) |
 
+## Approved next program
+
+The local Voice expansion is accepted but unimplemented. macOS and iOS are the
+active roadmap; Android, Windows, and Linux remain architectural line-of-sight
+platforms; web and mobile web are deferred. The acceptance and execution
+authorities are:
+
+| Authority | Purpose |
+| --- | --- |
+| [`decisions/0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md) | Durable product, platform, portability, retention, and delivery choices. |
+| [`voice_cujs.md`](voice_cujs.md) | CUJ-first behavioral and testing contract. |
+| [`voice_platform_design.md`](voice_platform_design.md) | Model, runtime, iOS keyboard, storage, performance, and milestone design. |
+| [`voice_implementation_goal_prompt.md`](voice_implementation_goal_prompt.md) | Autonomous worktree/PR execution contract and definition of done. |
+
+Implementation integrates focused vertical PRs into `dev`. `main`, release
+metadata, tags, distribution artifacts, and store submission remain unchanged
+until the user verifies the finished `dev` state and separately approves
+promotion.
+
 ## Quality gates
 
 | Gate | Contract | Current automated evidence |

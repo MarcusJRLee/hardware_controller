@@ -208,3 +208,9 @@ Given Profiles contain different Device setups:
 
 These are current boundaries, not prohibitions on measured future work. Durable
 changes require a decision record under [`decisions/`](decisions/).
+
+The accepted local-first Voice program will supersede several boundaries above
+as its vertical slices ship; none describes current behavior yet. See
+[`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
+[`voice_platform_design.md`](voice_platform_design.md), and
+[`voice_cujs.md`](voice_cujs.md).

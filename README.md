@@ -242,6 +242,9 @@ documented in [release validation](docs/release_validation.md).
 | [Branding](BRANDING.md) | Canonical-project and modified-build identification. |
 | [User guide](docs/user_guide.md) | Installation, setup, use, and troubleshooting. |
 | [Product brief](docs/product_brief.md) | Product scope, domain language, and acceptance stories. |
+| [Voice platform design](docs/voice_platform_design.md) | Accepted local Voice roadmap for the existing macOS app and iOS. |
+| [Voice CUJs](docs/voice_cujs.md) | Accepted test-first macOS and iOS behavior contract. |
+| [Voice implementation goal](docs/voice_implementation_goal_prompt.md) | Copy-paste autonomous execution prompt and definition of done. |
 | [Game plan](docs/game_plan.md) | Current quality gates and remaining evidence. |
 | [Public distribution](docs/public_distribution.md) | Gated Developer ID, notarization, and free-DMG runbook. |
 | [Public repository migration](docs/public_repository_migration.md) | Completed clean-history replacement record and GitHub controls. |

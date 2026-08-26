@@ -42,3 +42,25 @@ The migration was completed on 2026-08-21:
 
 The public repository gate was satisfied on 2026-08-21. Public source approval
 does not approve a signed binary, DMG, tag, or GitHub Release.
+
+## Voice platform expansion gate
+
+The gate closed on 2026-08-25 through
+[`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md).
+Current behavior remains unchanged until the accepted roadmap ships.
+
+| Decision | Accepted direction |
+| --- | --- |
+| Product boundary | Add Voice to the existing Hardware Controller macOS app; create no second macOS product. |
+| Repository | Use one repository with incremental `apps/`, Rust crate, Apple support, schema, and CUJ boundaries. |
+| Delivery | Start with M1 and proceed CUJ-by-CUJ through focused worktree PRs into `dev`; keep `main` gated on final user verification. |
+| History | Retain transcripts until deletion; cap successful audio by accepted age, byte, and artifact-count defaults; retain recoverable partials for 24 hours. |
+| Local-only | Permit explicit verified Model-package downloads containing no Voice data; exclude Voice data from app sync/backup where supported; add no accounts, telemetry, cloud inference, or remote storage. |
+| Models | Use separate ASR and optional formatting stages with deterministic edits, validation, and Raw fallback; delegate provider/package choice to measured evidence. |
+| iOS | Ship a containing app and full custom keyboard; the app owns capture/inference/History and the keyboard controls and inserts confirmed results. |
+| Portability | Own portable behavior in Rust, allow measured native kernels behind it, and keep Android/Windows/Linux in line of sight. Defer web/mobile web. |
+| Deployment floors | Preserve macOS 15 for the spike and choose iOS/lowest-device support from benchmarks. |
+
+No unresolved user choice blocks the implementation goal. K0 signed-device,
+model, performance, and App Review checks are evidence gates that must not stop
+independent work. Release promotion and `dev` → `main` remain separately gated.
