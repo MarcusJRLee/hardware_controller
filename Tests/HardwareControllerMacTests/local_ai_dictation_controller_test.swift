@@ -1,3 +1,4 @@
+import AVFoundation
 @preconcurrency import ApplicationServices
 import Foundation
 import HardwareControllerCore
@@ -6,6 +7,48 @@ import Testing
 @testable import HardwareControllerMac
 
 struct LocalAIDictationControllerTest {
+  @Test
+  func storesDeliveredDictationWithPlayableAudio() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_\(UUID().uuidString)")
+    defer {
+      try? FileManager.default.removeItem(at: rootDirectory)
+    }
+    let history = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory
+    )
+    let fixture = LocalAIControllerFixture(
+      refinement: .output("send the revised plan tomorrow")
+    )
+    let capturedAt = Date(timeIntervalSince1970: 1_000)
+    let controller = fixture.makeController(
+      history: history,
+      now: { capturedAt }
+    )
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.microphone.emit(try makeVoiceAudioFixture())
+    fixture.session.emit(.committed("send the revised plan tomorrow"))
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    let sessions = try await history.recentSessions(limit: 10)
+    let session = try #require(sessions.first)
+    #expect(sessions.count == 1)
+    #expect(fixture.writer.inserted == ["Send the revised plan tomorrow."])
+    #expect(session.rawText == "send the revised plan tomorrow")
+    #expect(session.editedText == "send the revised plan tomorrow")
+    #expect(session.formattedText == "Send the revised plan tomorrow.")
+    #expect(session.deliveredText == "Send the revised plan tomorrow.")
+    #expect(session.deliveryOutcome == .inserted)
+    #expect(session.document.startedAt == capturedAt)
+    #expect(session.document.endedAt == capturedAt)
+    let audioURL = try #require(session.audioArtifactURL)
+    let audioFile = try AVAudioFile(forReading: audioURL)
+    #expect(audioFile.length > 0)
+  }
+
   @Test(
     .enabled(
       if:
@@ -375,7 +418,10 @@ private final class LocalAIControllerFixture: @unchecked Sendable {
     refinementTimeout: Duration = .seconds(3),
     refiner: (any LocalAIRefinementRouting)? = nil,
     authorization: any TranscriptionAuthorizationProviding =
-      LocalAIFixedAuthorization()
+      LocalAIFixedAuthorization(),
+    history: any VoiceSessionHistoryRecording =
+      DiscardingVoiceSessionHistory(),
+    now: @escaping @Sendable () -> Date = { Date() }
   ) -> LocalAIDictationController {
     LocalAIDictationController(
       factory: factory,
@@ -387,7 +433,9 @@ private final class LocalAIControllerFixture: @unchecked Sendable {
       refiner: refiner ?? self.refiner,
       settings: settings,
       profileName: "Coding",
-      refinementTimeout: refinementTimeout
+      refinementTimeout: refinementTimeout,
+      history: history,
+      now: now
     )
   }
 
@@ -571,6 +619,12 @@ private final class LocalAIFakeMicrophone:
     >.makeStream()
     lock.withLock { self.continuation = continuation }
     return stream
+  }
+
+  func emit(_ audio: CapturedAudioBuffer) {
+    _ = lock.withLock {
+      continuation?.yield(audio)
+    }
   }
 
   func stop() async {

@@ -356,6 +356,19 @@ private final class LiveApplicationProcess:
     )
     self.transcriptionController = transcriptionController
 
+    let history: any VoiceSessionHistoryRecording
+    do {
+      history = try SQLiteVoiceSessionHistory.applicationSupportHistory()
+    } catch let failure as VoiceSessionHistoryError {
+      history = UnavailableVoiceSessionHistory(failure: failure)
+    } catch {
+      history = UnavailableVoiceSessionHistory(
+        failure: .storageUnavailable(
+          "Voice History could not open its local storage."
+        )
+      )
+    }
+
     let localAIDictationController = LocalAIDictationController(
       factory: sessionFactory,
       microphone: microphone,
@@ -364,6 +377,7 @@ private final class LiveApplicationProcess:
       authorization: SystemTranscriptionAuthorizationProvider(),
       settings: localAISettings,
       profileName: profile.name,
+      history: history,
       snapshotHandler: eventRelay.publishLocalAIDictation
     )
     self.localAIDictationController = localAIDictationController

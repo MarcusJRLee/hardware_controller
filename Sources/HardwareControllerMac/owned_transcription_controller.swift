@@ -51,6 +51,7 @@ public actor OwnedTranscriptionController {
   private let locale: Locale
   private let finalizationTimeout: Duration
   private let snapshotHandler: SnapshotHandler
+  private let audioBufferHandler: @Sendable (CapturedAudioBuffer) -> Void
   private var vocabularyHints: [String]
 
   private var state = TranscriptionSessionStateMachine()
@@ -81,6 +82,8 @@ public actor OwnedTranscriptionController {
     locale: Locale = .current,
     vocabularyHints: [String] = [],
     finalizationTimeout: Duration = .seconds(5),
+    audioBufferHandler:
+      @escaping @Sendable (CapturedAudioBuffer) -> Void = { _ in },
     snapshotHandler:
       @escaping SnapshotHandler = { _ in }
   ) {
@@ -91,6 +94,7 @@ public actor OwnedTranscriptionController {
     self.authorization = authorization
     self.locale = locale
     self.finalizationTimeout = finalizationTimeout
+    self.audioBufferHandler = audioBufferHandler
     self.snapshotHandler = snapshotHandler
     self.vocabularyHints = vocabularyHints
   }
@@ -321,6 +325,7 @@ public actor OwnedTranscriptionController {
     audioTask = Task {
       do {
         for try await audio in stream {
+          audioBufferHandler(audio)
           try await session.append(audio)
         }
         guard !Task.isCancelled else {

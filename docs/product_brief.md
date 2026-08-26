@@ -200,7 +200,8 @@ Given Profiles contain different Device setups:
   providers.
 - Private Cloud Compute fallback.
 - A second speech recognizer, Whisper runtime, or direct-audio language model.
-- A mobile or Windows version.
+- A shipped mobile, Windows, or Linux app in the current macOS release. iOS is
+  an accepted active roadmap; Android, Windows, and Linux remain line of sight.
 - Downloaded Driver code or user-authored plug-ins.
 - Arbitrary shell commands, scripts, or AppleScript.
 - Automatic per-application Profile switching.
@@ -209,8 +210,10 @@ Given Profiles contain different Device setups:
 These are current boundaries, not prohibitions on measured future work. Durable
 changes require a decision record under [`decisions/`](decisions/).
 
-The accepted local-first Voice program will supersede several boundaries above
-as its vertical slices ship; none describes current behavior yet. See
+The accepted local-first Voice program supersedes these boundaries one tested
+vertical slice at a time. Its current M1 tracer persists Local AI Dictation
+audio and distinct final text stages; History UI, retention enforcement, the
+portable engine, and iOS remain pending. See
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 [`voice_platform_design.md`](voice_platform_design.md), and
 [`voice_cujs.md`](voice_cujs.md).

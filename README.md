@@ -168,8 +168,12 @@ but preserves a model that another local Ollama client already had running.
 
 ## Privacy and safety
 
-- Microphone audio, transcripts, nearby context, prompts, and generated text
-  remain in memory and are not logged or persisted.
+- Local Dictation remains memory-only. Local AI Dictation records one local CAF
+  plus Raw, Edited, Formatted, and Delivered text under the app's Application
+  Support directory. The M1 branch has no History UI or retention enforcement
+  yet; those remain gated roadmap work, so do not use it for sensitive capture.
+- Nearby context, prompts, and model payloads remain memory-only. Speech content
+  is never written to logs.
 - Apple speech recognition is required to run on-device.
 - Ollama traffic is restricted to fixed numeric loopback; no user content is
   sent to a remote host.
