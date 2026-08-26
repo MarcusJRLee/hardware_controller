@@ -670,6 +670,374 @@ struct SQLiteVoiceSessionStoreTest {
     #expect(try await history.recentSessions(limit: 1).isEmpty)
   }
 
+  @Test
+  func expirationRemovesOnlyAudioAndPersistsItsReason() async throws {
+    let rootDirectory = temporaryRoot("retention_metadata")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let sessionID = UUID()
+    let history = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory,
+      retentionSettings: .unlimited
+    )
+    let document = retentionDocument(sessionID: sessionID)
+    history.begin(sessionID: sessionID, startedAt: document.startedAt)
+    history.append(try makeVoiceAudioFixture())
+    try await history.complete(document)
+    let audioURL = try #require(
+      try await history.session(id: sessionID)?.audioArtifactURL
+    )
+
+    let report = try await history.setRetentionSettings(
+      VoiceHistoryRetentionSettings(
+        maximumAgeDays: nil,
+        maximumAudioBytes: nil,
+        maximumArtifactCount: 0
+      )
+    )
+
+    #expect(report.expired.map(\.sessionID) == [sessionID])
+    #expect(report.expired.first?.reason == .artifactLimit)
+    #expect(report.issues.isEmpty)
+    #expect(!FileManager.default.fileExists(atPath: audioURL.path))
+    let retained = try #require(try await history.session(id: sessionID))
+    #expect(retained.audioArtifactURL == nil)
+    #expect(retained.audioDurationMilliseconds == 100)
+    #expect(retained.audioExpirationReason == .artifactLimit)
+    #expect(retained.audioExpiredAt != nil)
+    #expect(retained.results.count == 4)
+    #expect(
+      try await history.searchSessions(query: "nebula", limit: 1).first?.id
+        == sessionID
+    )
+  }
+
+  @Test
+  func zeroRetentionPreservesPinnedAndSoleRecoveryAudio() async throws {
+    let rootDirectory = temporaryRoot("retention_protected")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let pinnedID = UUID()
+    let recoveryID = UUID()
+    let history = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory,
+      retentionSettings: .unlimited
+    )
+    try await recordAudio(
+      in: history,
+      document: retentionDocument(sessionID: pinnedID)
+    )
+    try await history.setPinned(sessionID: pinnedID, isPinned: true)
+    try await recordAudio(
+      in: history,
+      document: retentionDocument(
+        sessionID: recoveryID,
+        deliveryOutcome: .failed
+      )
+    )
+
+    let report = try await history.setRetentionSettings(
+      VoiceHistoryRetentionSettings(
+        maximumAgeDays: 0,
+        maximumAudioBytes: 0,
+        maximumArtifactCount: 0
+      )
+    )
+
+    #expect(report.expired.isEmpty)
+    #expect(
+      report.issues.contains(.artifactLimitUnmet(count: 2))
+    )
+    #expect(try await history.session(id: pinnedID)?.audioArtifactURL != nil)
+    #expect(try await history.session(id: recoveryID)?.audioArtifactURL != nil)
+
+    try await history.setPinned(sessionID: pinnedID, isPinned: false)
+
+    #expect(try await history.session(id: pinnedID)?.audioArtifactURL == nil)
+    #expect(
+      try await history.session(id: pinnedID)?.audioExpirationReason
+        == .ageLimit
+    )
+  }
+
+  @Test
+  func startupAndPostFinalizationEnforceConfiguredCaps() async throws {
+    let rootDirectory = temporaryRoot("retention_startup")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    var seed: SQLiteVoiceSessionHistory? = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory,
+      retentionSettings: .unlimited
+    )
+    let firstID = UUID()
+    try await recordAudio(
+      in: try #require(seed),
+      document: retentionDocument(sessionID: firstID)
+    )
+    seed = nil
+    let zeroAudio = VoiceHistoryRetentionSettings(
+      maximumAgeDays: nil,
+      maximumAudioBytes: nil,
+      maximumArtifactCount: 0
+    )
+    let reopened = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory,
+      retentionSettings: zeroAudio
+    )
+
+    #expect(try await reopened.recentSessions(limit: 1).count == 1)
+    #expect(
+      try await reopened.session(id: firstID)?.audioExpirationReason
+        == .artifactLimit
+    )
+
+    let secondID = UUID()
+    try await recordAudio(
+      in: reopened,
+      document: retentionDocument(sessionID: secondID)
+    )
+    #expect(
+      try await reopened.session(id: secondID)?.audioExpirationReason
+        == .artifactLimit
+    )
+  }
+
+  @Test
+  func maintenanceSkipsUnreadableSizeAndExpiresUnrelatedAudio()
+    async throws
+  {
+    let rootDirectory = temporaryRoot("retention_corrupt_size")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let unreadableID = UUID()
+    let eligibleID = UUID()
+    var seed: SQLiteVoiceSessionHistory? = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory,
+      retentionSettings: .unlimited
+    )
+    try await recordAudio(
+      in: try #require(seed),
+      document: retentionDocument(sessionID: unreadableID, secondsAgo: 2)
+    )
+    try await recordAudio(
+      in: try #require(seed),
+      document: retentionDocument(sessionID: eligibleID, secondsAgo: 1)
+    )
+    seed = nil
+    let audioDirectory = rootDirectory.appending(path: "audio")
+    let store = try SQLiteVoiceHistoryRetentionStore(
+      databaseURL: rootDirectory.appending(path: "history.sqlite3"),
+      audioDirectory: audioDirectory,
+      artifactSize: { url in
+        if url.lastPathComponent == "\(unreadableID.uuidString).caf" {
+          return -1
+        }
+        return Int64(
+          try url.resourceValues(forKeys: [.fileSizeKey]).fileSize
+            ?? 0
+        )
+      }
+    )
+
+    let report = try await store.enforce(
+      settings: VoiceHistoryRetentionSettings(
+        maximumAgeDays: nil,
+        maximumAudioBytes: nil,
+        maximumArtifactCount: 0
+      ),
+      now: Date(),
+      activeSessionIDs: [],
+      lowDiskReclaimBytes: 0
+    )
+
+    #expect(report.expired.map(\.sessionID) == [eligibleID])
+    #expect(
+      report.issues.contains(
+        .unreadableArtifactSize(sessionID: unreadableID)
+      )
+    )
+    #expect(
+      FileManager.default.fileExists(
+        atPath: audioDirectory.appending(
+          path: "\(unreadableID.uuidString).caf"
+        ).path
+      )
+    )
+  }
+
+  @Test
+  func lowDiskReportsShortfallWithoutDeletingProtectedAudio() async throws {
+    let rootDirectory = temporaryRoot("retention_low_disk")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let sessionID = UUID()
+    let history = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory,
+      retentionSettings: .unlimited
+    )
+    try await recordAudio(
+      in: history,
+      document: retentionDocument(
+        sessionID: sessionID,
+        deliveryOutcome: .failed
+      )
+    )
+
+    let report = try await history.reclaimForLowDisk(bytes: 1_000)
+
+    #expect(report.expired.isEmpty)
+    #expect(report.issues == [.lowDiskShortfall(bytes: 1_000)])
+    #expect(try await history.session(id: sessionID)?.audioArtifactURL != nil)
+    await #expect(
+      throws: VoiceHistoryRetentionValidationError.invalidReclaimRequest
+    ) {
+      try await history.reclaimForLowDisk(bytes: -1)
+    }
+  }
+
+  @Test
+  func concurrentFinalizationConvergesOnOneArtifact() async throws {
+    let rootDirectory = temporaryRoot("retention_concurrent")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let settings = VoiceHistoryRetentionSettings(
+      maximumAgeDays: nil,
+      maximumAudioBytes: nil,
+      maximumArtifactCount: 1
+    )
+    let first = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory,
+      retentionSettings: settings
+    )
+    let second = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory,
+      retentionSettings: settings
+    )
+    let firstDocument = retentionDocument(
+      sessionID: UUID(),
+      secondsAgo: 2
+    )
+    let secondDocument = retentionDocument(
+      sessionID: UUID(),
+      secondsAgo: 1
+    )
+    first.begin(
+      sessionID: firstDocument.id,
+      startedAt: firstDocument.startedAt
+    )
+    first.append(try makeVoiceAudioFixture())
+    second.begin(
+      sessionID: secondDocument.id,
+      startedAt: secondDocument.startedAt
+    )
+    second.append(try makeVoiceAudioFixture())
+
+    async let firstCompletion: Void = first.complete(firstDocument)
+    async let secondCompletion: Void = second.complete(secondDocument)
+    _ = try await (firstCompletion, secondCompletion)
+
+    let reopened = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory,
+      retentionSettings: .unlimited
+    )
+    var sessions: [VoiceSessionHistoryItem] = []
+    for _ in 0..<100 {
+      sessions = try await reopened.recentSessions(limit: 10)
+      if sessions.filter({ $0.audioArtifactURL != nil }).count == 1 {
+        break
+      }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(sessions.count == 2)
+    #expect(sessions.filter { $0.audioArtifactURL != nil }.count == 1)
+    #expect(
+      sessions.filter { $0.audioExpirationReason != nil }.count == 1
+    )
+  }
+
+  @Test
+  func retentionStateRejectsStaleMaintenanceEvidence() {
+    let currentReport = VoiceHistoryRetentionReport(
+      completedAt: Date(timeIntervalSince1970: 2),
+      expired: [],
+      issues: []
+    )
+    let staleReport = VoiceHistoryRetentionReport(
+      completedAt: Date(timeIntervalSince1970: 1),
+      expired: [],
+      issues: [.maintenanceUnavailable("Stale failure.")]
+    )
+    var state = SQLiteVoiceSessionHistory.RetentionState(
+      settings: .macOSDefault,
+      revision: 2
+    )
+
+    state.record(currentReport, for: 2, markEnforced: true)
+    state.record(staleReport, for: 1, markEnforced: false)
+
+    #expect(state.lastEnforcedRevision == 2)
+    #expect(state.latestReport == currentReport)
+  }
+
+  @Test
+  func expirationRemainsOrderedAcrossWallClockRollback() async throws {
+    let rootDirectory = temporaryRoot("retention_clock_rollback")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let sessionID = UUID()
+    let document = retentionDocument(
+      sessionID: sessionID,
+      secondsAgo: -60
+    )
+    let history = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory,
+      retentionSettings: .unlimited
+    )
+    try await recordAudio(in: history, document: document)
+
+    _ = try await history.setRetentionSettings(
+      VoiceHistoryRetentionSettings(
+        maximumAgeDays: nil,
+        maximumAudioBytes: nil,
+        maximumArtifactCount: 0
+      )
+    )
+
+    let retained = try #require(
+      try await history.session(id: sessionID)
+    )
+    #expect(retained.audioExpiredAt.map { $0 >= document.endedAt } == true)
+    #expect(retained.audioExpirationReason == .artifactLimit)
+  }
+
+  @Test
+  func automaticLowDiskCleanupUsesTheSameRetentionPath() async throws {
+    let rootDirectory = temporaryRoot("retention_automatic_low_disk")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let sessionID = UUID()
+    var seed: SQLiteVoiceSessionHistory? = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory,
+      retentionSettings: .unlimited
+    )
+    try await recordAudio(
+      in: try #require(seed),
+      document: retentionDocument(sessionID: sessionID)
+    )
+    seed = nil
+    let audioDirectory = rootDirectory.appending(path: "audio")
+    let store = try SQLiteVoiceHistoryRetentionStore(
+      databaseURL: rootDirectory.appending(path: "history.sqlite3"),
+      audioDirectory: audioDirectory,
+      availableCapacity: { _ in
+        SQLiteVoiceHistoryRetentionStore.lowDiskReserveBytes - 1
+      }
+    )
+
+    let report = try await store.enforce(
+      settings: .unlimited,
+      now: Date(),
+      activeSessionIDs: [],
+      lowDiskReclaimBytes: 0
+    )
+
+    #expect(report.expired.map(\.sessionID) == [sessionID])
+    #expect(report.expired.first?.reason == .lowDisk)
+    #expect(report.issues.isEmpty)
+  }
+
   private func historyDocument(
     sessionID: UUID
   ) throws -> VoiceSessionDocument {
@@ -696,5 +1064,45 @@ struct SQLiteVoiceSessionStoreTest {
       deliveryOutcome: .inserted,
       formattedDocument: formattedDocument
     )
+  }
+
+  private func temporaryRoot(_ purpose: String) -> URL {
+    FileManager.default.temporaryDirectory.appending(
+      path: "voice_history_\(purpose)_\(UUID().uuidString)"
+    )
+  }
+
+  private func retentionDocument(
+    sessionID: UUID,
+    secondsAgo: TimeInterval = 0,
+    deliveryOutcome: VoiceSessionDeliveryOutcome = .inserted
+  ) -> VoiceSessionDocument {
+    let endedAt = Date().addingTimeInterval(-secondsAgo)
+    let failure = deliveryOutcome == .failed ? "Target changed." : nil
+    return VoiceSessionDocument(
+      id: sessionID,
+      startedAt: endedAt.addingTimeInterval(-1),
+      endedAt: endedAt,
+      rawText: "raw nebula",
+      editedText: "edited comet",
+      formattedText: "Formatted orbit.",
+      deliveredText:
+        deliveryOutcome == .inserted ? "Delivered star." : "",
+      targetApplicationName: "Notes",
+      deliveryOutcome: deliveryOutcome,
+      deliveryFailure: failure
+    )
+  }
+
+  private func recordAudio(
+    in history: SQLiteVoiceSessionHistory,
+    document: VoiceSessionDocument
+  ) async throws {
+    history.begin(
+      sessionID: document.id,
+      startedAt: document.startedAt
+    )
+    history.append(try makeVoiceAudioFixture())
+    try await history.complete(document)
   }
 }

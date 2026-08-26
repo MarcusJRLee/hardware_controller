@@ -155,6 +155,47 @@ struct ApplicationPreferencesStoreTests {
     )
   }
 
+  @Test
+  func schemaFiveLoadsDefaultVoiceHistoryRetention() throws {
+    let files = PreferenceFileAccess()
+    let encoded = try JSONEncoder().encode(
+      ApplicationPreferences(schemaVersion: 5)
+    )
+    var object = try #require(
+      JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+    )
+    object.removeValue(forKey: "voiceHistoryRetention")
+    files.data = try JSONSerialization.data(withJSONObject: object)
+
+    let result = makeStore(files: files).load()
+
+    #expect(result.issue == nil)
+    #expect(result.preferences.voiceHistoryRetention == .macOSDefault)
+    #expect(
+      result.preferences.schemaVersion
+        == ApplicationPreferences.currentSchemaVersion
+    )
+  }
+
+  @Test
+  func invalidVoiceHistoryRetentionIsPreservedForRecovery() throws {
+    let files = PreferenceFileAccess()
+    let encoded = try JSONEncoder().encode(ApplicationPreferences.default)
+    var object = try #require(
+      JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+    )
+    object["voiceHistoryRetention"] = ["maximumAgeDays": -1]
+    files.data = try JSONSerialization.data(withJSONObject: object)
+
+    let result = makeStore(files: files).load()
+
+    #expect(result.preferences == .default)
+    guard case .recoveredInvalidFile = try #require(result.issue) else {
+      Issue.record("Expected invalid retention recovery.")
+      return
+    }
+  }
+
   /// Migrates schema 1 presentation preferences to system-default input.
   @Test
   func schemaOneLoadsWithSystemDefaultMicrophone() {
@@ -489,6 +530,54 @@ struct ApplicationPreferencesModelTests {
     #expect(!model.setVoiceTriggerSettings(testVoiceTriggerSettings))
 
     #expect(model.voiceTriggerSettings == .default)
+    #expect(store.saved.isEmpty)
+    #expect(applied.isEmpty)
+  }
+
+  @Test
+  func voiceHistoryRetentionChangeIsTransactional() {
+    let store = PreferenceStore()
+    let model = ApplicationPreferencesModel(
+      arguments: [],
+      isDemoMode: false,
+      appearanceApplier: AppearanceApplier(),
+      store: store
+    )
+    var applied: [VoiceHistoryRetentionSettings] = []
+    model.setVoiceHistoryRetentionHandler { applied.append($0) }
+    let settings = VoiceHistoryRetentionSettings(
+      maximumAgeDays: 30,
+      maximumAudioBytes: 512 * 1_024 * 1_024,
+      maximumArtifactCount: 1_000
+    )
+
+    #expect(model.setVoiceHistoryRetention(settings))
+
+    #expect(model.voiceHistoryRetention == settings)
+    #expect(store.saved.map(\.voiceHistoryRetention) == [settings])
+    #expect(applied == [settings])
+  }
+
+  @Test
+  func failedRetentionSaveDoesNotApplyCandidate() {
+    let store = PreferenceStore(saveFails: true)
+    let model = ApplicationPreferencesModel(
+      arguments: [],
+      isDemoMode: false,
+      appearanceApplier: AppearanceApplier(),
+      store: store
+    )
+    var applied: [VoiceHistoryRetentionSettings] = []
+    model.setVoiceHistoryRetentionHandler { applied.append($0) }
+    let settings = VoiceHistoryRetentionSettings(
+      maximumAgeDays: nil,
+      maximumAudioBytes: nil,
+      maximumArtifactCount: nil
+    )
+
+    #expect(!model.setVoiceHistoryRetention(settings))
+
+    #expect(model.voiceHistoryRetention == .macOSDefault)
     #expect(store.saved.isEmpty)
     #expect(applied.isEmpty)
   }

@@ -3,7 +3,7 @@ import Foundation
 import HardwareControllerCore
 
 struct VoiceHistoryExportSession: Codable, Equatable, Sendable {
-  static let currentSchemaRevision = 1
+  static let currentSchemaRevision = 2
 
   let schemaRevision: Int
   let exportedAt: Date
@@ -11,6 +11,8 @@ struct VoiceHistoryExportSession: Codable, Equatable, Sendable {
   let results: [VoiceHistoryResult]
   let audioFilename: String?
   let audioDurationMilliseconds: Int64?
+  let audioExpiredAt: Date?
+  let audioExpirationReason: VoiceHistoryAudioExpirationReason?
   let isPinned: Bool
 }
 
@@ -62,6 +64,8 @@ public actor VoiceHistoryExporter: VoiceHistoryExporting {
       results: session.results,
       audioFilename: audioFilename,
       audioDurationMilliseconds: session.audioDurationMilliseconds,
+      audioExpiredAt: session.audioExpiredAt,
+      audioExpirationReason: session.audioExpirationReason,
       isPinned: session.isPinned
     )
     let encoder = JSONEncoder()

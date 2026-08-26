@@ -30,14 +30,16 @@ final class AppModel {
     profileStore: (any ProfilePersisting)? = nil,
     preferredMicrophoneUID: String? = nil,
     localAISettings: LocalAISettings = .default,
-    voiceTriggerSettings: VoiceTriggerSettings = .default
+    voiceTriggerSettings: VoiceTriggerSettings = .default,
+    voiceSessionHistory: (any VoiceSessionHistoryRecording)? = nil
   ) {
     let runtime = ApplicationRuntime.make(
       arguments: arguments,
       profileStore: profileStore,
       preferredMicrophoneUID: preferredMicrophoneUID,
       localAISettings: localAISettings,
-      voiceTriggerSettings: voiceTriggerSettings
+      voiceTriggerSettings: voiceTriggerSettings,
+      voiceSessionHistory: voiceSessionHistory
     )
     self.runtime = runtime
     applicationSnapshot = runtime.initialSnapshot

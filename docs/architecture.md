@@ -410,9 +410,15 @@ evidence into one atomic open package with streaming SHA-256 file checksums
 without modifying the database.
 
 Deletion first quarantines owned audio, commits metadata removal, then removes
-the quarantine; a failed database commit restores the file. Automatic age,
-byte, count, and low-disk enforcement remains an M7 utility-path responsibility
-and never runs on capture or delivery.
+the quarantine; a failed database commit restores the file. A separate
+retention actor reads the same SQLite database and owns quota selection,
+expiration transactions, and file lifecycle. One shared History service applies
+versioned preference schema 6 after finalization and on first startup access.
+Age, count, byte-to-90%-low-water, and 1 GiB basic-volume-reserve rules select the
+oldest eligible audio deterministically while excluding active, pinned, and sole
+recovery artifacts. Expiration stores a typed reason and time, removes only the
+CAF, and retains searchable text, timing, and export evidence. M8 remains
+responsible for partial and orphan reconciliation after interruption.
 
 ### Presentation
 

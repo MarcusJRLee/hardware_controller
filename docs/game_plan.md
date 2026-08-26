@@ -20,6 +20,7 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 | Voice M4 spoken edits | Exact backtrack, paragraph, numbered-list, and literal commands produce persisted replayable operations before formatting; ambiguous or inapplicable phrases remain text. | [`voice_cujs.md`](voice_cujs.md#m4--backtrack-explicitly) |
 | Voice M5 ownership guard | Local AI preserves its captured route, rejects nonempty or changed carets, distinguishes process/secure/focus/caret invalidation, withholds later mutations, and stores a typed reason. | [`voice_cujs.md`](voice_cujs.md#m5--preserve-ownership-when-the-target-changes) |
 | Voice M6 History | A fourth native destination searches every text stage, exposes immutable provenance and timed audio, and appends corrections, retranscriptions, reformats, and explicit re-delivery outcomes without rewriting earlier results. Export, pin, and transactional delete are available. | [`voice_cujs.md`](voice_cujs.md#m6--browse-and-reuse-history) |
+| Voice M7 retention | Versioned age, byte, count, and low-disk rules expire only eligible audio, retain searchable transcript evidence, protect active/pinned/recovery artifacts, and disclose typed reasons. | [`decisions/0031_bounded_voice_history_audio.md`](decisions/0031_bounded_voice_history_audio.md) |
 | Model recommendation | Qwen 3.5 4B is digest-pinned from the fixed evaluation corpus. | [`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md) |
 | Profiles | Transactional named Profiles with independent per-Device setups and active-Action cleanup. | [`decisions/0014_multi_profile_device_configuration.md`](decisions/0014_multi_profile_device_configuration.md) |
 | Application | Controller, History, Profiles, and General in one native foreground window with Dock and menu-bar presence. | [`ux_spec.md`](ux_spec.md) |
@@ -28,7 +29,7 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 
 ## Approved next program
 
-The local Voice expansion is accepted; macOS M1–M6 are implemented across the
+The local Voice expansion is accepted; macOS M1–M7 are implemented across the
 current stacked branches. macOS and iOS are the active
 roadmap; Android, Windows, and Linux remain architectural line-of-sight
 platforms; web and mobile web are deferred. The acceptance and execution
@@ -50,7 +51,7 @@ promotion.
 
 | Gate | Contract | Current automated evidence |
 | --- | --- | --- |
-| HID dispatch | p50 ≤ 3 ms, p95 ≤ 8 ms, p99 ≤ 15 ms, max ≤ 30 ms across 10,000 transitions; no loss or duplication. | p50 0.015 ms, p95 0.045 ms, p99 0.084 ms, max 0.201 ms; 10,000 ordered dispatches. |
+| HID dispatch | p50 ≤ 3 ms, p95 ≤ 8 ms, p99 ≤ 15 ms, max ≤ 30 ms across 10,000 transitions; no loss or duplication. | M7 current-source p50 0.016 ms, p95 0.060 ms, p99 0.115 ms, max 0.846 ms; 10,000 ordered dispatches. |
 | Microphone activation | Warm maximum ≤ 250 ms. | p50 48.118 ms, p95/p99/max 87.050 ms across five starts; one-time preparation 149.539 ms. |
 | Local AI semantic safety | No accepted provider output may corrupt protected content; invalid output falls back to Edited text once. | Fixed 17-case corpus plus spoken-edit, replay, Style, structured-block, renderer, controller, and migration tests. |
 | Local AI refinement | Warm raw-final-to-refined p95 ≤ 1 s on the reference Mac. | Prompt-5 Qwen 3.5 4B p95 0.908 s. |
@@ -74,6 +75,12 @@ and preserves the accepted Profile. Both provider tests passed before install.
 With Ollama **Until app quits**, the app-owned model reported indefinite
 retention while the candidate ran and no resident model after quit. The
 physical Control has not been actuated against build 17.
+
+The signed M7 packaged UI exposes stable accessibility identifiers for each
+retention picker, exact MiB/GiB choices, default and `Unlimited` states, and a
+typed storage-size expiration reason while leaving transcript reuse available.
+Light, dark, increased-contrast, reduced-motion, and large-text demo modes retain
+the complete Voice History storage control and disclosure hierarchy.
 
 ## Remaining evidence
 

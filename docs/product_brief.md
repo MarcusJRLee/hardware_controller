@@ -56,6 +56,10 @@ automatically formatted result.
 | Voice trigger | An input adapter that begins, finishes, or cancels the same Voice-session workflow without changing its ASR, formatting, delivery, or History meaning. |
 | Voice chord | The optional machine-wide exact keyboard shortcut dedicated to Voice capture; it is distinct from a Binding keyboard fallback. |
 | Latched capture | A Voice session kept active after two short Voice-chord presses until the next valid double press. |
+| Retained audio | The optional app-owned CAF linked to one completed Voice session. |
+| Audio expiration | Automatic removal of Retained audio while keeping its session, results, timing metadata, and typed reason. |
+| Voice retention policy | Versioned age, byte, count, pin, recovery, and low-disk rules for Retained audio. |
+| Model residency policy | How long an app-started local formatting model remains loaded; distinct from Voice retention. |
 
 Use `pedal` only for Infinity-specific UI copy. Domain and reusable UI use
 `Control` so future buttons, knobs, switches, and MIDI controls fit without a
@@ -130,8 +134,9 @@ failure path.
 - Optionally assign one machine-wide Voice chord under General. Begin on the
   first key-down; release after a hold to finish, or double press to latch and
   double press again to finish. Never enable it automatically.
-- Keep Local AI provider, model/digest, retention, Style, context permission,
-  Dictionary, and additional instructions machine-wide under General.
+- Keep Local AI provider, model/digest, Model residency policy, Style, context
+  permission, Dictionary, and additional instructions machine-wide under
+  General.
 - Recommend the measured Qwen 3.5 4B Ollama model while allowing explicitly
   selected installed models to remain labeled unvalidated.
 - Persist Profiles and application preferences locally, atomically, and with
@@ -145,7 +150,8 @@ failure path.
   expanded-by-default native sidebar.
 - Searchable local History with immutable result evidence, timed audio,
   correction, retranscription, reformatting, explicit re-delivery, export,
-  pinning, and deletion.
+  pinning, deletion, and bounded audio retention that never removes searchable
+  transcript evidence.
 - Immediate physical state, active-Profile state, independent Action
   readiness, and direct permission/provider recovery.
 - A click-through transcript HUD only while an active target cannot display
@@ -250,7 +256,9 @@ vertical slice at a time. M1 persists Local AI Dictation audio and distinct
 final text stages; M2 adds the independent hold/latch Voice chord; M3 adds
 versioned Styles and structured formatting; M4 adds typed replayable spoken
 edits; M5 preserves target ownership; M6 adds searchable, reusable History.
-Retention enforcement, the portable engine, and iOS remain pending. See
+M7 bounds retained audio by age, bytes, count, and low disk while protecting
+active, pinned, and sole recovery artifacts. The portable engine and iOS remain
+pending. See
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 [`voice_platform_design.md`](voice_platform_design.md), and
 [`voice_cujs.md`](voice_cujs.md).

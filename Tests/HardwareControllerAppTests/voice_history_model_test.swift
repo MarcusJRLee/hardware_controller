@@ -86,6 +86,35 @@ struct VoiceHistoryModelTest {
     #expect(results[1].sourceResultID == results[0].id)
     #expect(results[2].sourceResultID == results[1].id)
     #expect(results[1].provider == .appleOnDevice)
+    #expect(presentation.model.sessions[1].audioExpiredAt != nil)
+    #expect(
+      presentation.model.sessions[1].audioExpirationReason == .byteLimit
+    )
+  }
+
+  @Test
+  func applyingRetentionRefreshesExpiredAudioWithoutLosingText()
+    async throws
+  {
+    let fixture = try HistoryModelFixture()
+    defer { fixture.remove() }
+    try await fixture.storeSession(withAudio: true)
+    let model = fixture.model()
+    await model.load()
+    #expect(model.selectedSession?.audioArtifactURL != nil)
+
+    await model.applyRetention(
+      VoiceHistoryRetentionSettings(
+        maximumAgeDays: nil,
+        maximumAudioBytes: nil,
+        maximumArtifactCount: 0
+      )
+    )
+
+    #expect(model.selectedSession?.audioArtifactURL == nil)
+    #expect(model.selectedSession?.audioExpirationReason == .artifactLimit)
+    #expect(model.selectedSession?.rawText == "searchable raw text")
+    #expect(model.notice?.contains("1 audio recording") == true)
   }
 }
 
@@ -232,6 +261,7 @@ private final class HistoryModelFixture: @unchecked Sendable {
         reformatter: HistoryModelReformatter(),
         redeliverer: HistoryModelRedeliverer()
       ),
+      retentionManager: history,
       exporter: HistoryModelExporter(),
       player: player
     )

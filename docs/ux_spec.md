@@ -64,12 +64,16 @@ layout metadata is absent.
 History uses a searchable session list and selected-result evidence view. It
 keeps prior results immutable, makes correction and stage reruns explicit, and
 uses one delayed action for safe re-delivery to a fresh target. Destructive
-deletion is visually distinct from reuse actions.
+deletion is visually distinct from reuse actions. When audio expires, the
+playback card names the applicable age, size, count, or low-disk rule while
+leaving transcript evidence available.
 
 Profiles uses a stable Profile list and selected-Profile editor. Active state
 is separate from selection. General uses native form sections for Appearance,
-the Local Dictation microphone, Local AI Dictation, and Launch at Login. Local
-AI progressively reveals provider-specific model and retention controls while
+the Local Dictation microphone, Local AI Dictation, Voice History storage, and
+Launch at Login. Voice History storage uses independent preset pickers for age,
+bytes, and audio count with explicit `Unlimited` and no-retained-audio choices.
+Local AI progressively reveals provider-specific model retention controls while
 keeping dictionary, context, instructions, readiness, and provider test in one
 restrained section.
 

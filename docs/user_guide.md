@@ -16,7 +16,7 @@ use its keyboard shortcut.
 
 1. Quit every running Hardware Controller copy.
 2. Follow the signed personal-build commands in
-   [`README.md`](../README.md#build-and-verify). Verify the signature against
+   [`README.md`](../README.md#signed-hardware-build). Verify the signature against
    the private `HC_EXPECTED_TEAM_ID`, then replace the Applications copy only
    when that install is explicitly approved.
 3. Open exactly `/Applications/Hardware Controller.app`.
@@ -151,9 +151,12 @@ clipboard.
 Starting a new session clears the previous presentation transcript. Local
 Dictation audio and text remain memory-only. Local AI Dictation stores one local
 CAF and immutable final text results under the app's Application Support
-directory. **History** makes those sessions searchable and reusable. Automatic
-retention enforcement is not implemented yet, so delete sensitive or unwanted
-captures manually. Speech content is never logged.
+directory. **History** makes those sessions searchable and reusable. Under
+**General → Voice History storage**, set independent age, size, and recording
+limits or choose **Unlimited**. The defaults retain successful audio until the
+first of 90 days, 2 GiB, or 5,000 recordings. Automatic cleanup keeps transcript
+evidence, skips active, pinned, and sole recovery audio, and explains expired
+playback in History. Speech content is never logged.
 
 ## Configure Local AI Dictation
 

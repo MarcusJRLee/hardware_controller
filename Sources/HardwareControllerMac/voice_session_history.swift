@@ -1,6 +1,12 @@
 import Foundation
 import HardwareControllerCore
+import OSLog
 import Synchronization
+
+private let voiceHistoryLogger = Logger(
+  subsystem: ApplicationIdentity.bundleIdentifier,
+  category: "voice_history"
+)
 
 public enum VoiceSessionHistoryError:
   Error,
@@ -37,6 +43,8 @@ public struct VoiceSessionHistoryItem:
   public let document: VoiceSessionDocument
   public let audioArtifactURL: URL?
   public let audioDurationMilliseconds: Int64?
+  public let audioExpiredAt: Date?
+  public let audioExpirationReason: VoiceHistoryAudioExpirationReason?
   public let isPinned: Bool
   public let results: [VoiceHistoryResult]
 
@@ -44,12 +52,16 @@ public struct VoiceSessionHistoryItem:
     document: VoiceSessionDocument,
     audioArtifactURL: URL?,
     audioDurationMilliseconds: Int64? = nil,
+    audioExpiredAt: Date? = nil,
+    audioExpirationReason: VoiceHistoryAudioExpirationReason? = nil,
     isPinned: Bool = false,
     results: [VoiceHistoryResult] = []
   ) {
     self.document = document
     self.audioArtifactURL = audioArtifactURL
     self.audioDurationMilliseconds = audioDurationMilliseconds
+    self.audioExpiredAt = audioExpiredAt
+    self.audioExpirationReason = audioExpirationReason
     self.isPinned = isPinned
     self.results = results
   }
@@ -64,6 +76,32 @@ public struct VoiceSessionHistoryItem:
   }
   public var deliveryOutcome: VoiceSessionDeliveryOutcome {
     document.deliveryOutcome
+  }
+}
+
+public enum VoiceHistoryRetentionIssue: Equatable, Sendable {
+  case missingArtifact(sessionID: UUID)
+  case unreadableArtifactSize(sessionID: UUID)
+  case removalFailed(sessionID: UUID)
+  case lowDiskShortfall(bytes: Int64)
+  case byteLimitUnmet(bytes: Int64)
+  case artifactLimitUnmet(count: Int)
+  case maintenanceUnavailable(String)
+}
+
+public struct VoiceHistoryRetentionReport: Equatable, Sendable {
+  public let completedAt: Date
+  public let expired: [VoiceHistoryRetentionDecision]
+  public let issues: [VoiceHistoryRetentionIssue]
+
+  public init(
+    completedAt: Date,
+    expired: [VoiceHistoryRetentionDecision],
+    issues: [VoiceHistoryRetentionIssue]
+  ) {
+    self.completedAt = completedAt
+    self.expired = expired
+    self.issues = issues
   }
 }
 
@@ -97,6 +135,26 @@ public protocol VoiceSessionHistoryRecording: Sendable {
   func cancel(sessionID: UUID) async
 }
 
+public protocol VoiceSessionHistoryRetentionManaging: Sendable {
+  /// Applies validated caps immediately and to future completed sessions.
+  func setRetentionSettings(
+    _ settings: VoiceHistoryRetentionSettings
+  ) async throws -> VoiceHistoryRetentionReport
+
+  /// Reclaims eligible audio using the normal deterministic ordering.
+  func reclaimForLowDisk(bytes: Int64) async throws
+    -> VoiceHistoryRetentionReport
+
+  /// Returns the latest maintenance evidence without running maintenance.
+  func latestRetentionReport() -> VoiceHistoryRetentionReport?
+}
+
+public protocol VoiceSessionHistoryManaging:
+  VoiceSessionHistoryRecording,
+  VoiceSessionHistoryAccessing,
+  VoiceSessionHistoryRetentionManaging
+{}
+
 public struct DiscardingVoiceSessionHistory:
   VoiceSessionHistoryRecording
 {
@@ -109,8 +167,7 @@ public struct DiscardingVoiceSessionHistory:
 }
 
 public struct UnavailableVoiceSessionHistory:
-  VoiceSessionHistoryRecording,
-  VoiceSessionHistoryAccessing
+  VoiceSessionHistoryManaging
 {
   private let failure: VoiceSessionHistoryError
 
@@ -154,11 +211,26 @@ public struct UnavailableVoiceSessionHistory:
   public func deleteSession(id: UUID) async throws {
     throw failure
   }
+
+  public func setRetentionSettings(
+    _ settings: VoiceHistoryRetentionSettings
+  ) async throws -> VoiceHistoryRetentionReport {
+    throw failure
+  }
+
+  public func reclaimForLowDisk(bytes: Int64) async throws
+    -> VoiceHistoryRetentionReport
+  {
+    throw failure
+  }
+
+  public func latestRetentionReport() -> VoiceHistoryRetentionReport? {
+    nil
+  }
 }
 
 public final class SQLiteVoiceSessionHistory:
-  VoiceSessionHistoryRecording,
-  VoiceSessionHistoryAccessing,
+  VoiceSessionHistoryManaging,
   Sendable
 {
   private struct ActiveRecording {
@@ -167,16 +239,64 @@ public final class SQLiteVoiceSessionHistory:
   }
 
   private let state = Mutex<ActiveRecording?>(nil)
+  struct RetentionState {
+    var settings: VoiceHistoryRetentionSettings
+    var revision: UInt64 = 1
+    var lastEnforcedRevision: UInt64?
+    var latestReport: VoiceHistoryRetentionReport?
+
+    /// Prevents an older maintenance task from replacing newer evidence.
+    mutating func record(
+      _ report: VoiceHistoryRetentionReport,
+      for enforcedRevision: UInt64,
+      markEnforced: Bool
+    ) {
+      guard revision == enforcedRevision else {
+        return
+      }
+      if markEnforced {
+        lastEnforcedRevision = enforcedRevision
+      }
+      latestReport = report
+    }
+  }
+
+  private let retentionState: Mutex<RetentionState>
   private let store: SQLiteVoiceSessionStore
+  private let retentionStore: SQLiteVoiceHistoryRetentionStore
   private let audioDirectory: URL
 
-  public init(rootDirectory: URL) throws {
+  public convenience init(rootDirectory: URL) throws {
+    try self.init(
+      rootDirectory: rootDirectory,
+      retentionSettings: .unlimited
+    )
+  }
+
+  public init(
+    rootDirectory: URL,
+    retentionSettings: VoiceHistoryRetentionSettings
+  ) throws {
+    let retentionSettings = try retentionSettings.validated()
+    retentionState = Mutex(
+      RetentionState(settings: retentionSettings)
+    )
     let fileManager = FileManager.default
     do {
       try fileManager.createDirectory(
         at: rootDirectory,
         withIntermediateDirectories: true
       )
+      var excludedRootDirectory = rootDirectory
+      var backupValues = URLResourceValues()
+      backupValues.isExcludedFromBackup = true
+      do {
+        try excludedRootDirectory.setResourceValues(backupValues)
+      } catch {
+        voiceHistoryLogger.error(
+          "Voice History backup exclusion could not be applied."
+        )
+      }
       let audioDirectory = rootDirectory.appending(
         path: "audio",
         directoryHint: .isDirectory
@@ -186,8 +306,13 @@ public final class SQLiteVoiceSessionHistory:
         withIntermediateDirectories: true
       )
       self.audioDirectory = audioDirectory
+      let databaseURL = rootDirectory.appending(path: "history.sqlite3")
       store = try SQLiteVoiceSessionStore(
-        databaseURL: rootDirectory.appending(path: "history.sqlite3"),
+        databaseURL: databaseURL,
+        audioDirectory: audioDirectory
+      )
+      retentionStore = try SQLiteVoiceHistoryRetentionStore(
+        databaseURL: databaseURL,
         audioDirectory: audioDirectory
       )
     } catch let failure as VoiceSessionHistoryError {
@@ -199,12 +324,17 @@ public final class SQLiteVoiceSessionHistory:
     }
   }
 
-  public static func applicationSupportHistory() throws
+  public static func applicationSupportHistory(
+    retentionSettings: VoiceHistoryRetentionSettings = .macOSDefault
+  ) throws
     -> SQLiteVoiceSessionHistory
   {
     let root = try ApplicationIdentity.applicationSupportDirectory()
       .appending(path: "voice", directoryHint: .isDirectory)
-    return try SQLiteVoiceSessionHistory(rootDirectory: root)
+    return try SQLiteVoiceSessionHistory(
+      rootDirectory: root,
+      retentionSettings: retentionSettings
+    )
   }
 
   public func begin(sessionID: UUID, startedAt: Date) {
@@ -238,6 +368,8 @@ public final class SQLiteVoiceSessionHistory:
     }
     let audioURL = try await recorder?.finishRetainingAudio()
     try await store.insert(document, audioURL: audioURL)
+    invalidateRetention()
+    scheduleRetention()
   }
 
   public func cancel(sessionID: UUID) async {
@@ -254,20 +386,23 @@ public final class SQLiteVoiceSessionHistory:
   public func recentSessions(
     limit: Int
   ) async throws -> [VoiceSessionHistoryItem] {
-    try await store.recentSessions(limit: limit)
+    try await enforceAtStartupIfNeeded()
+    return try await store.recentSessions(limit: limit)
   }
 
   public func searchSessions(
     query: String,
     limit: Int
   ) async throws -> [VoiceSessionHistoryItem] {
-    try await store.searchSessions(query: query, limit: limit)
+    try await enforceAtStartupIfNeeded()
+    return try await store.searchSessions(query: query, limit: limit)
   }
 
   public func session(id: UUID) async throws
     -> VoiceSessionHistoryItem?
   {
-    try await store.session(id: id)
+    try await enforceAtStartupIfNeeded()
+    return try await store.session(id: id)
   }
 
   public func appendResult(_ result: VoiceHistoryResult) async throws {
@@ -282,9 +417,123 @@ public final class SQLiteVoiceSessionHistory:
       sessionID: sessionID,
       isPinned: isPinned
     )
+    invalidateRetention()
+    if !isPinned {
+      await enforceAfterMutation()
+    }
   }
 
   public func deleteSession(id: UUID) async throws {
     try await store.deleteSession(id: id)
+    invalidateRetention()
+    scheduleRetention()
+  }
+
+  public func setRetentionSettings(
+    _ settings: VoiceHistoryRetentionSettings
+  ) async throws -> VoiceHistoryRetentionReport {
+    let settings = try settings.validated()
+    let revision = retentionState.withLock { state in
+      state.settings = settings
+      state.revision &+= 1
+      return state.revision
+    }
+    return try await enforce(
+      settings: settings,
+      revision: revision,
+      lowDiskReclaimBytes: 0
+    )
+  }
+
+  public func reclaimForLowDisk(bytes: Int64) async throws
+    -> VoiceHistoryRetentionReport
+  {
+    let values = retentionState.withLock {
+      ($0.settings, $0.revision)
+    }
+    return try await enforce(
+      settings: values.0,
+      revision: values.1,
+      lowDiskReclaimBytes: bytes
+    )
+  }
+
+  public func latestRetentionReport() -> VoiceHistoryRetentionReport? {
+    retentionState.withLock(\.latestReport)
+  }
+
+  private func enforceAtStartupIfNeeded() async throws {
+    let values = retentionState.withLock { state in
+      (
+        state.settings,
+        state.revision,
+        state.lastEnforcedRevision == state.revision
+      )
+    }
+    guard !values.2 else {
+      return
+    }
+    _ = try await enforce(
+      settings: values.0,
+      revision: values.1,
+      lowDiskReclaimBytes: 0
+    )
+  }
+
+  private func invalidateRetention() {
+    retentionState.withLock { state in
+      state.revision &+= 1
+      state.lastEnforcedRevision = nil
+    }
+  }
+
+  private func scheduleRetention() {
+    Task(priority: .utility) { [weak self] in
+      await self?.enforceAfterMutation()
+    }
+  }
+
+  private func enforceAfterMutation() async {
+    let values = retentionState.withLock {
+      ($0.settings, $0.revision)
+    }
+    do {
+      _ = try await enforce(
+        settings: values.0,
+        revision: values.1,
+        lowDiskReclaimBytes: 0
+      )
+    } catch {
+      let report = VoiceHistoryRetentionReport(
+        completedAt: Date(),
+        expired: [],
+        issues: [
+          .maintenanceUnavailable(error.localizedDescription)
+        ]
+      )
+      retentionState.withLock { state in
+        state.record(report, for: values.1, markEnforced: false)
+      }
+    }
+  }
+
+  private func enforce(
+    settings: VoiceHistoryRetentionSettings,
+    revision: UInt64,
+    lowDiskReclaimBytes: Int64
+  ) async throws -> VoiceHistoryRetentionReport {
+    let activeSessionIDs = state.withLock { active in
+      active.map { Set([$0.sessionID]) } ?? []
+    }
+    let report = try await retentionStore.enforce(
+      settings: settings,
+      now: Date(),
+      activeSessionIDs: activeSessionIDs,
+      lowDiskReclaimBytes: lowDiskReclaimBytes
+    )
+    retentionState.withLock { state in
+      state.record(report, for: revision, markEnforced: true)
+    }
+    return report
   }
 }
