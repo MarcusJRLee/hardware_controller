@@ -14,6 +14,7 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 | Actions | No Action, Local Dictation, Local AI Dictation, and Keyboard Shortcut with independent Hold and Toggle Bindings. | [`product_brief.md`](product_brief.md) |
 | Local Dictation | On-device Apple recognition, adaptive live/final delivery, bounded finalization, and app-local microphone selection. | [`architecture.md`](architecture.md#action-registry-and-executors) |
 | Local AI Dictation | Apple or fixed-loopback Ollama text refinement, dictionary, bounded context, validation, and raw fallback. | [`decisions/0020_local_ai_dictation.md`](decisions/0020_local_ai_dictation.md) |
+| Voice M1 tracer | Local AI Dictation tees immutable audio off the capture path, inserts once, and atomically stores one CAF plus separate final text stages in SQLite. History UI, timed spans, retention, and recovery remain pending. | [`voice_cujs.md`](voice_cujs.md#m1--hold-to-dictate-and-recover) |
 | Model recommendation | Qwen 3.5 4B is digest-pinned from the fixed evaluation corpus. | [`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md) |
 | Profiles | Transactional named Profiles with independent per-Device setups and active-Action cleanup. | [`decisions/0014_multi_profile_device_configuration.md`](decisions/0014_multi_profile_device_configuration.md) |
 | Application | Controller, Profiles, and General in one native foreground window with Dock and menu-bar presence. | [`ux_spec.md`](ux_spec.md) |
@@ -22,8 +23,9 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 
 ## Approved next program
 
-The local Voice expansion is accepted but unimplemented. macOS and iOS are the
-active roadmap; Android, Windows, and Linux remain architectural line-of-sight
+The local Voice expansion is accepted and its macOS M1 storage tracer is
+implemented on the current stacked branch. macOS and iOS are the active
+roadmap; Android, Windows, and Linux remain architectural line-of-sight
 platforms; web and mobile web are deferred. The acceptance and execution
 authorities are:
 
@@ -49,7 +51,7 @@ promotion.
 | Local AI refinement | Warm raw-final-to-refined p95 ≤ 1 s on the reference Mac. | Qwen 3.5 4B p95 0.935 s. |
 | Local AI end to end | Warm release-to-insertion p95 ≤ 1.5 s on the reference Mac. | Prewarmed production-controller benchmark p95 1.052 s. |
 | Local AI deadline | Preparation plus generation must fall back within three seconds after final speech text. | Deterministic deadline and late-output tests. |
-| Privacy | No speech content is persisted or logged; Ollama cannot reach a nonloopback endpoint. | Static scan plus fixed-endpoint transport tests. |
+| Privacy | Voice artifacts remain app-owned and local; no speech content is logged; Ollama cannot reach a nonloopback endpoint. | Deterministic SQLite/CAF tests, static scan, and fixed-endpoint transport tests. |
 | Documentation | Canonical docs describe current behavior and all links resolve. | All local links resolve. |
 
 Reference Local AI measurements and reproduction commands are in

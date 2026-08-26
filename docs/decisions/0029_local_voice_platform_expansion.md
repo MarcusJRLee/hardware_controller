@@ -1,6 +1,6 @@
 # 0029: Local Voice platform expansion
 
-- **Status:** Accepted; implementation not started
+- **Status:** Accepted; macOS M1 tracer implemented
 - **Date:** 2026-08-25
 - **Amends:**
   [`0001_native_macos_stack.md`](0001_native_macos_stack.md),
@@ -113,9 +113,10 @@ now.
 
 ## Consequences
 
-- The current in-memory-only and Apple-speech-only policies remain current
-  behavior until their replacement slices ship, but they no longer prohibit the
-  accepted Voice program.
+- Local Dictation remains in-memory-only and Apple-speech-only. The M1 slice
+  replaces the in-memory-only policy for Local AI Dictation with one local CAF
+  and distinct final text stages; later slices still own retention, recovery,
+  portable ASR, and History presentation.
 - macOS and iOS receive implementation capacity first. Portability is enforced
   through boundaries and conformance tests, not speculative Android, Windows,
   Linux, or browser applications.
@@ -129,3 +130,14 @@ now.
 - [`../voice_platform_design.md`](../voice_platform_design.md)
 - [`../voice_cujs.md`](../voice_cujs.md)
 - [`../voice_implementation_goal_prompt.md`](../voice_implementation_goal_prompt.md)
+
+## Implementation progress
+
+The first macOS tracer composes the existing capture, Apple ASR, formatting,
+validation, and delivery path. A bounded nonblocking tee writes audio on a
+utility task; successful finalization synchronizes and atomically renames the
+CAF before an actor-owned system SQLite transaction stores the Voice session.
+Deterministic tests cover one insertion, every final text stage, playable audio,
+database reopen, typed storage unavailability, and cancellation cleanup. Timed
+Raw spans, UI, retention, crash reconciliation, portable Rust, alternate ASR,
+and iOS remain subsequent CUJ slices.

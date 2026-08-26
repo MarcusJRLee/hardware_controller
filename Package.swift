@@ -47,6 +47,7 @@ let package = Package(
         .linkedFramework("CoreGraphics"),
         .linkedFramework("IOKit"),
         .linkedFramework("Speech"),
+        .linkedLibrary("sqlite3"),
       ]
     ),
     .executableTarget(

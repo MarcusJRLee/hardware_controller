@@ -148,8 +148,11 @@ automatic insertion stops, recognized final text stays visible, and
 **Copy Text** provides explicit recovery without automatically changing the
 clipboard.
 
-Starting a new session clears the previous in-memory transcript. Audio and
-transcript text are not persisted or logged.
+Starting a new session clears the previous presentation transcript. Local
+Dictation audio and text remain memory-only. On the M1 development branch,
+Local AI Dictation stores one local CAF and its final text stages under the
+app's Application Support directory; History UI and automatic retention are
+not implemented yet. Speech content is never logged.
 
 ## Configure Local AI Dictation
 

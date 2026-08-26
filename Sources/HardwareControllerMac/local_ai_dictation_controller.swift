@@ -1,5 +1,6 @@
 import Foundation
 import HardwareControllerCore
+import os
 
 private enum LocalAIRefinementDeadlineOutcome: Sendable {
   case response(LocalAIRefinementResponse)
@@ -49,6 +50,12 @@ public actor LocalAIDictationController {
   private let refinementTimeout: Duration
   private let snapshotHandler: SnapshotHandler
   private let speechMailbox: LocalAISpeechSnapshotMailbox
+  private let history: any VoiceSessionHistoryRecording
+  private let now: @Sendable () -> Date
+  private let logger = Logger(
+    subsystem: ApplicationIdentity.bundleIdentifier,
+    category: "VoiceHistory"
+  )
 
   private var settings: LocalAISettings
   private var profileName: String
@@ -60,6 +67,7 @@ public actor LocalAIDictationController {
   private var providerTestTask: Task<LocalAIRefinementFailure?, Never>?
   private var refinementTask: Task<Void, Never>?
   private var speechObservationTask: Task<Void, Never>?
+  private var sessionStartedAt: Date?
 
   public init(
     factory: any SpeechRecognitionSessionCreating,
@@ -76,6 +84,9 @@ public actor LocalAIDictationController {
     locale: Locale = .current,
     finalizationTimeout: Duration = .seconds(5),
     refinementTimeout: Duration = .seconds(3),
+    history: any VoiceSessionHistoryRecording =
+      DiscardingVoiceSessionHistory(),
+    now: @escaping @Sendable () -> Date = { Date() },
     snapshotHandler: @escaping SnapshotHandler = { _ in }
   ) {
     let preparedTargeter = PreparedLocalAITargeter(
@@ -91,6 +102,7 @@ public actor LocalAIDictationController {
       locale: locale,
       vocabularyHints: settings.dictionary.vocabulary,
       finalizationTimeout: finalizationTimeout,
+      audioBufferHandler: history.append,
       snapshotHandler: mailbox.publish
     )
     self.preparedTargeter = preparedTargeter
@@ -105,6 +117,8 @@ public actor LocalAIDictationController {
     self.profileName = profileName
     self.locale = locale
     self.refinementTimeout = refinementTimeout
+    self.history = history
+    self.now = now
     self.snapshotHandler = snapshotHandler
     speechMailbox = mailbox
 
@@ -292,6 +306,9 @@ public actor LocalAIDictationController {
     }
 
     let sessionID = UUID()
+    let startedAt = now()
+    sessionStartedAt = startedAt
+    history.begin(sessionID: sessionID, startedAt: startedAt)
     target = capturedTarget
     preparedTargeter.prepare(capturedTarget.finalOnlyCopy())
     state = LocalAIDictationSnapshot(
@@ -474,6 +491,14 @@ public actor LocalAIDictationController {
       }
       try writer.insert(validated, into: target)
       let duration = MonotonicClock.nowNanoseconds() - start
+      await recordCompletedSession(
+        sessionID: sessionID,
+        rawText: rawText,
+        formattedText: validated,
+        deliveredText: validated,
+        targetApplicationName: target.applicationName,
+        deliveryOutcome: .inserted
+      )
       state = LocalAIDictationSnapshot(
         sessionID: sessionID,
         phase: .completed,
@@ -580,6 +605,15 @@ public actor LocalAIDictationController {
       return
     }
     guard !rawText.isEmpty, let target else {
+      await recordCompletedSession(
+        sessionID: sessionID,
+        rawText: rawText,
+        formattedText: "",
+        deliveredText: "",
+        targetApplicationName: state.targetApplicationName,
+        deliveryOutcome: .notAttempted,
+        deliveryFailure: reason.localizedDescription
+      )
       publishFailure(
         .refinement(reason),
         sessionID: sessionID,
@@ -592,6 +626,14 @@ public actor LocalAIDictationController {
     do {
       replace(phase: .delivering, refinedText: "")
       try writer.insert(rawText, into: target)
+      await recordCompletedSession(
+        sessionID: sessionID,
+        rawText: rawText,
+        formattedText: rawText,
+        deliveredText: rawText,
+        targetApplicationName: target.applicationName,
+        deliveryOutcome: .inserted
+      )
       state = LocalAIDictationSnapshot(
         sessionID: sessionID,
         phase: .completed,
@@ -621,6 +663,15 @@ public actor LocalAIDictationController {
     guard state.sessionID == sessionID else {
       return
     }
+    await recordCompletedSession(
+      sessionID: sessionID,
+      rawText: rawText,
+      formattedText: state.refinedText,
+      deliveredText: "",
+      targetApplicationName: state.targetApplicationName,
+      deliveryOutcome: .failed,
+      deliveryFailure: failure.localizedDescription
+    )
     publishFailure(
       .transcription(failure),
       sessionID: sessionID,
@@ -638,6 +689,15 @@ public actor LocalAIDictationController {
     guard state.sessionID == sessionID else {
       return
     }
+    await recordCompletedSession(
+      sessionID: sessionID,
+      rawText: rawText,
+      formattedText: state.refinedText,
+      deliveredText: "",
+      targetApplicationName: state.targetApplicationName,
+      deliveryOutcome: .failed,
+      deliveryFailure: failure.localizedDescription
+    )
     publishFailure(
       .delivery(failure),
       sessionID: sessionID,
@@ -649,6 +709,7 @@ public actor LocalAIDictationController {
   }
 
   private func cancel() async {
+    let sessionID = state.sessionID
     let wasActive = [
       LocalAIDictationPhase.preparing,
       .listening,
@@ -663,6 +724,9 @@ public actor LocalAIDictationController {
     providerPreparationTask?.cancel()
     refinementTask?.cancel()
     await speech.handle(.cancel)
+    if let sessionID {
+      await history.cancel(sessionID: sessionID)
+    }
     speechSessionID = nil
     clearSessionResources()
     if wasActive {
@@ -734,6 +798,35 @@ public actor LocalAIDictationController {
     providerPreparationTask = nil
     refinementTask = nil
     speechSessionID = nil
+    sessionStartedAt = nil
+  }
+
+  private func recordCompletedSession(
+    sessionID: UUID,
+    rawText: String,
+    formattedText: String,
+    deliveredText: String,
+    targetApplicationName: String?,
+    deliveryOutcome: VoiceSessionDeliveryOutcome,
+    deliveryFailure: String? = nil
+  ) async {
+    let document = VoiceSessionDocument(
+      id: sessionID,
+      startedAt: sessionStartedAt ?? now(),
+      endedAt: now(),
+      rawText: rawText,
+      editedText: rawText,
+      formattedText: formattedText,
+      deliveredText: deliveredText,
+      targetApplicationName: targetApplicationName,
+      deliveryOutcome: deliveryOutcome,
+      deliveryFailure: deliveryFailure
+    )
+    do {
+      try await history.complete(document)
+    } catch {
+      logger.error("Voice History persistence failed.")
+    }
   }
 
   private func publish() {

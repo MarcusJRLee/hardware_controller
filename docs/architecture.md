@@ -18,6 +18,7 @@ flowchart LR
   ACTIONS --> DICTATION[Dictation coordinator]
   DICTATION --> SPEECH[Shared local speech boundary]
   DICTATION --> REFINEMENT[Local AI refinement]
+  DICTATION --> HISTORY[(Local Voice History)]
   REFINEMENT --> APPLE[Apple On-Device]
   REFINEMENT --> OLLAMA[Fixed-loopback Ollama]
 
@@ -47,7 +48,7 @@ diagnostics observe that path but cannot block it.
 | Speech recognition   | `SpeechAnalyzer` on macOS 26+; on-device-required `SFSpeechRecognizer` before. |
 | Local AI refinement  | `SystemLanguageModel` on macOS 26+ or structured fixed-loopback Ollama generation. |
 | Transcript delivery  | Accessibility insertion plus guarded buffered Unicode event routes.            |
-| Persistence         | Versioned Codable JSON in Application Support, written atomically.            |
+| Persistence         | Versioned Codable JSON for configuration; system SQLite plus atomic CAF artifacts for Voice History. |
 | Logging and timing  | Unified Logging, `OSSignposter`, and a monotonic clock.                       |
 | Tests               | Swift Testing plus scripted packaged-UI and Accessibility inspection.        |
 | Dependencies        | Apple frameworks only in the app; Ollama is an optional separately installed local service. |
@@ -61,7 +62,9 @@ records the stack rationale.
 The app, logging subsystems, and process queues use
 `com.longdevity.hardwarecontroller`. The shared identity boundary resolves only
 that Application Support directory and rejects a file occupying the required
-path. The public snapshot contains no predecessor personal namespace.
+path. Voice History uses its `voice/` child with one SQLite database and one
+retained CAF at most per Voice session. The public snapshot contains no
+predecessor personal namespace.
 
 Changing the signed bundle identifier creates a new macOS privacy identity.
 Accessibility, Microphone, Speech Recognition, and Launch at Login state may
@@ -213,7 +216,12 @@ Current executors:
   protected content and semantic bounds, then inserts refined or raw fallback
   text exactly once. Preparation plus generation share a three-second
   post-final-transcript deadline. The deadline race returns without awaiting a
-  provider that ignores cancellation; every late result is discarded.
+  provider that ignores cancellation; every late result is discarded. A
+  bounded nonblocking tee writes immutable capture buffers on a utility task.
+  After delivery, the controller atomically finalizes one CAF and commits Raw,
+  Edited, Formatted, and Delivered text to an actor-owned system SQLite store.
+  Cancellation removes its owned artifact. History presentation, timed spans,
+  retention, reconciliation, and user deletion remain later Voice slices.
 
 One process-wide `DictationWorkflowCoordinator` serializes commands and cancels
 the other Dictation workflow before beginning a replacement. The Actions keep
