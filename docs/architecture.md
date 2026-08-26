@@ -222,19 +222,21 @@ Current executors:
   retain recoverable text.
 - **Local AI Dictation:** captures the same safe target and composes the shared
   microphone and Apple recognition controller in final-only mode. It warms the
-  selected provider while speech continues, applies deterministic dictionary
-  replacements, sends immutable typed context to one local refiner, validates
-  protected content and semantic bounds, parses evidence-backed paragraph and
-  list blocks, then renders target-safe refined or raw fallback text exactly
-  once. Verbatim Style bypasses provider preparation and generation.
+  selected provider while speech continues, applies typed spoken-edit operations
+  to Raw before deterministic Dictionary replacements, sends immutable typed
+  context to one local refiner, validates protected content and semantic bounds, parses
+  evidence-backed paragraph and list blocks, then renders target-safe refined
+  or Edited fallback text exactly once. Verbatim Style bypasses provider
+  preparation and generation.
   Preparation plus generation share a three-second
   post-final-transcript deadline. The deadline race returns without awaiting a
   provider that ignores cancellation; every late result is discarded. A
   bounded nonblocking tee writes immutable capture buffers on a utility task.
   After delivery, the controller atomically finalizes one CAF and commits Raw,
-  Edited, Formatted, and Delivered text plus the versioned structured document
-  and model evidence to an actor-owned system SQLite store. Existing databases
-  gain the nullable structured column without rewriting earlier rows.
+  Edited, Formatted, and Delivered text plus replayable spoken-edit evidence,
+  the versioned structured document, and model evidence to an actor-owned
+  system SQLite store. Existing databases gain both nullable evidence columns
+  without rewriting earlier rows.
   Cancellation removes its owned artifact. History presentation, timed spans,
   retention, reconciliation, and user deletion remain later Voice slices.
 
@@ -260,8 +262,8 @@ Local AI providers implement `TranscriptRefining`:
 
 Prompt revision 5 keeps invariant policy and centralized Style instructions
 separate from an encoded untrusted payload. The payload bounds transcript,
-locale, Profile, target app identity,
-role, multiline capability, optional nearby text, Dictionary data, Style kind,
+locale, Profile, target app identity, role, multiline capability, optional
+nearby text, Dictionary data, Style kind,
 and Style revision. Output validation rejects empty, oversized, control-bearing,
 protected-token-changing, additive, destructive, or context-copying results.
 The typed document builder accepts validated newlines, while the deterministic
@@ -271,6 +273,21 @@ first/second sequence, the builder conservatively converts the full sequence
 to an ordered-list block and validation runs again on the canonical rendering.
 The sanitized provider test shares the three-second preparation-plus-generation
 deadline; settings changes and shutdown cancel it and suppress stale results.
+
+The revision-1 Swift spoken-edit engine recognizes only exact, case-insensitive
+command phrases in immutable Raw text, so a Dictionary replacement cannot
+synthesize a destructive command. Each accepted command records its source
+UTF-8 range, affected pre-Dictionary suffix, typed operation, and replacement.
+Replay rejects unsupported revisions, noncanonical command evidence,
+overlapping source evidence, non-suffix destructive ranges, invalid structure
+replacements, and mismatched stored results. Clause and sentence deletion stop at explicit
+stable punctuation or a list-item marker. In ordered-list mode, `new paragraph`
+begins the next numbered item; `literal` preserves one immediately following
+exact command. An inapplicable destructive/list command and every near-match
+remain ordinary transcript text. The model receives only the resulting Edited
+text. If all Edited text is removed, the session completes without generation
+or insertion while retaining its Raw evidence. Dictionary replacements then
+produce the final Edited text.
 See [`decisions/0020_local_ai_dictation.md`](decisions/0020_local_ai_dictation.md)
 and
 [`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md).
@@ -354,7 +371,7 @@ Schema 5 adds the Local AI Dictation Action identity. Schema-4 Profiles migrate
 without changing any Action, Binding, interaction mode, or fallback.
 
 Application appearance, sidebar visibility, microphone identity, Local AI
-settings, and the Voice chord use a separate schema-4 `preferences.json` file.
+settings, and the Voice chord use a separate schema-5 `preferences.json` file.
 Earlier schemas
 migrate with System Default microphone and conservative Local AI defaults:
 Apple On-Device, recommended Ollama model identity, five-minute retention,

@@ -688,7 +688,7 @@ final class AppModel {
     )
   }
 
-  /// Copies the retained raw or refined AI result after explicit user action.
+  /// Copies retained Raw or delivered AI text after explicit user action.
   func copyLocalAITranscript(refined: Bool) {
     let snapshot = localAIDictationSnapshot
     let text = refined ? snapshot.refinedText : snapshot.rawText

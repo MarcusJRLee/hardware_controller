@@ -47,8 +47,9 @@ automatically formatted result.
 | Toggle | Alternate between begin and end on successive presses. |
 | Active Action | An Action that began and has not yet ended. |
 | Formatting provider | A local model boundary that converts Edited text evidence into a Formatted document. |
-| Raw transcript | Final on-device speech-recognition text before dictionary replacement or refinement. |
-| Edited transcript | Raw text after deterministic Dictionary replacements or spoken edits. |
+| Raw transcript | Final on-device speech-recognition text before Dictionary replacement, spoken edits, or refinement. |
+| Edited transcript | Raw text after deterministic spoken edits and Dictionary replacements. |
+| Spoken edit | A typed, source-evidenced deterministic operation applied before formatting. |
 | Formatted document | Validated paragraph and list blocks linked to Raw evidence. |
 | Delivered text | A target-specific plain-text rendering of the Formatted document. |
 | Style | A versioned Natural, Casual Message, Formal, Technical, or Verbatim formatting policy. |
@@ -98,6 +99,9 @@ failure path.
   generative refinement.
 - Accept machine-wide recognition vocabulary, deterministic exact
   replacements, and optional formatting instructions.
+- Apply exact `scratch that`, `delete that sentence`, `new paragraph`, `start a
+  numbered list`, and `end list` commands before formatting. `literal` preserves
+  the immediately following exact command phrase; near-misses remain text.
 - Optionally use a bounded caret window from the current nonsecure multiline
   target. Never read browser URLs, terminal contents, whole documents,
   screenshots, the pasteboard, or secure fields.
@@ -105,9 +109,9 @@ failure path.
   output.
 - Preserve protected numbers, URLs, email addresses, paths, code-like tokens,
   quotations, and dictionary values.
-- Deliver refined text once, or raw text once after provider failure, invalid
-  output, or a three-second post-release deadline when target ownership remains
-  valid.
+- Deliver refined text once, or deterministic Edited text once after provider
+  failure, invalid output, or a three-second post-release deadline when target
+  ownership remains valid.
 - Store local audio plus distinct Raw, Edited, Formatted, and Delivered stages
   for later History slices; keep current-session copy actions separate.
 
@@ -166,11 +170,11 @@ Given a focused editable field and a ready selected provider:
 - begin captures the target, starts the shared local speech path, and warms the
   model concurrently;
 - provisional recognition appears only in the transient HUD;
-- finish obtains one raw transcript, applies exact replacements, refines,
-  validates, and inserts one result;
+- finish obtains one Raw transcript, applies exact replacements and typed spoken
+  edits, refines, validates, and inserts one result;
 - formatted structure is preserved only for a target that safely supports it;
 - provider absence, digest drift, malformed output, overload, or timeout inserts
-  raw text once if the original target remains valid;
+  deterministic Edited text once if the original target remains valid;
 - cancellation, focus change, or caret change discards late model output;
 - raw and refined recovery controls remain distinct.
 
@@ -236,8 +240,10 @@ changes require a decision record under [`decisions/`](decisions/).
 
 The accepted local-first Voice program supersedes these boundaries one tested
 vertical slice at a time. M1 persists Local AI Dictation audio and distinct
-final text stages. M2 adds the independent hold/latch Voice chord. History UI,
-retention enforcement, the portable engine, and iOS remain pending. See
+final text stages; M2 adds the independent hold/latch Voice chord; M3 adds
+versioned Styles and structured formatting; M4 adds typed replayable spoken
+edits. History UI, retention enforcement, the portable engine, and iOS remain
+pending. See
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 [`voice_platform_design.md`](voice_platform_design.md), and
 [`voice_cujs.md`](voice_cujs.md).

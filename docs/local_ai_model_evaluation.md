@@ -70,7 +70,7 @@ Pinned digest:
 Qwen 3.5 9B remains selectable as an unvalidated installed model. Its two
 additional exact results did not justify 48% more resident allocation, a 38%
 higher p95, and one rejected nearby-context copy. Apple On-Device remains a
-supported provider, with validation and raw fallback covering its rejected
+supported provider, with validation and deterministic Edited fallback covering its rejected
 outputs.
 
 ## Controller benchmark
@@ -84,8 +84,9 @@ HC_RUN_LOCAL_AI_END_TO_END_BENCHMARK=1 \
 ```
 
 The benchmark explicitly prepares the selected model before timing. From an
-initially unloaded model, the subsequent 17-case warm run measured
-release-to-insertion p50 0.776 seconds and p95, p99, and maximum 1.009 seconds.
+initially unloaded model, the M4 spoken-edit controller's subsequent 17-case
+warm run measured release-to-insertion p50 0.773 seconds and p95, p99, and
+maximum 1.004 seconds.
 Every case produced exactly one writer insertion. This is a synthetic target
 test; physical Control, real microphone, recognition-finalization, and
 external-app timing remain separate system checks.

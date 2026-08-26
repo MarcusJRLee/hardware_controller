@@ -28,7 +28,7 @@ CUJ tests observe stable outcomes rather than implementation types:
 | Capture ownership | Exactly one session ID, confirmed start time, visible state, and terminal stop/cancel/failure. |
 | Transcript        | Ordered timed Raw spans plus explicit replacements; no duplicate stable ranges.                |
 | Spoken edits      | Typed operations and deterministic Edited transcript.                                          |
-| Formatting        | Style revision, structured blocks, evidence references, validation result, and Raw fallback.   |
+| Formatting        | Style revision, structured blocks, evidence references, validation result, and deterministic Raw/Edited fallback. |
 | Delivery          | Target identity/capability snapshot, one attempted rendering, and typed outcome.               |
 | History           | Searchable session record independent of delivery success.                                     |
 | Audio             | Final artifact or explicit absence/expiry/recovery reason, byte count, duration, and digest.   |
@@ -137,6 +137,19 @@ databases without rewriting their rows.
 “literal” produce typed, replayable operations. An ambiguous command remains
 literal text. A destructive command cannot remove stable text outside its
 defined range. The Raw transcript remains inspectable.
+
+**Current evidence:** the deterministic Swift engine recognizes only the five
+exact command phrases and one exact `literal` prefix. Operations record source
+UTF-8 evidence, the affected Edited suffix, and a typed replacement. Clause and
+sentence deletion stop at stable punctuation or an active list-item marker;
+`new paragraph` begins the next item while a numbered list is active. Revision,
+command evidence, canonical ranges, ordering, replay, and stored-result
+corruption are rejected during SQLite write and read. Commands run against Raw
+before Dictionary output can synthesize one. The formatter receives Edited text, provider fallback delivers
+the same Edited text, and a fully scratched session retains Raw/audio evidence
+without generation or insertion. Near-misses and inapplicable commands remain
+literal. Deterministic engine, replay, controller, fallback, empty-result, JSON,
+SQLite migration, and corruption tests cover the journey.
 
 ### M5 — Preserve ownership when the target changes
 
@@ -299,7 +312,7 @@ state, and model digest.
 The user accepted on 2026-08-25:
 
 1. M1 as the first tracer and the listed CUJ priority;
-2. the observable contract and deterministic Raw fallback;
+2. the observable contract and deterministic Raw/Edited fallback;
 3. macOS 90-day/2-GiB/5,000-artifact and iOS
    90-day/1-GiB/2,000-artifact audio defaults;
 4. 24-hour retention for failed but recoverable partial artifacts;

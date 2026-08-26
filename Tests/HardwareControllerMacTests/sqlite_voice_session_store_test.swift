@@ -18,13 +18,18 @@ struct SQLiteVoiceSessionStoreTest {
     let first = try SQLiteVoiceSessionHistory(
       rootDirectory: rootDirectory
     )
+    let rawText =
+      "wrong scratch that first install Git second run bash --version"
     let formattedDocument = try VoiceFormattedDocumentBuilder().build(
       formattedText: "1. Install Git.\n2. Run bash --version.",
-      rawText: "first install Git second run bash --version",
+      rawText: rawText,
       style: .technical,
       provider: .ollama,
       modelIdentifier: "qwen3.5:4b",
       promptRevision: 5
+    )
+    let spokenEdits = VoiceSpokenEditEngine().apply(
+      to: rawText
     )
     first.begin(sessionID: sessionID, startedAt: startedAt)
     try await first.complete(
@@ -32,13 +37,14 @@ struct SQLiteVoiceSessionStoreTest {
         id: sessionID,
         startedAt: startedAt,
         endedAt: Date(timeIntervalSince1970: 1_001),
-        rawText: "first install Git second run bash --version",
-        editedText: "edited",
+        rawText: rawText,
+        editedText: spokenEdits.editedText,
         formattedText: "1. Install Git.\n2. Run bash --version.",
         deliveredText: "1. Install Git.\n2. Run bash --version.",
         targetApplicationName: "Notes",
         deliveryOutcome: .inserted,
-        formattedDocument: formattedDocument
+        formattedDocument: formattedDocument,
+        spokenEdits: spokenEdits
       )
     )
 
@@ -55,6 +61,11 @@ struct SQLiteVoiceSessionStoreTest {
         == "1. Install Git.\n2. Run bash --version."
     )
     #expect(item.formattedDocument == formattedDocument)
+    #expect(item.document.spokenEdits == spokenEdits)
+    #expect(
+      try VoiceSpokenEditReplayer().replay(spokenEdits)
+        == item.editedText
+    )
     #expect(item.audioArtifactURL == nil)
   }
 
@@ -114,6 +125,7 @@ struct SQLiteVoiceSessionStoreTest {
     #expect(item.id == sessionID)
     #expect(item.rawText == "raw")
     #expect(item.formattedDocument == nil)
+    #expect(item.document.spokenEdits == nil)
   }
 
   @Test
@@ -138,6 +150,39 @@ struct SQLiteVoiceSessionStoreTest {
       targetApplicationName: "Notes",
       deliveryOutcome: .inserted,
       formattedDocument: formattedDocument
+    )
+
+    await #expect(throws: VoiceSessionHistoryError.self) {
+      try await history.complete(document)
+    }
+    #expect(try await history.recentSessions(limit: 1).isEmpty)
+  }
+
+  @Test
+  func mismatchedSpokenEditTraceIsNotStored() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_invalid_edits_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let valid = VoiceSpokenEditEngine().apply(
+      to: "Wrong scratch that Right"
+    )
+    let mismatched = VoiceSpokenEditResult(
+      sourceText: valid.sourceText,
+      editedText: "Changed",
+      operations: valid.operations
+    )
+    let document = VoiceSessionDocument(
+      id: UUID(),
+      startedAt: Date(timeIntervalSince1970: 1_000),
+      endedAt: Date(timeIntervalSince1970: 1_001),
+      rawText: valid.sourceText,
+      editedText: "Changed",
+      formattedText: "Changed.",
+      deliveredText: "Changed.",
+      targetApplicationName: "Notes",
+      deliveryOutcome: .inserted,
+      spokenEdits: mismatched
     )
 
     await #expect(throws: VoiceSessionHistoryError.self) {

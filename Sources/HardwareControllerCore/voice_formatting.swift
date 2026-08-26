@@ -90,7 +90,7 @@ public enum VoiceFormattingValidationStatus:
   Sendable
 {
   case validated
-  case rawFallback
+  case sourceFallback = "rawFallback"
 }
 
 public struct VoiceFormattedDocument: Codable, Equatable, Sendable {

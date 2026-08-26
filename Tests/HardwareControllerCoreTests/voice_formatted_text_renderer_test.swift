@@ -1,8 +1,19 @@
+import Foundation
 import Testing
 
 @testable import HardwareControllerCore
 
 struct VoiceFormattedTextRendererTest {
+  @Test
+  func legacyRawFallbackStatusDecodesAsSourceFallback() throws {
+    let status = try JSONDecoder().decode(
+      VoiceFormattingValidationStatus.self,
+      from: Data("\"rawFallback\"".utf8)
+    )
+
+    #expect(status == .sourceFallback)
+  }
+
   @Test
   func preservesStructureOnlyForMultilineTargets() throws {
     let document = try VoiceFormattedDocumentBuilder().build(

@@ -13,10 +13,11 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 | Device input | Exact Infinity 3 matching, exclusive ownership, three Controls, simultaneous input, and reconnect-safe decoding. | [`hardware/infinity_3.md`](hardware/infinity_3.md) |
 | Actions | No Action, Local Dictation, Local AI Dictation, and Keyboard Shortcut with independent Hold and Toggle Bindings. | [`product_brief.md`](product_brief.md) |
 | Local Dictation | On-device Apple recognition, adaptive live/final delivery, bounded finalization, and app-local microphone selection. | [`architecture.md`](architecture.md#action-registry-and-executors) |
-| Local AI Dictation | Apple or fixed-loopback Ollama text refinement, dictionary, bounded context, validation, and raw fallback. | [`decisions/0020_local_ai_dictation.md`](decisions/0020_local_ai_dictation.md) |
+| Local AI Dictation | Apple or fixed-loopback Ollama text refinement, spoken edits, Dictionary, bounded context, validation, and deterministic Edited fallback. | [`decisions/0020_local_ai_dictation.md`](decisions/0020_local_ai_dictation.md) |
 | Voice M1 tracer | Local AI Dictation tees immutable audio off the capture path, inserts once, and atomically stores one CAF plus separate final text stages in SQLite. History UI, timed spans, retention, and recovery remain pending. | [`voice_cujs.md`](voice_cujs.md#m1--hold-to-dictate-and-recover) |
 | Voice M2 trigger | One opt-in machine-wide exact chord starts Local AI Dictation immediately, supports hold or double-press latch, finishes once, cancels on interruption, and reports reservation conflicts. | [`voice_cujs.md`](voice_cujs.md#m2--latch-a-long-prompt) |
 | Voice M3 formatting | Five versioned Styles produce validated evidence-backed paragraph/list blocks; one renderer preserves multiline structure or safely flattens it, and Verbatim skips the model. | [`voice_cujs.md`](voice_cujs.md#m3--format-for-purpose) |
+| Voice M4 spoken edits | Exact backtrack, paragraph, numbered-list, and literal commands produce persisted replayable operations before formatting; ambiguous or inapplicable phrases remain text. | [`voice_cujs.md`](voice_cujs.md#m4--backtrack-explicitly) |
 | Model recommendation | Qwen 3.5 4B is digest-pinned from the fixed evaluation corpus. | [`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md) |
 | Profiles | Transactional named Profiles with independent per-Device setups and active-Action cleanup. | [`decisions/0014_multi_profile_device_configuration.md`](decisions/0014_multi_profile_device_configuration.md) |
 | Application | Controller, Profiles, and General in one native foreground window with Dock and menu-bar presence. | [`ux_spec.md`](ux_spec.md) |
@@ -25,8 +26,8 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 
 ## Approved next program
 
-The local Voice expansion is accepted and its macOS M1 storage tracer is
-implemented on the current stacked branch. macOS and iOS are the active
+The local Voice expansion is accepted and macOS M1–M4 are implemented across
+the current stacked branches. macOS and iOS are the active
 roadmap; Android, Windows, and Linux remain architectural line-of-sight
 platforms; web and mobile web are deferred. The acceptance and execution
 authorities are:
@@ -49,9 +50,9 @@ promotion.
 | --- | --- | --- |
 | HID dispatch | p50 ≤ 3 ms, p95 ≤ 8 ms, p99 ≤ 15 ms, max ≤ 30 ms across 10,000 transitions; no loss or duplication. | p50 0.013 ms, p95 0.024 ms, p99 0.046 ms, max 0.257 ms; 10,000 ordered dispatches. |
 | Microphone activation | Warm maximum ≤ 250 ms. | p50 48.118 ms, p95/p99/max 87.050 ms across five starts; one-time preparation 149.539 ms. |
-| Local AI semantic safety | No accepted provider output may corrupt protected content; invalid output falls back raw once. | Fixed 17-case corpus plus Style, structured-block, renderer, controller, and migration tests. |
+| Local AI semantic safety | No accepted provider output may corrupt protected content; invalid output falls back to Edited text once. | Fixed 17-case corpus plus spoken-edit, replay, Style, structured-block, renderer, controller, and migration tests. |
 | Local AI refinement | Warm raw-final-to-refined p95 ≤ 1 s on the reference Mac. | Prompt-5 Qwen 3.5 4B p95 0.908 s. |
-| Local AI end to end | Warm release-to-insertion p95 ≤ 1.5 s on the reference Mac. | Prompt-5 prewarmed production-controller p95 1.009 s. |
+| Local AI end to end | Warm release-to-insertion p95 ≤ 1.5 s on the reference Mac. | Prompt-5 prewarmed M4 production-controller p95 1.004 s. |
 | Local AI deadline | Preparation plus generation must fall back within three seconds after final speech text. | Deterministic deadline and late-output tests. |
 | Privacy | Voice artifacts remain app-owned and local; no speech content is logged; Ollama cannot reach a nonloopback endpoint. | Deterministic SQLite/CAF tests, static scan, and fixed-endpoint transport tests. |
 | Documentation | Canonical docs describe current behavior and all links resolve. | All local links resolve. |

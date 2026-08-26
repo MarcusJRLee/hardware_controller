@@ -127,7 +127,7 @@ system permission itself.
 | Action begin       | Action label and menu bar enter active state.                        |
 | Action end         | Active state clears only after the executor accepts the end.         |
 | Listening/finalize | Dedicated status shows authoritative phase, target app, and text.     |
-| AI refinement      | Dedicated status distinguishes preparing, refining, validating, delivering, raw fallback, and failure. |
+| AI refinement      | Dedicated status distinguishes preparing, refining, validating, delivering, deterministic Edited fallback, and failure. |
 | Focus failure      | Automatic insertion stops and recoverable final text can be copied.   |
 | Microphone change  | Active Dictation ends and prepared capture uses the new app route.     |
 | Device unplug      | Layout remains visible, becomes unavailable, and explains reconnect. |

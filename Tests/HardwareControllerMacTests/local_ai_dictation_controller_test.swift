@@ -390,6 +390,129 @@ struct LocalAIDictationControllerTest {
   }
 
   @Test
+  func appliesSpokenEditsBeforeFormattingAndStoresTheirTrace() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_spoken_edits_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let rawText =
+      "Keep this. Wrong scratch that Right new paragraph start a numbered list First new paragraph Second end list Done."
+    let editedText =
+      "Keep this. Right\n\n1. First\n2. Second\n\nDone."
+    let fixture = LocalAIControllerFixture(
+      refinement: .output(editedText)
+    )
+    let controller = fixture.makeController(history: history)
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.session.emit(.committed(rawText))
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    let request = try #require(await fixture.refiner.requests.first)
+    let item = try #require(
+      try await history.recentSessions(limit: 1).first
+    )
+    let spokenEdits = try #require(item.document.spokenEdits)
+    #expect(request.transcript == editedText)
+    #expect(item.rawText == rawText)
+    #expect(item.editedText == editedText)
+    #expect(spokenEdits.editedText == editedText)
+    #expect(spokenEdits.operations.count == 5)
+    #expect(
+      try VoiceSpokenEditReplayer().replay(spokenEdits)
+        == item.editedText
+    )
+  }
+
+  @Test
+  func dictionaryReplacementCannotSynthesizeADestructiveCommand()
+    async throws
+  {
+    let fixture = LocalAIControllerFixture(refinement: .output("Unused."))
+    var settings = LocalAISettings.default
+    settings.style = .verbatim
+    settings.dictionary = PersonalDictionary(
+      replacements: [
+        PersonalDictionaryReplacement(
+          spokenForm: "backtrack",
+          replacement: "scratch that"
+        )
+      ]
+    )
+    let controller = fixture.makeController(settings: settings)
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.session.emit(.committed("Keep backtrack as literal text"))
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    #expect(fixture.writer.inserted == ["Keep scratch that as literal text"])
+    #expect(await fixture.refiner.requests.isEmpty)
+  }
+
+  @Test
+  func formattingFallbackStillHonorsExplicitSpokenEdits() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_spoken_edit_fallback_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let fixture = LocalAIControllerFixture(
+      refinement: .failure(.providerUnavailable("No formatter."))
+    )
+    let controller = fixture.makeController(history: history)
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.session.emit(
+      .committed("Wrong scratch that Right new paragraph Next")
+    )
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    let item = try #require(
+      try await history.recentSessions(limit: 1).first
+    )
+    #expect(fixture.writer.inserted == ["Right\n\nNext"])
+    #expect(item.rawText == "Wrong scratch that Right new paragraph Next")
+    #expect(item.editedText == "Right\n\nNext")
+    #expect(item.formattedText == "Right\n\nNext")
+    #expect(item.document.spokenEdits?.operations.count == 2)
+  }
+
+  @Test
+  func fullyScratchedSessionCompletesWithoutFormattingOrInsertion()
+    async throws
+  {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_spoken_edit_empty_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let fixture = LocalAIControllerFixture(refinement: .output("Unused."))
+    let controller = fixture.makeController(history: history)
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.session.emit(.committed("Only thought scratch that"))
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    let item = try #require(
+      try await history.recentSessions(limit: 1).first
+    )
+    #expect(fixture.writer.inserted.isEmpty)
+    #expect(await fixture.refiner.requests.isEmpty)
+    #expect(item.rawText == "Only thought scratch that")
+    #expect(item.editedText.isEmpty)
+    #expect(item.formattedText.isEmpty)
+    #expect(item.deliveredText.isEmpty)
+    #expect(item.deliveryOutcome == .notAttempted)
+    #expect(item.document.spokenEdits?.operations.count == 1)
+  }
+
+  @Test
   func refinementFailureInsertsRawTranscriptExactlyOnce() async throws {
     let fixture = LocalAIControllerFixture(
       refinement: .failure(.providerUnavailable("Ollama is not running."))
@@ -404,7 +527,7 @@ struct LocalAIDictationControllerTest {
 
     let snapshot = await controller.snapshot()
     #expect(fixture.writer.inserted == ["keep the raw text"])
-    #expect(snapshot.refinedText.isEmpty)
+    #expect(snapshot.refinedText == "keep the raw text")
     #expect(
       snapshot.fallbackReason
         == .providerUnavailable("Ollama is not running.")
@@ -412,7 +535,7 @@ struct LocalAIDictationControllerTest {
   }
 
   @Test
-  func rawFallbackFlattensOnlyForASingleLineTarget() async throws {
+  func editedFallbackFlattensOnlyForASingleLineTarget() async throws {
     let fixture = LocalAIControllerFixture(
       refinement: .failure(.providerUnavailable("No formatter."))
     )
@@ -471,7 +594,7 @@ struct LocalAIDictationControllerTest {
     #expect(elapsed < .milliseconds(200))
     #expect(fixture.writer.inserted == ["time bounded"])
     #expect(await fixture.refiner.refinementCompletionCount == 1)
-    #expect(await controller.snapshot().refinedText.isEmpty)
+    #expect(await controller.snapshot().refinedText == "time bounded")
     #expect(await controller.snapshot().fallbackReason == .timedOut)
   }
 
@@ -839,6 +962,7 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
   private var preparationCancellationObservers: [CheckedContinuation<Void, Never>] = []
   private(set) var preparationCount = 0
   private(set) var refinementCompletionCount = 0
+  private(set) var requests: [LocalAIRefinementRequest] = []
   private(set) var releasedSettings: [LocalAISettings] = []
   private(set) var shutdownCount = 0
 
@@ -898,6 +1022,7 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
     _ request: LocalAIRefinementRequest,
     settings: LocalAISettings
   ) async throws -> LocalAIRefinementResponse {
+    requests.append(request)
     let output: String
     switch behavior {
     case .output(let value):
