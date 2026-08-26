@@ -14,6 +14,9 @@ identify deep implementation modules without changing that language.
 | Voice session History | Local session document containing separate Raw, Edited, Formatted, and Delivered text plus at most one audio artifact. |
 | Audio artifact recorder | Bounded nonblocking tee from immutable capture buffers to an atomically finalized local CAF. |
 | Voice session store | Actor-owned system SQLite connection that serializes local session metadata transactions. |
+| Voice trigger | Input adapter that maps physical, exact-chord, or in-app intent into the shared Voice-session contract. |
+| Voice chord | Optional machine-wide exact shortcut dedicated to Voice capture and independent of Binding keyboard fallbacks. |
+| Latched capture | Voice capture kept active after a valid double press until the next valid double press. |
 | Refinement provider | Typed local text-to-text boundary implemented by Apple Foundation Models or fixed-loopback Ollama. |
 | Target lease | Captured editable element, process, caret/selection, and delivery capability revalidated before mutation. |
 | Nearby context | Optional bounded text around the caret from an approved nonsecure multiline target, held only for one Local AI session. |

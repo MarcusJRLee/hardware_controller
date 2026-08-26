@@ -20,6 +20,36 @@ public struct KeyboardFallbackRegistrationFailure: Equatable, Sendable {
   }
 }
 
+/// Describes the Voice shortcut when macOS could not reserve it.
+public struct VoiceShortcutRegistrationFailure: Equatable, Sendable {
+  public let shortcut: KeyboardShortcut
+  public let systemCode: Int32
+
+  public init(shortcut: KeyboardShortcut, systemCode: Int32) {
+    self.shortcut = shortcut
+    self.systemCode = systemCode
+  }
+
+  /// Gives the user a direct recovery path without interpreting system codes.
+  public var recoveryMessage: String {
+    "This Voice capture shortcut is unavailable. Record a different shortcut; another app or macOS may already use it."
+  }
+}
+
+/// Reports all exact-shortcut registration outcomes in one transaction.
+public struct KeyboardInputRegistrationResult: Equatable, Sendable {
+  public let fallbackFailures: [KeyboardFallbackRegistrationFailure]
+  public let voiceFailure: VoiceShortcutRegistrationFailure?
+
+  public init(
+    fallbackFailures: [KeyboardFallbackRegistrationFailure],
+    voiceFailure: VoiceShortcutRegistrationFailure?
+  ) {
+    self.fallbackFailures = fallbackFailures
+    self.voiceFailure = voiceFailure
+  }
+}
+
 /// Abstracts exact Carbon hot-key registration for deterministic lifecycle tests.
 @MainActor
 protocol GlobalHotKeySystem: AnyObject {
@@ -44,30 +74,44 @@ public final class KeyboardFallbackInputSource {
       ControlPhase,
       UInt64
     ) -> Void
+  public typealias VoiceEventHandler =
+    @Sendable (ControlPhase, UInt64) -> Void
+
+  private enum Registration {
+    case fallback(KeyboardFallbackRegistration)
+    case voice(KeyboardShortcut)
+  }
 
   private let system: any GlobalHotKeySystem
   private let onEvent: EventHandler
-  private var registrationsByID: [UInt32: KeyboardFallbackRegistration] = [:]
+  private let onVoiceEvent: VoiceEventHandler
+  private var registrationsByID: [UInt32: Registration] = [:]
   private var activeIDs: Set<UInt32> = []
   private var nextID: UInt32 = 1
 
   /// Installs a narrow exact-hot-key source without reading global key events.
   init(
     system: any GlobalHotKeySystem,
-    onEvent: @escaping EventHandler
+    onEvent: @escaping EventHandler,
+    onVoiceEvent: @escaping VoiceEventHandler = { _, _ in }
   ) {
     self.system = system
     self.onEvent = onEvent
+    self.onVoiceEvent = onVoiceEvent
     system.onEvent = { [weak self] id, phase in
       self?.handle(id: id, phase: phase)
     }
   }
 
   /// Creates the live exact-hot-key source on the main event target.
-  public convenience init(onEvent: @escaping EventHandler) {
+  public convenience init(
+    onEvent: @escaping EventHandler,
+    onVoiceEvent: @escaping VoiceEventHandler = { _, _ in }
+  ) {
     self.init(
       system: CarbonGlobalHotKeySystem(),
-      onEvent: onEvent
+      onEvent: onEvent,
+      onVoiceEvent: onVoiceEvent
     )
   }
 
@@ -76,15 +120,27 @@ public final class KeyboardFallbackInputSource {
   public func replace(
     with registrations: [KeyboardFallbackRegistration]
   ) -> [KeyboardFallbackRegistrationFailure] {
+    replace(
+      fallbacks: registrations,
+      voiceShortcut: nil
+    ).fallbackFailures
+  }
+
+  /// Atomically replaces Binding fallbacks and the independent Voice chord.
+  @discardableResult
+  public func replace(
+    fallbacks: [KeyboardFallbackRegistration],
+    voiceShortcut: KeyboardShortcut?
+  ) -> KeyboardInputRegistrationResult {
     stop()
 
     var failures: [KeyboardFallbackRegistrationFailure] = []
-    for registration in registrations {
+    for registration in fallbacks {
       let id = nextID
-      nextID = nextID == .max ? 1 : nextID + 1
+      advanceID()
       let status = system.register(registration.shortcut, id: id)
       if status == noErr {
-        registrationsByID[id] = registration
+        registrationsByID[id] = .fallback(registration)
       } else {
         failures.append(
           KeyboardFallbackRegistrationFailure(
@@ -94,7 +150,25 @@ public final class KeyboardFallbackInputSource {
         )
       }
     }
-    return failures
+
+    var voiceFailure: VoiceShortcutRegistrationFailure?
+    if let voiceShortcut {
+      let id = nextID
+      advanceID()
+      let status = system.register(voiceShortcut, id: id)
+      if status == noErr {
+        registrationsByID[id] = .voice(voiceShortcut)
+      } else {
+        voiceFailure = VoiceShortcutRegistrationFailure(
+          shortcut: voiceShortcut,
+          systemCode: status
+        )
+      }
+    }
+    return KeyboardInputRegistrationResult(
+      fallbackFailures: failures,
+      voiceFailure: voiceFailure
+    )
   }
 
   /// Releases active inputs before unregistering every exact shortcut.
@@ -102,7 +176,7 @@ public final class KeyboardFallbackInputSource {
     let timestamp = MonotonicClock.nowNanoseconds()
     for id in activeIDs.sorted() {
       if let registration = registrationsByID[id] {
-        onEvent(registration, .released, timestamp)
+        deliver(registration, phase: .released, timestamp: timestamp)
       }
     }
     activeIDs.removeAll()
@@ -128,11 +202,28 @@ public final class KeyboardFallbackInputSource {
         return
       }
     }
-    onEvent(
+    deliver(
       registration,
-      phase,
-      MonotonicClock.nowNanoseconds()
+      phase: phase,
+      timestamp: MonotonicClock.nowNanoseconds()
     )
+  }
+
+  private func deliver(
+    _ registration: Registration,
+    phase: ControlPhase,
+    timestamp: UInt64
+  ) {
+    switch registration {
+    case .fallback(let fallback):
+      onEvent(fallback, phase, timestamp)
+    case .voice:
+      onVoiceEvent(phase, timestamp)
+    }
+  }
+
+  private func advanceID() {
+    nextID = nextID == .max ? 1 : nextID + 1
   }
 }
 

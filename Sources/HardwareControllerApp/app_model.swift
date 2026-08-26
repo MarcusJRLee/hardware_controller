@@ -29,13 +29,15 @@ final class AppModel {
     arguments: [String] = ProcessInfo.processInfo.arguments,
     profileStore: (any ProfilePersisting)? = nil,
     preferredMicrophoneUID: String? = nil,
-    localAISettings: LocalAISettings = .default
+    localAISettings: LocalAISettings = .default,
+    voiceTriggerSettings: VoiceTriggerSettings = .default
   ) {
     let runtime = ApplicationRuntime.make(
       arguments: arguments,
       profileStore: profileStore,
       preferredMicrophoneUID: preferredMicrophoneUID,
-      localAISettings: localAISettings
+      localAISettings: localAISettings,
+      voiceTriggerSettings: voiceTriggerSettings
     )
     self.runtime = runtime
     applicationSnapshot = runtime.initialSnapshot
@@ -102,6 +104,10 @@ final class AppModel {
 
   var keyboardFallbackFailures: [KeyboardFallbackRegistrationFailure] {
     applicationSnapshot.keyboardFallbackFailures
+  }
+
+  var voiceShortcutFailure: VoiceShortcutRegistrationFailure? {
+    applicationSnapshot.voiceShortcutFailure
   }
 
   var lastError: String? {
@@ -607,6 +613,13 @@ final class AppModel {
   func setLocalAISettings(_ settings: LocalAISettings) {
     enqueueIntent { [runtime] in
       await runtime.setLocalAISettings(settings)
+    }
+  }
+
+  /// Applies one persisted Voice capture shortcut configuration.
+  func setVoiceTriggerSettings(_ settings: VoiceTriggerSettings) {
+    enqueueIntent { [runtime] in
+      await runtime.setVoiceTriggerSettings(settings)
     }
   }
 

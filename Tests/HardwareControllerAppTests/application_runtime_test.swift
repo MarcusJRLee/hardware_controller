@@ -211,6 +211,24 @@ struct ApplicationRuntimeTest {
     await fixture.runtime.stop()
   }
 
+  @Test
+  func voiceTriggerSettingsReachTheProcessAfterStartup() async {
+    let fixture = RuntimeFixture()
+    await fixture.runtime.start(
+      snapshotHandler: fixture.snapshots.append
+    )
+    let settings = VoiceTriggerSettings(
+      shortcut: .suggestedControlActivation
+    )
+
+    await fixture.runtime.setVoiceTriggerSettings(settings)
+
+    #expect(
+      fixture.process.voiceTriggerSettings == [.default, settings]
+    )
+    await fixture.runtime.stop()
+  }
+
   /// Keeps typed demo failure separate from synchronous dispatch state.
   @MainActor
   @Test
@@ -550,6 +568,25 @@ struct ApplicationRuntimeTest {
     await fixture.runtime.stop()
   }
 
+  @Test
+  func voiceShortcutFailureFlowsThroughRuntime() async throws {
+    let fixture = RuntimeFixture()
+    await fixture.runtime.start(
+      snapshotHandler: fixture.snapshots.append
+    )
+    let failure = VoiceShortcutRegistrationFailure(
+      shortcut: .suggestedControlActivation,
+      systemCode: -1
+    )
+
+    fixture.process.publish(.voiceShortcutFailure(failure))
+    try await waitUntil {
+      fixture.snapshots.values.last?.voiceShortcutFailure == failure
+    }
+
+    await fixture.runtime.stop()
+  }
+
   /// Publishes a new active Profile only after the process installs it.
   @Test
   func activationAndActiveDeletionReplaceRuntimeProfile() async throws {
@@ -823,6 +860,7 @@ private final class FakeApplicationProcess:
   private var profileStorage: [Profile] = []
   private var retryStorage = HardwareInputStartResult.started
   private var preferredMicrophoneUIDStorage: [String?] = []
+  private var voiceTriggerSettingsStorage: [VoiceTriggerSettings] = []
   private var localAIReadinessStorage = LocalAIReadinessSnapshot.checking
   private var localAIReadinessContinuation: CheckedContinuation<Void, Never>?
   private var localAIReadinessObservers: [CheckedContinuation<Void, Never>] = []
@@ -868,6 +906,10 @@ private final class FakeApplicationProcess:
 
   var preferredMicrophoneUIDs: [String?] {
     lock.withLock { preferredMicrophoneUIDStorage }
+  }
+
+  var voiceTriggerSettings: [VoiceTriggerSettings] {
+    lock.withLock { voiceTriggerSettingsStorage }
   }
 
   var retryResult: HardwareInputStartResult {
@@ -1007,6 +1049,16 @@ private final class FakeApplicationProcess:
     return localAIReadinessResult
   }
 
+  /// Records each independent Voice trigger configuration.
+  func setVoiceTriggerSettings(
+    _ settings: VoiceTriggerSettings
+  ) async throws -> VoiceShortcutRegistrationFailure? {
+    lock.withLock {
+      voiceTriggerSettingsStorage.append(settings)
+    }
+    return nil
+  }
+
   /// Returns deterministic provider readiness without external processes.
   func localAIReadiness() async -> LocalAIReadinessSnapshot {
     if blocksLocalAIReadiness {
@@ -1060,6 +1112,8 @@ private final class FakeApplicationProcess:
       relay?.publishLocalAIDictation(snapshot)
     case .keyboardFallbackFailures(let failures):
       relay?.publishKeyboardFallbackFailures(failures)
+    case .voiceShortcutFailure(let failure):
+      relay?.publishVoiceShortcutFailure(failure)
     }
   }
 }

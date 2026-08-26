@@ -48,6 +48,9 @@ automatically formatted result.
 | Active Action | An Action that began and has not yet ended. |
 | Refinement provider | A local model boundary that converts finalized recognized text into validated text. |
 | Raw transcript | Final on-device speech-recognition text before dictionary replacement or refinement. |
+| Voice trigger | An input adapter that begins, finishes, or cancels the same Voice-session workflow without changing its ASR, formatting, delivery, or History meaning. |
+| Voice chord | The optional machine-wide exact keyboard shortcut dedicated to Voice capture; it is distinct from a Binding keyboard fallback. |
+| Latched capture | A Voice session kept active after two short Voice-chord presses until the next valid double press. |
 
 Use `pedal` only for Infinity-specific UI copy. Domain and reusable UI use
 `Control` so future buttons, knobs, switches, and MIDI controls fit without a
@@ -110,6 +113,9 @@ failure path.
   Action.
 - Optionally assign one exact keyboard fallback to a Binding. Suggest `⌃⇧⌘D`
   but never enable it automatically.
+- Optionally assign one machine-wide Voice chord under General. Begin on the
+  first key-down; release after a hold to finish, or double press to latch and
+  double press again to finish. Never enable it automatically.
 - Keep Local AI provider, model/digest, retention, context permission,
   dictionary, and additional instructions machine-wide under General.
 - Recommend the measured Qwen 3.5 4B Ollama model while allowing explicitly
@@ -182,6 +188,17 @@ Given Profiles contain different Device setups:
   Binding's Action and Hold/Toggle behavior;
 - duplicate, recursive, or unavailable fallback chords produce typed recovery.
 
+### Independent Voice chord
+
+Given a configured Voice chord and ready Local AI Dictation:
+
+- the chord works without a connected Device and never becomes a Binding;
+- first key-down begins capture without waiting to decide hold versus latch;
+- a held chord finishes on release, while two short presses latch;
+- the next valid double press finishes a latched session exactly once;
+- repeats and unmatched releases are inert; and
+- replacement, sleep, and shutdown cancel active capture before unregistering.
+
 ### Permissions and provider readiness
 
 - Missing Accessibility blocks only Actions that require target mutation or
@@ -211,9 +228,9 @@ These are current boundaries, not prohibitions on measured future work. Durable
 changes require a decision record under [`decisions/`](decisions/).
 
 The accepted local-first Voice program supersedes these boundaries one tested
-vertical slice at a time. Its current M1 tracer persists Local AI Dictation
-audio and distinct final text stages; History UI, retention enforcement, the
-portable engine, and iOS remain pending. See
+vertical slice at a time. M1 persists Local AI Dictation audio and distinct
+final text stages. M2 adds the independent hold/latch Voice chord. History UI,
+retention enforcement, the portable engine, and iOS remain pending. See
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 [`voice_platform_design.md`](voice_platform_design.md), and
 [`voice_cujs.md`](voice_cujs.md).
