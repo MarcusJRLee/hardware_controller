@@ -112,6 +112,9 @@ failure path.
 - Deliver refined text once, or deterministic Edited text once after provider
   failure, invalid output, or a three-second post-release deadline when target
   ownership remains valid.
+- Require an empty captured caret and revalidate target process, secure status,
+  focused element, and expected caret before every Local AI mutation. Preserve
+  the captured delivery route; never fall through to a replacement adapter.
 - Store local audio plus distinct Raw, Edited, Formatted, and Delivered stages
   for later History slices; keep current-session copy actions separate.
 
@@ -175,7 +178,8 @@ Given a focused editable field and a ready selected provider:
 - formatted structure is preserved only for a target that safely supports it;
 - provider absence, digest drift, malformed output, overload, or timeout inserts
   deterministic Edited text once if the original target remains valid;
-- cancellation, focus change, or caret change discards late model output;
+- cancellation, process change, secure-status change, focus change, or caret
+  change discards late model output and stores a typed delivery reason;
 - raw and refined recovery controls remain distinct.
 
 ### Dictation handoff

@@ -245,6 +245,13 @@ the fallback. **Copy Raw** and **Copy Refined** remain separate recovery actions
 when their respective text exists. Cancellation, focus change, or caret change
 discards late model output.
 
+Local AI requires an empty text cursor when capture begins. If the target
+application, secure status, focused field, or cursor changes before delivery,
+automatic insertion stops without switching to another delivery method. The
+audio and final text remain in local History with the reason, and Controller's
+copy actions remain available. History re-delivery is added with the M6 History
+interface; it will always be an explicit action that creates a new result.
+
 ## Configure keyboard shortcuts
 
 Choose **Keyboard Shortcut**, then **Record**, and press the desired chord.

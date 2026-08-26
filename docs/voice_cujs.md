@@ -158,6 +158,15 @@ begins, automatic insertion is withheld. Capture and local finalization finish,
 History records the reason, and the user can copy or explicitly retry. The app
 never submits the target or types into the replacement field.
 
+**Current evidence:** Local AI captures an empty selected range and preserves
+the target's delivery route. Delivery rechecks process, secure status, focused
+element, and expected caret before each mutation; a failed lease performs no
+later mutation. The copyable Formatted/Edited result, audio, human-readable
+failure, and stable typed reason remain in the stored session. Deterministic
+policy, route-preservation, per-chunk writer, controller, SQLite migration, and
+database-reopen tests cover this guard. M6 adds explicit re-delivery as a new
+result linked to the immutable session.
+
 ### M6 — Browse and reuse History
 
 The user searches Raw, Formatted, Delivered, or corrected text; opens a result;

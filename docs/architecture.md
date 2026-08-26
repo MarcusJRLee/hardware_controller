@@ -235,8 +235,9 @@ Current executors:
   After delivery, the controller atomically finalizes one CAF and commits Raw,
   Edited, Formatted, and Delivered text plus replayable spoken-edit evidence,
   the versioned structured document, and model evidence to an actor-owned
-  system SQLite store. Existing databases gain both nullable evidence columns
-  without rewriting earlier rows.
+  system SQLite store. Existing databases gain nullable structured-document,
+  spoken-edit, and typed delivery-failure evidence columns without rewriting
+  earlier rows.
   Cancellation removes its owned artifact. History presentation, timed spans,
   retention, reconciliation, and user deletion remain later Voice slices.
 
@@ -288,6 +289,16 @@ remain ordinary transcript text. The model receives only the resulting Edited
 text. If all Edited text is removed, the session completes without generation
 or insertion while retaining its Raw evidence. Dictionary replacements then
 produce the final Edited text.
+
+Local AI derives two views from one captured target. Recognition receives a
+final-only view so provisional text cannot mutate the field. Final delivery
+retains the captured native, web, or terminal route plus an empty-caret lease.
+Before every mutation, Accessibility classifies process replacement, secure
+status, and focused-element replacement; the writer separately proves the
+expected caret. A failed lease cannot fall through to another delivery adapter.
+History stores its stable typed reason while the current-session Raw and
+Formatted/Edited copy paths remain explicit. M6 owns user-requested re-delivery
+as a new result.
 See [`decisions/0020_local_ai_dictation.md`](decisions/0020_local_ai_dictation.md)
 and
 [`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md).
@@ -513,16 +524,17 @@ keyboard event stream.
 - Malformed report: drop it, count it, and retain prior pressed state.
 - Known executor unavailability: per-Action permission preflight prevents only
   the affected Action from becoming active.
-- Dictation target failure: reject missing/secure fields at begin; if focus,
-  caret ownership, or selected-text insertion changes later, cancel automatic
-  delivery, retain final text in memory, and expose explicit copy recovery.
+- Dictation target failure: reject missing, selected, or secure fields at begin;
+  if process, secure status, focused element, caret ownership, or selected-text
+  insertion changes later, cancel automatic delivery, retain final text, store
+  the typed reason for Local AI, and expose explicit copy recovery.
 - Buffered event delivery failure: do not replay through Accessibility or the
   pasteboard; retain final text for explicit recovery.
 - Recognition failure: publish locale, asset, permission, audio, conversion, or
   recognition failure without persisting audio or partial text.
 - Local AI provider failure: distinguish provider absence, missing model,
   digest drift, timeout, overload, malformed output, validation rejection, and
-  delivery failure. Deliver raw text once only when target revalidation passes;
+  delivery failure. Deliver Edited text once only when target revalidation passes;
   discard late output after cancellation or timeout.
 - App-local microphone unavailable: retain the saved UID, use the current
   system default, and restore the saved Device automatically after reconnect.

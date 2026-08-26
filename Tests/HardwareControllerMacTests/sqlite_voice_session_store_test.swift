@@ -62,6 +62,7 @@ struct SQLiteVoiceSessionStoreTest {
     )
     #expect(item.formattedDocument == formattedDocument)
     #expect(item.document.spokenEdits == spokenEdits)
+    #expect(item.document.deliveryFailureReason == nil)
     #expect(
       try VoiceSpokenEditReplayer().replay(spokenEdits)
         == item.editedText
@@ -126,6 +127,69 @@ struct SQLiteVoiceSessionStoreTest {
     #expect(item.rawText == "raw")
     #expect(item.formattedDocument == nil)
     #expect(item.document.spokenEdits == nil)
+    #expect(item.document.deliveryFailureReason == nil)
+  }
+
+  @Test
+  func typedOwnershipFailureSurvivesDatabaseReopen() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_ownership_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let sessionID = UUID()
+    let first = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    first.begin(
+      sessionID: sessionID,
+      startedAt: Date(timeIntervalSince1970: 1_000)
+    )
+    try await first.complete(
+      VoiceSessionDocument(
+        id: sessionID,
+        startedAt: Date(timeIntervalSince1970: 1_000),
+        endedAt: Date(timeIntervalSince1970: 1_001),
+        rawText: "Keep this",
+        editedText: "Keep this",
+        formattedText: "Keep this.",
+        deliveredText: "",
+        targetApplicationName: "Notes",
+        deliveryOutcome: .failed,
+        deliveryFailure: "The target process changed.",
+        deliveryFailureReason: .processChanged
+      )
+    )
+
+    let reopened = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory
+    )
+    let item = try #require(
+      try await reopened.recentSessions(limit: 1).first
+    )
+
+    #expect(item.document.deliveryFailureReason == .processChanged)
+  }
+
+  @Test
+  func typedOwnershipFailureCannotContradictDeliveryEvidence() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_bad_ownership_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let document = VoiceSessionDocument(
+      id: UUID(),
+      startedAt: Date(timeIntervalSince1970: 1_000),
+      endedAt: Date(timeIntervalSince1970: 1_001),
+      rawText: "Keep this",
+      editedText: "Keep this",
+      formattedText: "Keep this.",
+      deliveredText: "Keep this.",
+      targetApplicationName: "Notes",
+      deliveryOutcome: .inserted,
+      deliveryFailureReason: .processChanged
+    )
+
+    await #expect(throws: VoiceSessionHistoryError.self) {
+      try await history.complete(document)
+    }
+    #expect(try await history.recentSessions(limit: 1).isEmpty)
   }
 
   @Test

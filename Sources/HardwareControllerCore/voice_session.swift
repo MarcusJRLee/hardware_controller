@@ -11,6 +11,42 @@ public enum VoiceSessionDeliveryOutcome:
   case notAttempted
 }
 
+public enum VoiceSessionDeliveryFailureReason:
+  String,
+  Codable,
+  Equatable,
+  Sendable
+{
+  case focusChanged
+  case processChanged
+  case secureStatusChanged
+  case caretChanged
+  case insertionRejected
+
+  public init?(_ failure: TranscriptionFailure) {
+    switch failure {
+    case .focusChanged:
+      self = .focusChanged
+    case .processChanged:
+      self = .processChanged
+    case .secureTextField:
+      self = .secureStatusChanged
+    case .caretChanged:
+      self = .caretChanged
+    case .insertionFailed:
+      self = .insertionRejected
+    case .microphonePermissionDenied,
+      .speechRecognitionPermissionDenied,
+      .localeUnsupported,
+      .modelUnavailable,
+      .noFocusedTextField,
+      .audioUnavailable,
+      .recognitionFailed:
+      return nil
+    }
+  }
+}
+
 /// Preserves each final text stage without conflating model output and delivery.
 public struct VoiceSessionDocument: Codable, Equatable, Sendable {
   public let id: UUID
@@ -23,6 +59,7 @@ public struct VoiceSessionDocument: Codable, Equatable, Sendable {
   public let targetApplicationName: String?
   public let deliveryOutcome: VoiceSessionDeliveryOutcome
   public let deliveryFailure: String?
+  public let deliveryFailureReason: VoiceSessionDeliveryFailureReason?
   public let formattedDocument: VoiceFormattedDocument?
   public let spokenEdits: VoiceSpokenEditResult?
 
@@ -37,6 +74,7 @@ public struct VoiceSessionDocument: Codable, Equatable, Sendable {
     targetApplicationName: String?,
     deliveryOutcome: VoiceSessionDeliveryOutcome,
     deliveryFailure: String? = nil,
+    deliveryFailureReason: VoiceSessionDeliveryFailureReason? = nil,
     formattedDocument: VoiceFormattedDocument? = nil,
     spokenEdits: VoiceSpokenEditResult? = nil
   ) {
@@ -50,6 +88,7 @@ public struct VoiceSessionDocument: Codable, Equatable, Sendable {
     self.targetApplicationName = targetApplicationName
     self.deliveryOutcome = deliveryOutcome
     self.deliveryFailure = deliveryFailure
+    self.deliveryFailureReason = deliveryFailureReason
     self.formattedDocument = formattedDocument
     self.spokenEdits = spokenEdits
   }

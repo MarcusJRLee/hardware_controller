@@ -314,12 +314,23 @@ public actor LocalAIDictationController {
       )
       return
     }
+    let deliveryTarget: FocusedTextTarget
+    do {
+      deliveryTarget = try capturedTarget.guardedDeliveryCopy()
+    } catch {
+      publishFailure(
+        .transcription(transcriptionFailure(from: error)),
+        sessionID: UUID(),
+        targetApplicationName: capturedTarget.applicationName
+      )
+      return
+    }
 
     let sessionID = UUID()
     let startedAt = now()
     sessionStartedAt = startedAt
     history.begin(sessionID: sessionID, startedAt: startedAt)
-    target = capturedTarget
+    target = deliveryTarget
     preparedTargeter.prepare(capturedTarget.finalOnlyCopy())
     state = LocalAIDictationSnapshot(
       sessionID: sessionID,
@@ -821,6 +832,7 @@ public actor LocalAIDictationController {
       targetApplicationName: state.targetApplicationName,
       deliveryOutcome: .failed,
       deliveryFailure: failure.localizedDescription,
+      deliveryFailureReason: VoiceSessionDeliveryFailureReason(failure),
       formattedDocument: activeFormattedDocument,
       spokenEdits: spokenEdits
     )
@@ -938,6 +950,7 @@ public actor LocalAIDictationController {
     targetApplicationName: String?,
     deliveryOutcome: VoiceSessionDeliveryOutcome,
     deliveryFailure: String? = nil,
+    deliveryFailureReason: VoiceSessionDeliveryFailureReason? = nil,
     formattedDocument: VoiceFormattedDocument? = nil,
     spokenEdits: VoiceSpokenEditResult? = nil
   ) async {
@@ -952,6 +965,7 @@ public actor LocalAIDictationController {
       targetApplicationName: targetApplicationName,
       deliveryOutcome: deliveryOutcome,
       deliveryFailure: deliveryFailure,
+      deliveryFailureReason: deliveryFailureReason,
       formattedDocument: formattedDocument,
       spokenEdits: spokenEdits
     )
@@ -1028,6 +1042,12 @@ private final class PreparedLocalAITargeter:
 
   func isStillFocused(_ target: FocusedTextTarget) -> Bool {
     underlying.isStillFocused(target)
+  }
+
+  func ownershipFailure(
+    for target: FocusedTextTarget
+  ) -> FocusedTextTargetOwnershipFailure? {
+    underlying.ownershipFailure(for: target)
   }
 }
 

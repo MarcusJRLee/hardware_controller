@@ -18,6 +18,7 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 | Voice M2 trigger | One opt-in machine-wide exact chord starts Local AI Dictation immediately, supports hold or double-press latch, finishes once, cancels on interruption, and reports reservation conflicts. | [`voice_cujs.md`](voice_cujs.md#m2--latch-a-long-prompt) |
 | Voice M3 formatting | Five versioned Styles produce validated evidence-backed paragraph/list blocks; one renderer preserves multiline structure or safely flattens it, and Verbatim skips the model. | [`voice_cujs.md`](voice_cujs.md#m3--format-for-purpose) |
 | Voice M4 spoken edits | Exact backtrack, paragraph, numbered-list, and literal commands produce persisted replayable operations before formatting; ambiguous or inapplicable phrases remain text. | [`voice_cujs.md`](voice_cujs.md#m4--backtrack-explicitly) |
+| Voice M5 ownership guard | Local AI preserves its captured route, rejects nonempty or changed carets, distinguishes process/secure/focus/caret invalidation, withholds later mutations, and stores a typed reason. Explicit History re-delivery remains in M6. | [`voice_cujs.md`](voice_cujs.md#m5--preserve-ownership-when-the-target-changes) |
 | Model recommendation | Qwen 3.5 4B is digest-pinned from the fixed evaluation corpus. | [`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md) |
 | Profiles | Transactional named Profiles with independent per-Device setups and active-Action cleanup. | [`decisions/0014_multi_profile_device_configuration.md`](decisions/0014_multi_profile_device_configuration.md) |
 | Application | Controller, Profiles, and General in one native foreground window with Dock and menu-bar presence. | [`ux_spec.md`](ux_spec.md) |
@@ -26,8 +27,8 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 
 ## Approved next program
 
-The local Voice expansion is accepted and macOS M1–M4 are implemented across
-the current stacked branches. macOS and iOS are the active
+The local Voice expansion is accepted; macOS M1–M4 and the M5 ownership guard
+are implemented across the current stacked branches. macOS and iOS are the active
 roadmap; Android, Windows, and Linux remain architectural line-of-sight
 platforms; web and mobile web are deferred. The acceptance and execution
 authorities are:
