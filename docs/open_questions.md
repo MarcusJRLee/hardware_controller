@@ -56,7 +56,7 @@ Current behavior remains unchanged until the accepted roadmap ships.
 | Delivery | Start with M1 and proceed CUJ-by-CUJ through focused worktree PRs into `dev`; keep `main` gated on final user verification. |
 | History | Retain transcripts until deletion; cap successful audio by accepted age, byte, and artifact-count defaults; retain recoverable partials for 24 hours. |
 | Local-only | Permit explicit verified Model-package downloads containing no Voice data; exclude Voice data from app sync/backup where supported; add no accounts, telemetry, cloud inference, or remote storage. |
-| Models | Use separate ASR and optional formatting stages with deterministic edits, validation, and Raw fallback; delegate provider/package choice to measured evidence. |
+| Models | Use separate ASR and optional formatting stages with deterministic edits, validation, and Raw/Edited fallback; delegate provider/package choice to measured evidence. |
 | iOS | Ship a containing app and full custom keyboard; the app owns capture/inference/History and the keyboard controls and inserts confirmed results. |
 | Portability | Own portable behavior in Rust, allow measured native kernels behind it, and keep Android/Windows/Linux in line of sight. Defer web/mobile web. |
 | Deployment floors | Preserve macOS 15 for the spike and choose iOS/lowest-device support from benchmarks. |

@@ -848,7 +848,7 @@ private struct LocalAITranscriptionStatusView: View {
         .buttonStyle(.bordered)
       }
       if !snapshot.refinedText.isEmpty {
-        Button("Copy Refined") {
+        Button(snapshot.fallbackReason == nil ? "Copy Refined" : "Copy Edited") {
           model.copyLocalAITranscript(refined: true)
         }
         .buttonStyle(.bordered)
@@ -864,7 +864,7 @@ private struct LocalAITranscriptionStatusView: View {
     }
     if let fallback = snapshot.fallbackReason {
       return
-        "The raw transcript was inserted because refinement was unavailable: \(fallback.recoveryMessage)"
+        "The deterministic Edited transcript was inserted because refinement was unavailable: \(fallback.recoveryMessage)"
     }
     if !snapshot.volatileText.isEmpty {
       return snapshot.volatileText

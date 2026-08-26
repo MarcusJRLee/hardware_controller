@@ -134,10 +134,13 @@ Local AI Dictation removes fillers, resolves clear self-corrections, corrects
 supported recognition errors, and applies the selected Natural, Casual
 Message, Formal, Technical, or Verbatim Style. It creates validated paragraph
 and list blocks, then preserves or flattens structure for the target. It
-validates protected
-numbers, URLs, email addresses, paths, code-like tokens, quotations, and
-dictionary terms. A provider error, invalid output, or three-second deadline
-delivers the raw transcript once when the captured target is still safe.
+also applies exact spoken commands such as **scratch that**, **delete that
+sentence**, **new paragraph**, and numbered-list boundaries before formatting;
+say **literal** immediately before a command phrase to keep the phrase. It
+validates protected numbers, URLs, email addresses, paths, code-like tokens,
+quotations, and dictionary terms. A provider error, invalid output, or
+three-second deadline delivers the deterministic Edited transcript once when
+the captured target is still safe.
 
 ### Apple On-Device
 
@@ -176,9 +179,9 @@ but preserves a model that another local Ollama client already had running.
 ## Privacy and safety
 
 - Local Dictation remains memory-only. Local AI Dictation records one local CAF
-  plus Raw, Edited, Formatted, and Delivered text under the app's Application
-  Support directory. The M1 branch has no History UI or retention enforcement
-  yet; those remain gated roadmap work, so do not use it for sensitive capture.
+  plus Raw, replayable spoken edits, Edited, Formatted, and Delivered text under
+  the app's Application Support directory. History UI and retention enforcement
+  are not implemented yet, so do not use it for sensitive capture.
 - Nearby context, prompts, and model payloads remain memory-only. Speech content
   is never written to logs.
 - Apple speech recognition is required to run on-device.

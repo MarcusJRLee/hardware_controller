@@ -1,6 +1,6 @@
 # 0029: Local Voice platform expansion
 
-- **Status:** Accepted; macOS M1–M2 implemented
+- **Status:** Accepted; macOS M1–M4 implemented
 - **Date:** 2026-08-25
 - **Amends:**
   [`0001_native_macos_stack.md`](0001_native_macos_stack.md),
@@ -158,3 +158,16 @@ validated output into evidence-backed paragraph/list blocks, renders structure
 only where the captured target supports it, and stores the encoded document in
 a nullable SQLite column. Earlier schema-4 preferences default to Natural and
 earlier Voice databases retain their rows with no structured document.
+
+M4 adds a deterministic Swift spoken-edit engine before formatting. Exact
+backtrack, sentence-delete, paragraph, numbered-list, and literal-escape phrases
+become typed operations with source and affected-output UTF-8 evidence. One
+strict replayer validates the revision and canonical trace before SQLite stores
+or returns it from a nullable column. Raw is the trace source, so a Dictionary
+replacement cannot synthesize a command; exact replacements run afterward to
+produce Edited text. Provider failure delivers Edited text, while an empty
+Edited result skips generation and insertion without discarding the session.
+Ambiguous, near-match, and structurally inapplicable commands remain literal.
+This amends the earlier Raw-only fallback wording: Raw remains recoverable, but
+the one automatic fallback delivery uses deterministic Edited text whenever
+that stage exists.

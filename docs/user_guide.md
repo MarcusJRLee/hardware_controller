@@ -160,8 +160,9 @@ Open **General → Local AI Dictation** before assigning the Action:
 
 1. Choose **Apple On-Device** or **Ollama**.
 2. Choose **Natural**, **Casual Message**, **Formal**, **Technical**, or
-   **Verbatim** under **Style**. Verbatim uses recognition and exact Dictionary
-   replacements but skips the generative model. Casual Message prefers
+   **Verbatim** under **Style**. Verbatim uses recognition, explicit spoken
+   edits, and exact Dictionary replacements but skips the generative model.
+   Casual Message prefers
    lowercase sentence starts while preserving required proper-name and
    Dictionary capitalization.
 3. For Ollama, start the local service and install the recommended model:
@@ -207,11 +208,28 @@ speech, recognized words appear only in the temporary HUD. After release, the
 app:
 
 1. finalizes on-device Apple speech recognition;
-2. applies exact dictionary replacements;
-3. corrects and formats text through the selected local provider, unless Style
+2. applies exact spoken-edit commands to Raw text;
+3. applies exact Dictionary replacements without treating replacement output as
+   a command;
+4. corrects and formats text through the selected local provider, unless Style
    is Verbatim;
-4. validates meaning and protected terms and creates paragraph/list blocks;
-5. renders those blocks for the captured target and inserts one result.
+5. validates meaning and protected terms and creates paragraph/list blocks;
+6. renders those blocks for the captured target and inserts one result.
+
+Spoken commands are deliberately exact:
+
+| Say | Result |
+| --- | --- |
+| `scratch that` | Remove only the current clause since its last stable boundary. |
+| `delete that sentence` | Remove only the current sentence. |
+| `new paragraph` | Insert a paragraph break, or begin the next item in an active numbered list. |
+| `start a numbered list` | Begin item 1. |
+| `end list` | Finish a nonempty numbered list. |
+| `literal scratch that` | Keep `scratch that` as ordinary text. The same escape works for every exact command phrase. |
+
+A near-match or a command that cannot safely act remains literal text. Raw text
+is retained separately from the replayable Edited result. If a command removes
+the entire thought, the session is retained without generation or insertion.
 
 Formatting structure is automatic. Clear lists or steps become validated
 bullet or numbered-list blocks. Safe multiline targets retain that structure;
@@ -219,9 +237,10 @@ single-line and compatibility targets receive a deterministic plain line.
 There is no Clean/Structured setting.
 
 Model warm-up begins while you speak. If warm-up plus generation does not
-finish within three seconds after the final raw transcript, or the provider is
-missing, changed, overloaded, or returns invalid text, the app inserts the raw
-transcript once when the original target is still safe. Controller explains
+finish within three seconds after the final Raw transcript, or the provider is
+missing, changed, overloaded, or returns invalid text, the app inserts the
+deterministic Edited transcript once when the original target is still safe.
+Controller explains
 the fallback. **Copy Raw** and **Copy Refined** remain separate recovery actions
 when their respective text exists. Cancellation, focus change, or caret change
 discards late model output.
@@ -330,8 +349,9 @@ current system default and resumes the saved Device after reconnect.
   result; automatic insertion has not occurred until Delivering.
 - **Transcription needs attention**: the status card explains the failure and
   offers **Copy Text** when final text is recoverable.
-- **Local AI Dictation complete**: refined text or a labeled raw fallback was
-  inserted once. Raw and refined recovery remain distinct.
+- **Local AI Dictation complete**: refined text or a labeled deterministic
+  Edited fallback was inserted once. Raw and Edited/refined recovery remain
+  distinct.
 
 A transcription failure appears once in its dedicated card. It does not add a
 second generic Action failure card or move the Controller layout.
@@ -438,13 +458,13 @@ through **Copy Text**. If recovery does not appear, quit and reopen the app.
 - If the digest changed, reselect the model only after deciding to trust the
   new local weights. The app never accepts drift silently.
 
-### Local AI inserted the raw transcript
+### Local AI inserted the Edited transcript
 
 Controller states the provider, timeout, overload, or validation reason. The
-raw fallback is intentional and is delivered only once. Check provider status,
-try a shorter utterance, or disable nearby context if a custom model copied
-unrelated target text. **Copy Raw** remains available for the current recovery
-state.
+deterministic fallback is intentional and is delivered only once. Check
+provider status, try a shorter utterance, or disable nearby context if a custom
+model copied unrelated target text. **Copy Edited** preserves the inserted
+fallback; **Copy Raw** remains independently available.
 
 ### The app says Controller unavailable
 

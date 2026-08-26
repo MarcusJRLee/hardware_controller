@@ -62,13 +62,23 @@ actor SQLiteVoiceSessionStore {
           delivery_outcome TEXT NOT NULL,
           delivery_failure TEXT,
           audio_filename TEXT,
-          formatted_document_json TEXT
+          formatted_document_json TEXT,
+          spoken_edits_json TEXT
         );
         CREATE INDEX IF NOT EXISTS voice_sessions_ended_at
         ON voice_sessions(ended_at DESC);
         """
     )
-    try Self.addFormattedDocumentColumnIfNeeded(opened)
+    try Self.addColumnIfNeeded(
+      opened,
+      name: "formatted_document_json",
+      definition: "TEXT"
+    )
+    try Self.addColumnIfNeeded(
+      opened,
+      name: "spoken_edits_json",
+      definition: "TEXT"
+    )
   }
 
   func insert(
@@ -82,8 +92,8 @@ actor SQLiteVoiceSessionStore {
           id, started_at, ended_at, raw_text, edited_text,
           formatted_text, delivered_text, target_application_name,
           delivery_outcome, delivery_failure, audio_filename,
-          formatted_document_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+          formatted_document_json, spoken_edits_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
         """
       var statement: OpaquePointer?
       guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
@@ -110,6 +120,10 @@ actor SQLiteVoiceSessionStore {
         expectedFormattedText: document.formattedText
       )
       try bind(formattedDocumentJSON, to: 12, in: statement)
+      let spokenEditsJSON = try encodedSpokenEdits(
+        document.spokenEdits
+      )
+      try bind(spokenEditsJSON, to: 13, in: statement)
       guard sqlite3_step(statement) == SQLITE_DONE else {
         throw storageFailure()
       }
@@ -128,7 +142,7 @@ actor SQLiteVoiceSessionStore {
       SELECT id, started_at, ended_at, raw_text, edited_text,
         formatted_text, delivered_text, target_application_name,
         delivery_outcome, delivery_failure, audio_filename,
-        formatted_document_json
+        formatted_document_json, spoken_edits_json
       FROM voice_sessions
       ORDER BY ended_at DESC
       LIMIT ?;
@@ -176,6 +190,9 @@ actor SQLiteVoiceSessionStore {
           from: optionalText(statement, column: 11),
           expectedRawText: text(statement, column: 3),
           expectedFormattedText: text(statement, column: 5)
+        ),
+        spokenEdits: try spokenEdits(
+          from: optionalText(statement, column: 12)
         )
       )
       let audioFilename = optionalText(statement, column: 10)
@@ -307,8 +324,48 @@ actor SQLiteVoiceSessionStore {
     }
   }
 
-  private static func addFormattedDocumentColumnIfNeeded(
-    _ database: OpaquePointer
+  private func spokenEdits(
+    from json: String?
+  ) throws -> VoiceSpokenEditResult? {
+    guard let json else {
+      return nil
+    }
+    do {
+      let result = try JSONDecoder().decode(
+        VoiceSpokenEditResult.self,
+        from: Data(json.utf8)
+      )
+      try VoiceSpokenEditReplayer().validate(result)
+      return result
+    } catch {
+      throw VoiceSessionHistoryError.storageUnavailable(
+        "Voice History contains invalid spoken-edit evidence."
+      )
+    }
+  }
+
+  private func encodedSpokenEdits(
+    _ result: VoiceSpokenEditResult?
+  ) throws -> String? {
+    guard let result else {
+      return nil
+    }
+    do {
+      try VoiceSpokenEditReplayer().validate(result)
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.sortedKeys]
+      return String(decoding: try encoder.encode(result), as: UTF8.self)
+    } catch {
+      throw VoiceSessionHistoryError.storageUnavailable(
+        "Voice History could not store invalid spoken-edit evidence."
+      )
+    }
+  }
+
+  private static func addColumnIfNeeded(
+    _ database: OpaquePointer,
+    name expectedName: String,
+    definition: String
   ) throws {
     var statement: OpaquePointer?
     guard
@@ -330,14 +387,13 @@ actor SQLiteVoiceSessionStore {
       guard let name = sqlite3_column_text(statement, 1) else {
         continue
       }
-      if String(cString: name) == "formatted_document_json" {
+      if String(cString: name) == expectedName {
         return
       }
     }
     try execute(
       database,
-      sql:
-        "ALTER TABLE voice_sessions ADD COLUMN formatted_document_json TEXT;"
+      sql: "ALTER TABLE voice_sessions ADD COLUMN \(expectedName) \(definition);"
     )
   }
 
