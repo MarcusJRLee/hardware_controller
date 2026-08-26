@@ -45,6 +45,8 @@ public struct VoiceSessionHistoryItem:
   public let audioDurationMilliseconds: Int64?
   public let audioExpiredAt: Date?
   public let audioExpirationReason: VoiceHistoryAudioExpirationReason?
+  public let recoveryKind: VoiceHistoryRecoveryKind?
+  public let recoveredAt: Date?
   public let isPinned: Bool
   public let results: [VoiceHistoryResult]
 
@@ -54,6 +56,8 @@ public struct VoiceSessionHistoryItem:
     audioDurationMilliseconds: Int64? = nil,
     audioExpiredAt: Date? = nil,
     audioExpirationReason: VoiceHistoryAudioExpirationReason? = nil,
+    recoveryKind: VoiceHistoryRecoveryKind? = nil,
+    recoveredAt: Date? = nil,
     isPinned: Bool = false,
     results: [VoiceHistoryResult] = []
   ) {
@@ -62,6 +66,8 @@ public struct VoiceSessionHistoryItem:
     self.audioDurationMilliseconds = audioDurationMilliseconds
     self.audioExpiredAt = audioExpiredAt
     self.audioExpirationReason = audioExpirationReason
+    self.recoveryKind = recoveryKind
+    self.recoveredAt = recoveredAt
     self.isPinned = isPinned
     self.results = results
   }
@@ -101,6 +107,29 @@ public struct VoiceHistoryRetentionReport: Equatable, Sendable {
   ) {
     self.completedAt = completedAt
     self.expired = expired
+    self.issues = issues
+  }
+}
+
+public enum VoiceHistoryRecoveryRuntimeIssue: Equatable, Sendable {
+  case unreadableArtifact(filename: String)
+  case actionFailed(filename: String)
+  case invalidSessionRecord
+  case databaseRebuilt(preservedFilename: String)
+}
+
+public struct VoiceHistoryRecoveryReport: Equatable, Sendable {
+  public let completedAt: Date
+  public let completedActions: [VoiceHistoryRecoveryAction]
+  public let issues: [VoiceHistoryRecoveryRuntimeIssue]
+
+  public init(
+    completedAt: Date,
+    completedActions: [VoiceHistoryRecoveryAction],
+    issues: [VoiceHistoryRecoveryRuntimeIssue]
+  ) {
+    self.completedAt = completedAt
+    self.completedActions = completedActions
     self.issues = issues
   }
 }
@@ -149,10 +178,16 @@ public protocol VoiceSessionHistoryRetentionManaging: Sendable {
   func latestRetentionReport() -> VoiceHistoryRetentionReport?
 }
 
+public protocol VoiceSessionHistoryRecoveryManaging: Sendable {
+  /// Returns the latest startup-reconciliation evidence without rerunning it.
+  func latestRecoveryReport() -> VoiceHistoryRecoveryReport?
+}
+
 public protocol VoiceSessionHistoryManaging:
   VoiceSessionHistoryRecording,
   VoiceSessionHistoryAccessing,
-  VoiceSessionHistoryRetentionManaging
+  VoiceSessionHistoryRetentionManaging,
+  VoiceSessionHistoryRecoveryManaging
 {}
 
 public struct DiscardingVoiceSessionHistory:
@@ -227,6 +262,10 @@ public struct UnavailableVoiceSessionHistory:
   public func latestRetentionReport() -> VoiceHistoryRetentionReport? {
     nil
   }
+
+  public func latestRecoveryReport() -> VoiceHistoryRecoveryReport? {
+    nil
+  }
 }
 
 public final class SQLiteVoiceSessionHistory:
@@ -235,8 +274,12 @@ public final class SQLiteVoiceSessionHistory:
 {
   private struct ActiveRecording {
     let sessionID: UUID
-    let recorder: VoiceAudioArtifactRecorder
+    let recorder: any VoiceAudioArtifactRecording
   }
+
+  typealias RecorderFactory =
+    @Sendable (UUID, URL) ->
+    any VoiceAudioArtifactRecording
 
   private let state = Mutex<ActiveRecording?>(nil)
   struct RetentionState {
@@ -262,9 +305,12 @@ public final class SQLiteVoiceSessionHistory:
   }
 
   private let retentionState: Mutex<RetentionState>
+  private let recoveryState = Mutex<VoiceHistoryRecoveryReport?>(nil)
   private let store: SQLiteVoiceSessionStore
   private let retentionStore: SQLiteVoiceHistoryRetentionStore
+  private let reconciler: VoiceHistoryReconciler
   private let audioDirectory: URL
+  private let recorderFactory: RecorderFactory
 
   public convenience init(rootDirectory: URL) throws {
     try self.init(
@@ -273,9 +319,26 @@ public final class SQLiteVoiceSessionHistory:
     )
   }
 
-  public init(
+  public convenience init(
     rootDirectory: URL,
     retentionSettings: VoiceHistoryRetentionSettings
+  ) throws {
+    try self.init(
+      rootDirectory: rootDirectory,
+      retentionSettings: retentionSettings,
+      recorderFactory: { sessionID, audioDirectory in
+        VoiceAudioArtifactRecorder(
+          sessionID: sessionID,
+          audioDirectory: audioDirectory
+        )
+      }
+    )
+  }
+
+  init(
+    rootDirectory: URL,
+    retentionSettings: VoiceHistoryRetentionSettings,
+    recorderFactory: @escaping RecorderFactory
   ) throws {
     let retentionSettings = try retentionSettings.validated()
     retentionState = Mutex(
@@ -307,6 +370,9 @@ public final class SQLiteVoiceSessionHistory:
       )
       self.audioDirectory = audioDirectory
       let databaseURL = rootDirectory.appending(path: "history.sqlite3")
+      let preservedDatabase = try VoiceHistoryDatabaseRecovery.prepare(
+        databaseURL: databaseURL
+      )
       store = try SQLiteVoiceSessionStore(
         databaseURL: databaseURL,
         audioDirectory: audioDirectory
@@ -315,6 +381,24 @@ public final class SQLiteVoiceSessionHistory:
         databaseURL: databaseURL,
         audioDirectory: audioDirectory
       )
+      reconciler = VoiceHistoryReconciler(
+        store: store,
+        audioDirectory: audioDirectory
+      )
+      self.recorderFactory = recorderFactory
+      if let preservedDatabase {
+        recoveryState.withLock { report in
+          report = VoiceHistoryRecoveryReport(
+            completedAt: Date(),
+            completedActions: [],
+            issues: [
+              .databaseRebuilt(
+                preservedFilename: preservedDatabase
+              )
+            ]
+          )
+        }
+      }
     } catch let failure as VoiceSessionHistoryError {
       throw failure
     } catch {
@@ -338,10 +422,7 @@ public final class SQLiteVoiceSessionHistory:
   }
 
   public func begin(sessionID: UUID, startedAt: Date) {
-    let recorder = VoiceAudioArtifactRecorder(
-      sessionID: sessionID,
-      audioDirectory: audioDirectory
-    )
+    let recorder = recorderFactory(sessionID, audioDirectory)
     let replaced = state.withLock { current in
       let replaced = current
       current = ActiveRecording(
@@ -359,21 +440,29 @@ public final class SQLiteVoiceSessionHistory:
   }
 
   public func complete(_ document: VoiceSessionDocument) async throws {
-    let recorder: VoiceAudioArtifactRecorder? = state.withLock { current in
+    let recorder: (any VoiceAudioArtifactRecording)? = state.withLock { current in
       guard current?.sessionID == document.id else {
         return nil
       }
       defer { current = nil }
       return current?.recorder
     }
-    let audioURL = try await recorder?.finishRetainingAudio()
+    let audioURL: URL?
+    do {
+      audioURL = try await recorder?.finishRetainingAudio()
+    } catch let audioFailure as VoiceSessionHistoryError {
+      try await store.insert(document, audioURL: nil)
+      invalidateRetention()
+      scheduleRetention()
+      throw audioFailure
+    }
     try await store.insert(document, audioURL: audioURL)
     invalidateRetention()
     scheduleRetention()
   }
 
   public func cancel(sessionID: UUID) async {
-    let recorder: VoiceAudioArtifactRecorder? = state.withLock { current in
+    let recorder: (any VoiceAudioArtifactRecording)? = state.withLock { current in
       guard current?.sessionID == sessionID else {
         return nil
       }
@@ -386,23 +475,29 @@ public final class SQLiteVoiceSessionHistory:
   public func recentSessions(
     limit: Int
   ) async throws -> [VoiceSessionHistoryItem] {
-    try await enforceAtStartupIfNeeded()
-    return try await store.recentSessions(limit: limit)
+    try await prepareAtStartupIfNeeded()
+    let sessions = try await store.recentSessions(limit: limit)
+    await recordInvalidSessionIssues()
+    return sessions
   }
 
   public func searchSessions(
     query: String,
     limit: Int
   ) async throws -> [VoiceSessionHistoryItem] {
-    try await enforceAtStartupIfNeeded()
-    return try await store.searchSessions(query: query, limit: limit)
+    try await prepareAtStartupIfNeeded()
+    let sessions = try await store.searchSessions(query: query, limit: limit)
+    await recordInvalidSessionIssues()
+    return sessions
   }
 
   public func session(id: UUID) async throws
     -> VoiceSessionHistoryItem?
   {
-    try await enforceAtStartupIfNeeded()
-    return try await store.session(id: id)
+    try await prepareAtStartupIfNeeded()
+    let session = try await store.session(id: id)
+    await recordInvalidSessionIssues()
+    return session
   }
 
   public func appendResult(_ result: VoiceHistoryResult) async throws {
@@ -460,6 +555,54 @@ public final class SQLiteVoiceSessionHistory:
 
   public func latestRetentionReport() -> VoiceHistoryRetentionReport? {
     retentionState.withLock(\.latestReport)
+  }
+
+  public func latestRecoveryReport() -> VoiceHistoryRecoveryReport? {
+    recoveryState.withLock { $0 }
+  }
+
+  private func prepareAtStartupIfNeeded() async throws {
+    try await reconcileAtStartupIfNeeded()
+    try await enforceAtStartupIfNeeded()
+  }
+
+  private func reconcileAtStartupIfNeeded() async throws {
+    if let report = try await reconciler.reconcileIfNeeded() {
+      recoveryState.withLock { existing in
+        let priorIssues = existing?.issues ?? []
+        existing = VoiceHistoryRecoveryReport(
+          completedAt: report.completedAt,
+          completedActions: report.completedActions,
+          issues: priorIssues
+            + report.issues.filter {
+              !priorIssues.contains($0)
+            }
+        )
+      }
+    }
+  }
+
+  private func recordInvalidSessionIssues() async {
+    guard await store.consumeInvalidSessionRecordCount() > 0 else {
+      return
+    }
+    recoveryState.withLock { report in
+      let existing =
+        report
+        ?? VoiceHistoryRecoveryReport(
+          completedAt: Date(),
+          completedActions: [],
+          issues: []
+        )
+      guard !existing.issues.contains(.invalidSessionRecord) else {
+        return
+      }
+      report = VoiceHistoryRecoveryReport(
+        completedAt: existing.completedAt,
+        completedActions: existing.completedActions,
+        issues: existing.issues + [.invalidSessionRecord]
+      )
+    }
   }
 
   private func enforceAtStartupIfNeeded() async throws {
@@ -522,6 +665,7 @@ public final class SQLiteVoiceSessionHistory:
     revision: UInt64,
     lowDiskReclaimBytes: Int64
   ) async throws -> VoiceHistoryRetentionReport {
+    try await reconcileAtStartupIfNeeded()
     let activeSessionIDs = state.withLock { active in
       active.map { Set([$0.sessionID]) } ?? []
     }

@@ -40,6 +40,7 @@ final class VoiceHistoryModel {
 
   @ObservationIgnored private let history: any VoiceSessionHistoryAccessing
   @ObservationIgnored private let retentionManager: (any VoiceSessionHistoryRetentionManaging)?
+  @ObservationIgnored private let recoveryManager: (any VoiceSessionHistoryRecoveryManaging)?
   @ObservationIgnored private let service: any VoiceHistoryServicing
   @ObservationIgnored private let exporter: any VoiceHistoryExporting
   @ObservationIgnored private let player: any VoiceHistoryAudioPlaying
@@ -50,11 +51,13 @@ final class VoiceHistoryModel {
     history: any VoiceSessionHistoryAccessing,
     service: any VoiceHistoryServicing,
     retentionManager: (any VoiceSessionHistoryRetentionManaging)? = nil,
+    recoveryManager: (any VoiceSessionHistoryRecoveryManaging)? = nil,
     exporter: any VoiceHistoryExporting = VoiceHistoryExporter(),
     player: (any VoiceHistoryAudioPlaying)? = nil
   ) {
     self.history = history
     self.retentionManager = retentionManager
+    self.recoveryManager = recoveryManager
     self.service = service
     self.exporter = exporter
     let playbackState = VoiceHistoryPlaybackState()
@@ -78,6 +81,7 @@ final class VoiceHistoryModel {
     }
     return selectedSession.results.first { $0.id == selectedResultID }
       ?? selectedSession.results.preferredReusableResult
+      ?? selectedSession.results.first
   }
 
   func load(query: String? = nil) async {
@@ -99,7 +103,11 @@ final class VoiceHistoryModel {
       }
       sessions = loadedSessions
       reconcileSelection()
-      if let report = retentionManager?.latestRetentionReport(),
+      if let report = recoveryManager?.latestRecoveryReport(),
+        !report.issues.isEmpty
+      {
+        errorMessage = recoveryIssueMessage(report.issues)
+      } else if let report = retentionManager?.latestRetentionReport(),
         !report.issues.isEmpty
       {
         errorMessage = retentionIssueMessage(report.issues)
@@ -123,6 +131,7 @@ final class VoiceHistoryModel {
     selectedResultID =
       selectedSession?.results
       .preferredReusableResult?.id
+      ?? selectedSession?.results.first?.id
     correctionDraft =
       selectedSession?.results
       .preferredReusableResult?.text ?? ""
@@ -331,6 +340,7 @@ final class VoiceHistoryModel {
         selectedResultID =
           selectedSession?.results
           .preferredReusableResult?.id
+          ?? selectedSession?.results.first?.id
       }
       return
     }
@@ -338,6 +348,7 @@ final class VoiceHistoryModel {
     selectedResultID =
       sessions.first?.results
       .preferredReusableResult?.id
+      ?? sessions.first?.results.first?.id
     correctionDraft =
       sessions.first?.results
       .preferredReusableResult?.text ?? ""
@@ -410,6 +421,29 @@ final class VoiceHistoryModel {
     }
     return "Voice History cleanup could not finish."
   }
+
+  private func recoveryIssueMessage(
+    _ issues: [VoiceHistoryRecoveryRuntimeIssue]
+  ) -> String {
+    if issues.contains(.invalidSessionRecord) {
+      return
+        "A damaged Voice History record was isolated. Other History remains available."
+    }
+    if issues.contains(where: {
+      if case .databaseRebuilt = $0 { true } else { false }
+    }) {
+      return
+        "A damaged Voice History database was preserved and clean local History was restored."
+    }
+    if issues.contains(where: {
+      if case .actionFailed = $0 { true } else { false }
+    }) {
+      return
+        "Voice History could not finish recovering some audio. It was preserved for the next launch."
+    }
+    return
+      "Unreadable recovery audio was preserved for up to 24 hours. Other History remains available."
+  }
 }
 
 /// Composes one query/action graph for the app window without sharing UI state.
@@ -449,7 +483,8 @@ struct VoiceHistoryPresentation {
         reformatter: reformatter,
         redeliverer: FocusedVoiceHistoryRedeliverer()
       ),
-      retentionManager: history
+      retentionManager: history,
+      recoveryManager: history
     )
   }
 
@@ -483,6 +518,7 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryManaging {
   init() {
     let firstID = UUID()
     let secondID = UUID()
+    let recoveredID = UUID()
     items = [
       Self.item(
         id: firstID,
@@ -502,6 +538,18 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryManaging {
         style: .casualMessage,
         pinned: false,
         audioExpirationReason: .byteLimit
+      ),
+      Self.item(
+        id: recoveredID,
+        endedAt: Date().addingTimeInterval(-7_400),
+        target: nil,
+        raw: "",
+        formatted: "",
+        style: .natural,
+        pinned: false,
+        audioExpirationReason: .recoveryLimit,
+        recoveryKind: .interruptedCapture,
+        deliveryOutcome: .notAttempted
       ),
     ]
   }
@@ -544,6 +592,8 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryManaging {
       audioDurationMilliseconds: item.audioDurationMilliseconds,
       audioExpiredAt: item.audioExpiredAt,
       audioExpirationReason: item.audioExpirationReason,
+      recoveryKind: item.recoveryKind,
+      recoveredAt: item.recoveredAt,
       isPinned: item.isPinned,
       results: item.results + [result]
     )
@@ -560,6 +610,8 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryManaging {
       audioDurationMilliseconds: item.audioDurationMilliseconds,
       audioExpiredAt: item.audioExpiredAt,
       audioExpirationReason: item.audioExpirationReason,
+      recoveryKind: item.recoveryKind,
+      recoveredAt: item.recoveredAt,
       isPinned: isPinned,
       results: item.results
     )
@@ -603,28 +655,39 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryManaging {
     nil
   }
 
+  nonisolated func latestRecoveryReport()
+    -> VoiceHistoryRecoveryReport?
+  {
+    nil
+  }
+
   private nonisolated static func item(
     id: UUID,
     endedAt: Date,
-    target: String,
+    target: String?,
     raw: String,
     formatted: String,
     style: VoiceStyle,
     pinned: Bool,
-    audioExpirationReason: VoiceHistoryAudioExpirationReason? = nil
+    audioExpirationReason: VoiceHistoryAudioExpirationReason? = nil,
+    recoveryKind: VoiceHistoryRecoveryKind? = nil,
+    deliveryOutcome: VoiceSessionDeliveryOutcome = .inserted
   ) -> VoiceSessionHistoryItem {
     let rawID = UUID()
     let formattedID = UUID()
+    let sessionEndedAt =
+      recoveryKind == nil
+      ? endedAt : endedAt.addingTimeInterval(-86_400)
     let document = VoiceSessionDocument(
       id: id,
-      startedAt: endedAt.addingTimeInterval(-18),
-      endedAt: endedAt,
+      startedAt: sessionEndedAt.addingTimeInterval(-18),
+      endedAt: sessionEndedAt,
       rawText: raw,
       editedText: raw,
       formattedText: formatted,
       deliveredText: formatted,
       targetApplicationName: target,
-      deliveryOutcome: .inserted
+      deliveryOutcome: deliveryOutcome
     )
     return VoiceSessionHistoryItem(
       document: document,
@@ -632,12 +695,14 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryManaging {
       audioDurationMilliseconds: 18_000,
       audioExpiredAt: audioExpirationReason.map { _ in endedAt },
       audioExpirationReason: audioExpirationReason,
+      recoveryKind: recoveryKind,
+      recoveredAt: recoveryKind.map { _ in sessionEndedAt },
       isPinned: pinned,
       results: [
         VoiceHistoryResult(
           id: rawID,
           sessionID: id,
-          createdAt: endedAt,
+          createdAt: sessionEndedAt,
           stage: .raw,
           origin: .capture,
           text: raw,
@@ -653,7 +718,7 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryManaging {
         VoiceHistoryResult(
           id: formattedID,
           sessionID: id,
-          createdAt: endedAt,
+          createdAt: sessionEndedAt,
           stage: .formatted,
           origin: .formatting,
           text: formatted,
@@ -665,12 +730,12 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryManaging {
         ),
         VoiceHistoryResult(
           sessionID: id,
-          createdAt: endedAt,
+          createdAt: sessionEndedAt,
           stage: .delivered,
           origin: .delivery,
           text: formatted,
           sourceResultID: formattedID,
-          deliveryOutcome: .inserted
+          deliveryOutcome: deliveryOutcome
         ),
       ]
     )

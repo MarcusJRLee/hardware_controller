@@ -224,7 +224,7 @@ struct SQLiteVoiceSessionStoreTest {
   }
 
   @Test
-  func contradictoryStoredResultProvenanceIsRejected() async throws {
+  func contradictoryStoredResultProvenanceIsIsolated() async throws {
     let rootDirectory = FileManager.default.temporaryDirectory
       .appending(path: "voice_history_provenance_\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: rootDirectory) }
@@ -254,13 +254,16 @@ struct SQLiteVoiceSessionStoreTest {
     sqlite3_close(opened)
     database = nil
 
-    await #expect(throws: VoiceSessionHistoryError.self) {
-      try await history.session(id: sessionID)
-    }
+    #expect(try await history.session(id: sessionID) == nil)
+    #expect(
+      history.latestRecoveryReport()?.issues.contains(
+        .invalidSessionRecord
+      ) == true
+    )
   }
 
   @Test
-  func brokenStoredResultRelationshipIsRejected() async throws {
+  func brokenStoredResultRelationshipIsIsolated() async throws {
     let rootDirectory = FileManager.default.temporaryDirectory
       .appending(path: "voice_history_relationship_\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: rootDirectory) }
@@ -292,13 +295,16 @@ struct SQLiteVoiceSessionStoreTest {
     sqlite3_close(opened)
     database = nil
 
-    await #expect(throws: VoiceSessionHistoryError.self) {
-      try await history.session(id: sessionID)
-    }
+    #expect(try await history.session(id: sessionID) == nil)
+    #expect(
+      history.latestRecoveryReport()?.issues.contains(
+        .invalidSessionRecord
+      ) == true
+    )
   }
 
   @Test
-  func deliveredResultWithoutOutcomeIsRejected() async throws {
+  func deliveredResultWithoutOutcomeIsIsolated() async throws {
     let rootDirectory = FileManager.default.temporaryDirectory
       .appending(path: "voice_history_outcome_\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: rootDirectory) }
@@ -330,9 +336,12 @@ struct SQLiteVoiceSessionStoreTest {
     sqlite3_close(opened)
     database = nil
 
-    await #expect(throws: VoiceSessionHistoryError.self) {
-      try await history.session(id: sessionID)
-    }
+    #expect(try await history.session(id: sessionID) == nil)
+    #expect(
+      history.latestRecoveryReport()?.issues.contains(
+        .invalidSessionRecord
+      ) == true
+    )
   }
 
   @Test

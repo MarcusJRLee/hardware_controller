@@ -26,6 +26,8 @@ actor SQLiteVoiceHistoryRetentionStore {
     let deliveryOutcome: VoiceSessionDeliveryOutcome
     let filename: String
     let isPinned: Bool
+    let recoveryKind: VoiceHistoryRecoveryKind?
+    let recoveredAt: Date?
   }
 
   /// SQLite uses the -1 sentinel to copy bound text before Swift releases it.
@@ -93,9 +95,17 @@ actor SQLiteVoiceHistoryRetentionStore {
     guard lowDiskReclaimBytes >= 0 else {
       throw VoiceHistoryRetentionValidationError.invalidReclaimRequest
     }
-    let descriptors = try retainedAudioDescriptors()
+    let descriptorQuery = try retainedAudioDescriptors()
+    let descriptors = descriptorQuery.descriptors
     var candidates: [VoiceHistoryRetentionCandidate] = []
     var issues: [VoiceHistoryRetentionIssue] = []
+    if descriptorQuery.invalidRecordCount > 0 {
+      issues.append(
+        .maintenanceUnavailable(
+          "Voice History isolated invalid retention metadata."
+        )
+      )
+    }
     for descriptor in descriptors {
       let url = audioDirectory.appending(path: descriptor.filename)
       guard FileManager.default.fileExists(atPath: url.path) else {
@@ -119,6 +129,10 @@ actor SQLiteVoiceHistoryRetentionStore {
             isActive: activeSessionIDs.contains(descriptor.sessionID),
             isSoleRecoveryArtifact:
               descriptor.deliveryOutcome != .inserted
+              || descriptor.recoveryKind != nil,
+            recoveryExpiresAt: descriptor.recoveredAt.map {
+              $0.addingTimeInterval(86_400)
+            }
           )
         )
       } catch {
@@ -159,7 +173,7 @@ actor SQLiteVoiceHistoryRetentionStore {
         let endedAt = endedAtBySessionID[decision.sessionID] ?? now
         let removed = try expireAudio(
           decision,
-          at: max(now, endedAt)
+          at: max(now, endedAt.addingTimeInterval(0.001))
         )
         expired.append(decision)
         if removed {
@@ -210,10 +224,14 @@ actor SQLiteVoiceHistoryRetentionStore {
   }
 
   private func retainedAudioDescriptors() throws
-    -> [RetainedAudioDescriptor]
+    -> (
+      descriptors: [RetainedAudioDescriptor],
+      invalidRecordCount: Int
+    )
   {
     let sql = """
-      SELECT id, ended_at, delivery_outcome, audio_filename, is_pinned
+      SELECT id, ended_at, delivery_outcome, audio_filename, is_pinned,
+        recovery_kind, recovered_at
       FROM voice_sessions
       WHERE audio_filename IS NOT NULL
       ORDER BY ended_at ASC, id ASC;
@@ -227,42 +245,48 @@ actor SQLiteVoiceHistoryRetentionStore {
     }
     defer { sqlite3_finalize(statement) }
     var descriptors: [RetainedAudioDescriptor] = []
+    var invalidRecordCount = 0
     while true {
       let result = sqlite3_step(statement)
       guard result != SQLITE_DONE else {
-        return descriptors
+        return (descriptors, invalidRecordCount)
       }
+      guard result == SQLITE_ROW else {
+        throw storageFailure()
+      }
+      let endedAtRaw = sqlite3_column_double(statement, 1)
+      let endedAt = Date(timeIntervalSince1970: endedAtRaw)
+      let filename = text(statement, column: 3)
+      let pinned = sqlite3_column_int(statement, 4)
+      let recoveryKindRaw = optionalText(statement, column: 5)
+      let recoveredAtRaw = optionalDouble(statement, column: 6)
+      let recoveryKind = recoveryKindRaw.flatMap(
+        VoiceHistoryRecoveryKind.init(rawValue:)
+      )
       guard
-        result == SQLITE_ROW,
         let sessionID = UUID(uuidString: text(statement, column: 0)),
         let deliveryOutcome = VoiceSessionDeliveryOutcome(
           rawValue: text(statement, column: 2)
-        )
+        ),
+        endedAtRaw.isFinite,
+        filename == "\(sessionID.uuidString).caf",
+        recoveredAtRaw.map({ $0.isFinite && $0 >= endedAtRaw }) ?? true,
+        pinned == 0 || pinned == 1,
+        recoveryKindRaw == nil || recoveryKind != nil,
+        (recoveryKind == nil) == (recoveredAtRaw == nil)
       else {
-        throw VoiceSessionHistoryError.storageUnavailable(
-          "Voice History contains invalid retention metadata."
-        )
-      }
-      let filename = text(statement, column: 3)
-      let expectedFilename = "\(sessionID.uuidString).caf"
-      let pinned = sqlite3_column_int(statement, 4)
-      guard
-        filename == expectedFilename,
-        pinned == 0 || pinned == 1
-      else {
-        throw VoiceSessionHistoryError.storageUnavailable(
-          "Voice History contains invalid retention metadata."
-        )
+        invalidRecordCount += 1
+        continue
       }
       descriptors.append(
         RetainedAudioDescriptor(
           sessionID: sessionID,
-          endedAt: Date(
-            timeIntervalSince1970: sqlite3_column_double(statement, 1)
-          ),
+          endedAt: endedAt,
           deliveryOutcome: deliveryOutcome,
           filename: filename,
-          isPinned: pinned == 1
+          isPinned: pinned == 1,
+          recoveryKind: recoveryKind,
+          recoveredAt: recoveredAtRaw.map(Date.init(timeIntervalSince1970:))
         )
       )
     }
@@ -340,7 +364,8 @@ actor SQLiteVoiceHistoryRetentionStore {
       SET audio_filename = NULL,
         audio_expired_at = ?, audio_expiration_reason = ?
       WHERE id = ? AND audio_filename = ?
-        AND is_pinned = 0 AND delivery_outcome = 'inserted';
+        AND is_pinned = 0
+        AND (delivery_outcome = 'inserted' OR recovery_kind IS NOT NULL);
       """
     var statement: OpaquePointer?
     guard
@@ -401,6 +426,26 @@ actor SQLiteVoiceHistoryRetentionStore {
       return ""
     }
     return String(cString: value)
+  }
+
+  private func optionalText(
+    _ statement: OpaquePointer,
+    column: Int32
+  ) -> String? {
+    guard sqlite3_column_type(statement, column) != SQLITE_NULL else {
+      return nil
+    }
+    return text(statement, column: column)
+  }
+
+  private func optionalDouble(
+    _ statement: OpaquePointer,
+    column: Int32
+  ) -> Double? {
+    guard sqlite3_column_type(statement, column) != SQLITE_NULL else {
+      return nil
+    }
+    return sqlite3_column_double(statement, column)
   }
 
   private func storageFailure() -> VoiceSessionHistoryError {

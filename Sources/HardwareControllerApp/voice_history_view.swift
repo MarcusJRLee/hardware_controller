@@ -63,6 +63,14 @@ struct VoiceHistoryView: View {
         TextField("Search every text stage", text: $model.searchQuery)
           .textFieldStyle(.roundedBorder)
           .accessibilityIdentifier("voice_history_search")
+
+        if let error = model.errorMessage {
+          Label(error, systemImage: "exclamationmark.triangle")
+            .font(.caption)
+            .foregroundStyle(StudioDesign.warning)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("voice_history_archive_issue")
+        }
       }
       .padding(16)
 
@@ -169,6 +177,13 @@ struct VoiceHistoryView: View {
               color: StudioDesign.accent
             )
           }
+          if session.recoveryKind != nil {
+            StatusPill(
+              title: "Recovered",
+              systemImage: "arrow.clockwise",
+              color: StudioDesign.warning
+            )
+          }
         }
         Text(sessionSubtitle(session))
           .foregroundStyle(.secondary)
@@ -201,9 +216,7 @@ struct VoiceHistoryView: View {
         Text(audioAvailabilityText(session))
           .foregroundStyle(.secondary)
       } else {
-        let spans = session.results
-          .filter { $0.stage == .raw }
-          .flatMap(\.timedSpans)
+        let spans = playbackSpans(session)
         if spans.isEmpty {
           Text("No timed transcript spans are available.")
             .foregroundStyle(.secondary)
@@ -259,10 +272,34 @@ struct VoiceHistoryView: View {
       prefix = "Audio expired after reaching the storage-size limit."
     case .lowDisk:
       prefix = "Audio expired to recover low disk space."
+    case .recoveryLimit:
+      prefix = "Recovered audio expired after 24 hours."
     case nil:
       prefix = "Audio is unavailable."
     }
     return "\(prefix) Transcript evidence remains searchable."
+  }
+
+  private func playbackSpans(
+    _ session: VoiceSessionHistoryItem
+  ) -> [VoiceHistoryTimedSpan] {
+    let timedSpans = session.results
+      .filter { $0.stage == .raw }
+      .flatMap(\.timedSpans)
+    guard timedSpans.isEmpty,
+      let duration = session.audioDurationMilliseconds,
+      duration > 0
+    else {
+      return timedSpans
+    }
+    return [
+      VoiceHistoryTimedSpan(
+        startMilliseconds: 0,
+        endMilliseconds: duration,
+        text: session.recoveryKind == nil
+          ? "Complete recording" : "Recovered audio"
+      )
+    ]
   }
 
   private func resultCard(
@@ -273,27 +310,27 @@ struct VoiceHistoryView: View {
         Text("Text evidence")
           .font(.headline)
         Spacer()
-        Picker(
-          "Result",
-          selection: Binding(
-            get: {
-              model.selectedResultID
-                ?? session.results.first?.id
-                ?? UUID()
-            },
-            set: { resultID in
-              model.select(resultID: resultID)
+        if let firstResult = session.results.first {
+          Picker(
+            "Result",
+            selection: Binding(
+              get: {
+                model.selectedResultID ?? firstResult.id
+              },
+              set: { resultID in
+                model.select(resultID: resultID)
+              }
+            )
+          ) {
+            ForEach(session.results) { result in
+              Text(resultTitle(result)).tag(result.id)
             }
-          )
-        ) {
-          ForEach(session.results) { result in
-            Text(resultTitle(result)).tag(result.id)
           }
+          .labelsHidden()
+          .frame(maxWidth: 230)
+          .accessibilityLabel("Text result")
+          .accessibilityIdentifier("voice_history_result_picker")
         }
-        .labelsHidden()
-        .frame(maxWidth: 230)
-        .accessibilityLabel("Text result")
-        .accessibilityIdentifier("voice_history_result_picker")
       }
 
       if let result = model.selectedResult {
@@ -334,6 +371,7 @@ struct VoiceHistoryView: View {
             evidenceLabel("Prompt", value: "r\(promptRevision)")
           }
         }
+        .id(result.id)
         .accessibilityElement(children: .combine)
 
         if let failure = result.deliveryFailure {
@@ -475,7 +513,10 @@ struct VoiceHistoryView: View {
   private func sessionSubtitle(
     _ session: VoiceSessionHistoryItem
   ) -> String {
-    let source = session.document.targetApplicationName ?? "Unknown app"
+    let source =
+      session.recoveryKind == nil
+      ? session.document.targetApplicationName ?? "Unknown app"
+      : "Recovered audio"
     let duration =
       session.audioDurationMilliseconds.map {
         String(format: "%.1f sec", Double($0) / 1_000)
@@ -547,11 +588,19 @@ private struct VoiceHistoryRow: View {
             .foregroundStyle(StudioDesign.accent)
         }
       }
-      Text(session.results.preferredReusableResult?.text ?? "No text")
-        .font(.subheadline)
-        .lineLimit(2)
+      Text(
+        session.results.preferredReusableResult?.text
+          ?? (session.recoveryKind == nil
+            ? "No text" : "Ready to retranscribe")
+      )
+      .font(.subheadline)
+      .lineLimit(2)
       HStack(spacing: 5) {
-        Text(session.document.targetApplicationName ?? "Unknown app")
+        Text(
+          session.recoveryKind == nil
+            ? session.document.targetApplicationName ?? "Unknown app"
+            : "Recovered audio"
+        )
         Text("·")
         Text(session.document.deliveryOutcome.title)
       }

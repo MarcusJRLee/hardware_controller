@@ -165,6 +165,36 @@ struct VoiceHistoryRetentionPlannerTest {
   }
 
   @Test
+  func recoveryAudioExpiresAfterItsDedicatedWindowUnlessPinned() throws {
+    let expired = candidate(
+      id: 1,
+      daysAgo: 2,
+      recoveryExpiresAt: now.addingTimeInterval(-1)
+    )
+    let pinned = candidate(
+      id: 2,
+      daysAgo: 2,
+      isPinned: true,
+      recoveryExpiresAt: now.addingTimeInterval(-1)
+    )
+    let retained = candidate(
+      id: 3,
+      daysAgo: 2,
+      recoveryExpiresAt: now.addingTimeInterval(1)
+    )
+
+    let plan = try VoiceHistoryRetentionPlanner.plan(
+      candidates: [retained, pinned, expired],
+      settings: .unlimited,
+      now: now
+    )
+
+    #expect(
+      plan.decisions == [decision(expired, reason: .recoveryLimit)]
+    )
+  }
+
+  @Test
   func invalidInputsAreRejected() {
     #expect(throws: VoiceHistoryRetentionValidationError.invalidAgeLimit) {
       try settings(ageDays: -1).validated()
@@ -220,7 +250,8 @@ struct VoiceHistoryRetentionPlannerTest {
     bytes: Int64 = 10,
     isPinned: Bool = false,
     isActive: Bool = false,
-    isRecovery: Bool = false
+    isRecovery: Bool = false,
+    recoveryExpiresAt: Date? = nil
   ) -> VoiceHistoryRetentionCandidate {
     guard
       let identifier = UUID(
@@ -238,7 +269,8 @@ struct VoiceHistoryRetentionPlannerTest {
       audioBytes: bytes,
       isPinned: isPinned,
       isActive: isActive,
-      isSoleRecoveryArtifact: isRecovery
+      isSoleRecoveryArtifact: isRecovery,
+      recoveryExpiresAt: recoveryExpiresAt
     )
   }
 

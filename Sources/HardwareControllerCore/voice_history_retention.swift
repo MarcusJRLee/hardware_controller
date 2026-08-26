@@ -84,6 +84,7 @@ public enum VoiceHistoryAudioExpirationReason:
   case artifactLimit = "artifact_limit"
   case byteLimit = "byte_limit"
   case lowDisk = "low_disk"
+  case recoveryLimit = "recovery_limit"
 }
 
 public struct VoiceHistoryRetentionCandidate:
@@ -97,6 +98,7 @@ public struct VoiceHistoryRetentionCandidate:
   public let isPinned: Bool
   public let isActive: Bool
   public let isSoleRecoveryArtifact: Bool
+  public let recoveryExpiresAt: Date?
 
   public init(
     id: UUID,
@@ -104,7 +106,8 @@ public struct VoiceHistoryRetentionCandidate:
     audioBytes: Int64,
     isPinned: Bool,
     isActive: Bool,
-    isSoleRecoveryArtifact: Bool
+    isSoleRecoveryArtifact: Bool,
+    recoveryExpiresAt: Date? = nil
   ) {
     self.id = id
     self.endedAt = endedAt
@@ -112,6 +115,7 @@ public struct VoiceHistoryRetentionCandidate:
     self.isPinned = isPinned
     self.isActive = isActive
     self.isSoleRecoveryArtifact = isSoleRecoveryArtifact
+    self.recoveryExpiresAt = recoveryExpiresAt
   }
 }
 
@@ -221,6 +225,15 @@ public enum VoiceHistoryRetentionPlanner {
           audioBytes: candidate.audioBytes
         )
       )
+    }
+
+    for candidate in sorted
+    where candidate.recoveryExpiresAt.map({ $0 <= now }) == true
+      && !candidate.isPinned
+      && !candidate.isActive
+      && !selected.contains(candidate.id)
+    {
+      select(candidate, reason: .recoveryLimit)
     }
 
     if let maximumAgeDays = settings.maximumAgeDays {
