@@ -2,7 +2,8 @@
 
 - **Status:** Accepted; HID ownership updated by
   [0004](0004_exclusive_vec_ownership.md) and transcription permissions updated
-  by [0005](0005_app_owned_transcription.md)
+  by [0005](0005_app_owned_transcription.md); future platform scope updated by
+  [0029](0029_local_voice_platform_expansion.md)
 - **Date:** 2026-07-24
 
 ## Context

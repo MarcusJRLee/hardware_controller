@@ -43,7 +43,10 @@ test placement, hardware fixtures, and signed Device testing.
 
 GitHub requests review from the repository owner. Automated verification and
 CodeQL must pass, review threads must be resolved, and accepted changes are
-squash-merged into `main`.
+squash-merged into `main`. During the accepted Voice program, its focused
+`codex/voice_*` pull requests target `dev`; `dev` returns to `main` only after
+the completed program receives final user verification. See
+[`0029_local_voice_platform_expansion.md`](docs/decisions/0029_local_voice_platform_expansion.md).
 
 ## Privacy and hardware evidence
 
