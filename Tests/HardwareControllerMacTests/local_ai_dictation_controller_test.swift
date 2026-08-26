@@ -49,6 +49,42 @@ struct LocalAIDictationControllerTest {
     #expect(audioFile.length > 0)
   }
 
+  @Test
+  func failedInsertionKeepsCopyableTextAndPlayableAudio() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_failed_\(UUID().uuidString)")
+    defer {
+      try? FileManager.default.removeItem(at: rootDirectory)
+    }
+    let history = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory
+    )
+    let fixture = LocalAIControllerFixture(
+      refinement: .output("keep this revised plan"),
+      writerFailure: .focusChanged
+    )
+    let controller = fixture.makeController(history: history)
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.microphone.emit(try makeVoiceAudioFixture())
+    fixture.session.emit(.committed("keep this revised plan"))
+    await controller.handle(.finish)
+    try await localAIWaitUntil {
+      await controller.snapshot().phase == .failed
+    }
+
+    let sessions = try await history.recentSessions(limit: 10)
+    let session = try #require(sessions.first)
+    #expect(sessions.count == 1)
+    #expect(session.rawText == "keep this revised plan")
+    #expect(session.formattedText == "Keep this revised plan.")
+    #expect(session.deliveredText.isEmpty)
+    #expect(session.deliveryOutcome == .failed)
+    let audioURL = try #require(session.audioArtifactURL)
+    #expect(try AVAudioFile(forReading: audioURL).length > 0)
+  }
+
   @Test(
     .enabled(
       if:
@@ -398,14 +434,16 @@ private struct BenchmarkRetainedRefinementRouter:
 private final class LocalAIControllerFixture: @unchecked Sendable {
   let session = LocalAIFakeRecognitionSession()
   let microphone = LocalAIFakeMicrophone()
-  let writer = LocalAIRecordingWriter()
+  let writer: LocalAIRecordingWriter
   let factory: LocalAIFakeRecognitionFactory
   let refiner: LocalAIFakeRefinementRouter
 
   init(
     refinement: LocalAIFakeRefinementRouter.Behavior,
-    preparationDelay: Duration? = nil
+    preparationDelay: Duration? = nil,
+    writerFailure: TranscriptionFailure? = nil
   ) {
+    writer = LocalAIRecordingWriter(failure: writerFailure)
     factory = LocalAIFakeRecognitionFactory(session: session)
     refiner = LocalAIFakeRefinementRouter(
       behavior: refinement,
@@ -640,7 +678,12 @@ private final class LocalAIRecordingWriter:
   @unchecked Sendable
 {
   private let lock = NSLock()
+  private let failure: TranscriptionFailure?
   private var storage: [String] = []
+
+  init(failure: TranscriptionFailure? = nil) {
+    self.failure = failure
+  }
 
   var inserted: [String] {
     lock.withLock { storage }
@@ -650,6 +693,9 @@ private final class LocalAIRecordingWriter:
     _ text: String,
     into target: FocusedTextTarget
   ) throws {
+    if let failure {
+      throw failure
+    }
     lock.withLock { storage.append(text) }
   }
 }
