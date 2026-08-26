@@ -40,7 +40,8 @@ struct ApplicationPreferencesStoreTests {
           expectedDigest: "sha256:expected"
         ),
         includeNearbyText: true
-      )
+      ),
+      voiceTrigger: testVoiceTriggerSettings
     )
 
     try store.save(preferences)
@@ -74,10 +75,55 @@ struct ApplicationPreferencesStoreTests {
 
     #expect(result.issue == nil)
     #expect(result.preferences.localAI == .default)
+    #expect(result.preferences.voiceTrigger == .default)
     #expect(
       result.preferences.schemaVersion
         == ApplicationPreferences.currentSchemaVersion
     )
+  }
+
+  @Test
+  func schemaThreeLoadsWithDefaultVoiceTriggerSettings() {
+    let files = PreferenceFileAccess()
+    files.data = Data(
+      """
+      {
+        "appearance": "system",
+        "schemaVersion": 3,
+        "sidebarVisibility": "expanded"
+      }
+      """.utf8
+    )
+
+    let result = makeStore(files: files).load()
+
+    #expect(result.issue == nil)
+    #expect(result.preferences.voiceTrigger == .default)
+    #expect(
+      result.preferences.schemaVersion
+        == ApplicationPreferences.currentSchemaVersion
+    )
+  }
+
+  @Test
+  func schemaThreePreservesLocalAISettings() throws {
+    let settings = LocalAISettings(
+      provider: .ollama,
+      ollamaModel: LocalAIModelSelection(name: "local-model")
+    )
+    let files = PreferenceFileAccess()
+    files.data = try JSONEncoder().encode(
+      ApplicationPreferences(
+        localAI: settings,
+        voiceTrigger: testVoiceTriggerSettings,
+        schemaVersion: 3
+      )
+    )
+
+    let result = makeStore(files: files).load()
+
+    #expect(result.preferences.localAI == settings)
+    #expect(result.preferences.voiceTrigger == .default)
   }
 
   /// Migrates schema 1 presentation preferences to system-default input.
@@ -379,6 +425,44 @@ struct ApplicationPreferencesModelTests {
     #expect(applied == [settings])
   }
 
+  @Test
+  func voiceTriggerChangeIsTransactional() {
+    let store = PreferenceStore()
+    let model = ApplicationPreferencesModel(
+      arguments: [],
+      isDemoMode: false,
+      appearanceApplier: AppearanceApplier(),
+      store: store
+    )
+    var applied: [VoiceTriggerSettings] = []
+    model.setVoiceTriggerSettingsHandler { applied.append($0) }
+
+    #expect(model.setVoiceTriggerSettings(testVoiceTriggerSettings))
+
+    #expect(model.voiceTriggerSettings == testVoiceTriggerSettings)
+    #expect(store.saved.map(\.voiceTrigger) == [testVoiceTriggerSettings])
+    #expect(applied == [testVoiceTriggerSettings])
+  }
+
+  @Test
+  func failedVoiceTriggerSaveDoesNotApplyCandidate() {
+    let store = PreferenceStore(saveFails: true)
+    let model = ApplicationPreferencesModel(
+      arguments: [],
+      isDemoMode: false,
+      appearanceApplier: AppearanceApplier(),
+      store: store
+    )
+    var applied: [VoiceTriggerSettings] = []
+    model.setVoiceTriggerSettingsHandler { applied.append($0) }
+
+    #expect(!model.setVoiceTriggerSettings(testVoiceTriggerSettings))
+
+    #expect(model.voiceTriggerSettings == .default)
+    #expect(store.saved.isEmpty)
+    #expect(applied.isEmpty)
+  }
+
   /// Retains a disconnected preference while reporting default fallback.
   @Test
   func unavailableMicrophoneRemainsVisible() {
@@ -431,6 +515,13 @@ struct ApplicationPreferencesModelTests {
     )
   }
 }
+
+private let testVoiceTriggerSettings = VoiceTriggerSettings(
+  shortcut: KeyboardShortcut(
+    keyCode: 49,
+    modifiers: [.command, .option]
+  )
+)
 
 /// Returns deterministic microphone choices to the preference model.
 private struct MicrophoneDiscovery: AudioInputDeviceDiscovering {

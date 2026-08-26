@@ -467,7 +467,7 @@ private struct AppMark: View {
 
 struct NoticeBanner: View {
   let message: String
-  let dismiss: () -> Void
+  let dismiss: (() -> Void)?
 
   var body: some View {
     HStack(spacing: 10) {
@@ -476,9 +476,11 @@ struct NoticeBanner: View {
       Text(message)
         .font(.callout)
         .frame(maxWidth: .infinity, alignment: .leading)
-      Button("Dismiss", action: dismiss)
-        .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
+      if let dismiss {
+        Button("Dismiss", action: dismiss)
+          .buttonStyle(.plain)
+          .foregroundStyle(.secondary)
+      }
     }
     .padding(13)
     .background(

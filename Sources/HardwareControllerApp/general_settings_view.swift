@@ -26,6 +26,13 @@ struct GeneralSettingsView: View {
           )
         }
 
+        if let failure = model.voiceShortcutFailure {
+          NoticeBanner(
+            message: failure.recoveryMessage,
+            dismiss: nil
+          )
+        }
+
         Form {
           Section("Appearance") {
             Picker(
@@ -88,6 +95,31 @@ struct GeneralSettingsView: View {
                 preferencesModel.microphoneDiscoveryError == nil
                   ? .secondary : StudioDesign.warning
               )
+          }
+
+          Section("Voice capture shortcut") {
+            ShortcutRecorderButton(
+              shortcut: preferencesModel.voiceTriggerSettings.shortcut
+            ) { shortcut in
+              var settings = preferencesModel.voiceTriggerSettings
+              settings.shortcut = shortcut
+              _ = preferencesModel.setVoiceTriggerSettings(settings)
+            }
+
+            if preferencesModel.voiceTriggerSettings.shortcut != nil {
+              Button("Clear shortcut", role: .destructive) {
+                var settings = preferencesModel.voiceTriggerSettings
+                settings.shortcut = nil
+                _ = preferencesModel.setVoiceTriggerSettings(settings)
+              }
+              .buttonStyle(.link)
+            }
+
+            Text(
+              "Hold the chord while speaking, or press it twice to keep listening. Press it twice again to finish. Use at least two modifier keys."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
           }
 
           LocalAISettingsSection(

@@ -1,6 +1,6 @@
 # 0029: Local Voice platform expansion
 
-- **Status:** Accepted; macOS M1 tracer implemented
+- **Status:** Accepted; macOS M1–M2 implemented
 - **Date:** 2026-08-25
 - **Amends:**
   [`0001_native_macos_stack.md`](0001_native_macos_stack.md),
@@ -141,3 +141,11 @@ Deterministic tests cover one insertion, every final text stage, playable audio,
 database reopen, typed storage unavailability, and cancellation cleanup. Timed
 Raw spans, UI, retention, crash reconciliation, portable Rust, alternate ASR,
 and iOS remain subsequent CUJ slices.
+
+M2 adds one disabled-by-default, machine-wide exact Voice chord to the existing
+app. Its first key-down begins the coordinated Local AI workflow immediately;
+release after a hold finishes, while two short presses latch and the next two
+finish once. One Carbon owner reserves both active-Profile Binding fallbacks
+and this distinct chord. Replacement and lifecycle interruption cancel Voice
+ownership before registration teardown. Application preference schema 4 stores
+the validated settings and migrates earlier schemas with the chord disabled.

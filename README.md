@@ -109,6 +109,11 @@ The center Control defaults to Local Dictation in Hold mode. Left and right
 default to No Action. Any configured Control may receive an opt-in exact
 keyboard fallback for use while its Device is disconnected.
 
+To dictate without a Device, open **General → Voice capture shortcut**, record
+an exact chord with at least two modifiers, then hold it while speaking. Two
+short presses latch capture; the next two finish. The chord uses Local AI
+Dictation and is disabled until you configure it.
+
 See the [user guide](docs/user_guide.md) for Profiles, target behavior,
 recovery, and troubleshooting.
 
@@ -188,8 +193,9 @@ but preserves a model that another local Ollama client already had running.
 ## What ships
 
 - Exact-signature, exclusive IOKit HID input on a user-interactive serial queue.
-- Independent per-Control Bindings, Hold/Toggle semantics, and exact keyboard
-  fallbacks scoped to the active Profile.
+- Independent per-Control Bindings, Hold/Toggle semantics, exact keyboard
+  fallbacks scoped to the active Profile, and an independent opt-in hold/latch
+  Voice chord.
 - `SpeechAnalyzer` on macOS 26+ and on-device-required
   `SFSpeechRecognizer` on macOS 15–25.
 - Adaptive Accessibility and guarded foreground text delivery for native,

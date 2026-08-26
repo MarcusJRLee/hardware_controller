@@ -227,6 +227,28 @@ without changing it.
 Keyboard shortcuts are independent of Local Dictation. They still require
 Accessibility but not Microphone or Speech Recognition access.
 
+## Use Voice capture without a Device
+
+The optional Voice chord is machine-wide and independent of Profiles,
+Controls, and Binding keyboard fallbacks. It runs the current Local AI
+Dictation pipeline, including its microphone, Apple on-device recognition,
+selected local refinement provider, safe target delivery, and local M1 session
+storage.
+
+1. Open **General → Voice capture shortcut**.
+2. Choose **Record** and press an exact chord with at least two modifier keys.
+3. Focus a nonsecure editable field.
+4. Hold the chord, speak, then release it to finish; or press it twice quickly
+   to keep listening and twice again to finish.
+5. Use **Clear shortcut** to stop reserving the chord.
+
+Capture begins on the first key-down; it does not wait to distinguish a hold
+from a double press. Repeated key-down events and unmatched releases do nothing.
+Changing the chord, sleeping, or quitting cancels active capture. If macOS or
+another app owns the exact chord, General keeps the setting visible and asks
+you to record a different one. The Voice chord is off by default and works
+without a connected Device.
+
 ## Use a keyboard fallback without the pedal
 
 Every configured Control can have one optional shortcut that triggers the

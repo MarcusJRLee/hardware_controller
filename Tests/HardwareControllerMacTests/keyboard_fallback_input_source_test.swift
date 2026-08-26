@@ -66,6 +66,53 @@ struct KeyboardFallbackInputSourceTest {
     #expect(system.unregisteredIDs.isEmpty)
   }
 
+  @Test
+  func voiceShortcutDeliversIndependentTransitions() {
+    let system = FakeGlobalHotKeySystem()
+    let recorder = VoiceShortcutEventRecorder()
+    let source = KeyboardFallbackInputSource(
+      system: system,
+      onEvent: { _, _, _ in },
+      onVoiceEvent: recorder.append
+    )
+
+    let result = source.replace(
+      fallbacks: [],
+      voiceShortcut: .suggestedControlActivation
+    )
+    system.send(id: 1, phase: .pressed)
+    system.send(id: 1, phase: .pressed)
+    system.send(id: 1, phase: .released)
+
+    #expect(
+      result
+        == KeyboardInputRegistrationResult(
+          fallbackFailures: [],
+          voiceFailure: nil
+        ))
+    #expect(recorder.phases == [.pressed, .released])
+  }
+
+  @Test
+  func voiceRegistrationFailureIsTyped() throws {
+    let system = FakeGlobalHotKeySystem(registerStatus: -9876)
+    let source = KeyboardFallbackInputSource(
+      system: system,
+      onEvent: { _, _, _ in }
+    )
+
+    let failure = try #require(
+      source.replace(
+        fallbacks: [],
+        voiceShortcut: .suggestedControlActivation
+      ).voiceFailure
+    )
+
+    #expect(failure.shortcut == .suggestedControlActivation)
+    #expect(failure.systemCode == -9876)
+    #expect(failure.recoveryMessage.contains("different shortcut"))
+  }
+
   /// Creates one deterministic active-Profile fallback registration.
   private func makeRegistration() -> KeyboardFallbackRegistration {
     KeyboardFallbackRegistration(
@@ -76,6 +123,21 @@ struct KeyboardFallbackInputSourceTest {
       sourceDeviceID: DeviceID(rawValue: "keyboard-fallback-test"),
       shortcut: .suggestedControlActivation
     )
+  }
+}
+
+private final class VoiceShortcutEventRecorder: @unchecked Sendable {
+  private let lock = NSLock()
+  private var phaseStorage: [ControlPhase] = []
+
+  var phases: [ControlPhase] {
+    lock.withLock { phaseStorage }
+  }
+
+  func append(_ phase: ControlPhase, _ timestampNanoseconds: UInt64) {
+    lock.withLock {
+      phaseStorage.append(phase)
+    }
   }
 }
 

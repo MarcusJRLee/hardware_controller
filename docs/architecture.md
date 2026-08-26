@@ -166,6 +166,17 @@ not require Accessibility permission; the selected Action retains its existing
 permission requirements. See
 [`decisions/0018_exact_keyboard_control_fallback.md`](decisions/0018_exact_keyboard_control_fallback.md).
 
+The same single Carbon owner may also reserve one independent machine-wide
+Voice chord. Its registration is not a Binding and routes into a pure
+hold/latch state machine: first key-down submits Local AI begin immediately, a
+long release submits finish, two short presses latch, and the next double press
+finishes once. A controller actor owns the decision deadline and forwards only
+typed commands through the process-wide Dictation coordinator. Repeats and
+unmatched releases are suppressed at the Carbon boundary. Replacement, sleep,
+and shutdown interrupt Voice ownership before active registrations synthesize
+release, so lifecycle teardown cancels rather than delivers partial speech.
+Binding and Voice registration failures remain separate typed snapshot state.
+
 ### Application runtime
 
 One process-owned actor is the authoritative application seam above hardware,
@@ -332,11 +343,13 @@ Profile, and fallbacks matching an output Keyboard Shortcut Action.
 Schema 5 adds the Local AI Dictation Action identity. Schema-4 Profiles migrate
 without changing any Action, Binding, interaction mode, or fallback.
 
-Application appearance, sidebar visibility, microphone identity, and Local AI
-settings use a separate schema-3 `preferences.json` file. Earlier schemas
+Application appearance, sidebar visibility, microphone identity, Local AI
+settings, and the Voice chord use a separate schema-4 `preferences.json` file.
+Earlier schemas
 migrate with System Default microphone and conservative Local AI defaults:
 Apple On-Device, recommended Ollama model identity, five-minute retention,
-nearby context off, empty dictionary, and no additional instructions. A valid
+nearby context off, empty dictionary, no additional instructions, and the Voice
+chord disabled. A valid
 future preference schema is preserved and never overwritten. This store uses
 the same atomic-write and corruption-preservation policy because application
 preferences are not work-mode data.
@@ -351,7 +364,8 @@ Profile transactions, permission polling, or transcription lifecycle.
 One `NavigationSplitView` presents Controller, Profiles, and General. A small
 navigation model owns only destination routing. A separate preference model
 owns app-wide appearance, sidebar visibility, app-local microphone selection,
-and transactional Local AI settings. Controller retains the device-centered
+transactional Local AI settings, and transactional Voice-trigger settings.
+Controller retains the device-centered
 studio composition; Profiles and General use native lists and forms. General's
 Local AI section progressively reveals installed Ollama models and retention,
 provider readiness/test state, bounded context, dictionary, and instructions.

@@ -1,6 +1,6 @@
 # Voice critical user journeys
 
-**Status:** Accepted future-behavior contract; implementation not started. The
+**Status:** Accepted behavior contract; macOS M1 and M2 are implemented. The
 authority is
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md).
 
@@ -102,6 +102,14 @@ delaying the first PCM frame. The user may read and speak across pauses. The nex
 valid double press stops once. Key repeat, an unmatched release, or a third press
 does not create another session. Sleep and lost key-up terminate through the
 same recovery state.
+
+**Current evidence:** the independent, opt-in exact Voice chord begins Local AI
+Dictation on its first key-down. A long release finishes; two short presses
+latch; the next two short presses finish. Pure-state, command-controller,
+Carbon-boundary, preference-migration, and runtime tests cover immediate begin,
+decision timeout, repeats, unmatched release, interruption, registration
+conflict, and transactional replacement. Sleep and shortcut replacement cancel
+before Carbon synthesizes a release.
 
 ### M3 — Format for purpose
 

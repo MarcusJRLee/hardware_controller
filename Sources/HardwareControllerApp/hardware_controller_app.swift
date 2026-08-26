@@ -146,7 +146,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       arguments: arguments,
       preferredMicrophoneUID:
         preferencesModel.preferredMicrophone?.id,
-      localAISettings: preferencesModel.localAISettings
+      localAISettings: preferencesModel.localAISettings,
+      voiceTriggerSettings: preferencesModel.voiceTriggerSettings
     )
     self.model = model
     navigation = ApplicationNavigationModel(arguments: arguments)
@@ -159,6 +160,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     preferencesModel.setLocalAISettingsHandler { [weak model] settings in
       model?.setLocalAISettings(settings)
+    }
+    preferencesModel.setVoiceTriggerSettingsHandler {
+      [weak model] settings in
+      model?.setVoiceTriggerSettings(settings)
     }
   }
 
