@@ -66,19 +66,12 @@ struct VoiceHistoryReconcilerTest {
     let root = temporaryRoot("expiration_restore")
     defer { try? FileManager.default.removeItem(at: root) }
     let sessionID = UUID()
-    var history: SQLiteVoiceSessionHistory? = try SQLiteVoiceSessionHistory(
-      rootDirectory: root
-    )
     let document = historyDocument(sessionID: sessionID)
-    try await record(document, in: try #require(history))
-    _ = try await #require(history).recentSessions(limit: 1)
-    let finalURL = root.appending(path: "audio/\(sessionID).caf")
+    let finalURL = try await insertFixture(document, root: root)
     let quarantineFilename =
       ".expiring_\(sessionID.uuidString)_\(UUID().uuidString).caf"
     let quarantineURL = root.appending(path: "audio/\(quarantineFilename)")
     try FileManager.default.moveItem(at: finalURL, to: quarantineURL)
-    history = nil
-
     let reopened = try SQLiteVoiceSessionHistory(rootDirectory: root)
     let item = try #require(try await reopened.session(id: sessionID))
 
@@ -156,18 +149,14 @@ struct VoiceHistoryReconcilerTest {
     defer { try? FileManager.default.removeItem(at: root) }
     let validID = UUID()
     let corruptID = UUID()
-    var history: SQLiteVoiceSessionHistory? = try SQLiteVoiceSessionHistory(
-      rootDirectory: root
-    )
-    try await record(
+    _ = try await insertFixture(
       historyDocument(sessionID: validID),
-      in: try #require(history)
+      root: root
     )
-    try await record(
+    _ = try await insertFixture(
       historyDocument(sessionID: corruptID),
-      in: try #require(history)
+      root: root
     )
-    history = nil
     try executeSQL(
       "UPDATE voice_sessions SET delivery_outcome = 'invalid', ended_at = 2000 "
         + "WHERE id = '\(corruptID.uuidString)';",
@@ -190,16 +179,14 @@ struct VoiceHistoryReconcilerTest {
     let root = temporaryRoot("expiration_discard")
     defer { try? FileManager.default.removeItem(at: root) }
     let sessionID = UUID()
-    var history: SQLiteVoiceSessionHistory? = try SQLiteVoiceSessionHistory(
-      rootDirectory: root
+    let finalURL = try await insertFixture(
+      historyDocument(sessionID: sessionID),
+      root: root
     )
-    try await record(historyDocument(sessionID: sessionID), in: try #require(history))
-    let finalURL = root.appending(path: "audio/\(sessionID).caf")
     let quarantineFilename =
       ".expiring_\(sessionID.uuidString)_\(UUID().uuidString).caf"
     let quarantineURL = root.appending(path: "audio/\(quarantineFilename)")
     try FileManager.default.moveItem(at: finalURL, to: quarantineURL)
-    history = nil
     try executeSQL(
       """
       UPDATE voice_sessions
@@ -261,14 +248,10 @@ struct VoiceHistoryReconcilerTest {
     defer { try? FileManager.default.removeItem(at: root) }
     let retainedID = UUID()
     let partialID = UUID()
-    var history: SQLiteVoiceSessionHistory? = try SQLiteVoiceSessionHistory(
-      rootDirectory: root
-    )
-    try await record(
+    let retainedURL = try await insertFixture(
       historyDocument(sessionID: retainedID),
-      in: try #require(history)
+      root: root
     )
-    let retainedURL = root.appending(path: "audio/\(retainedID).caf")
     let quarantineFilename =
       ".expiring_\(retainedID.uuidString)_\(UUID().uuidString).caf"
     try FileManager.default.copyItem(
@@ -285,8 +268,6 @@ struct VoiceHistoryReconcilerTest {
         "partial"
       )
     )
-    history = nil
-
     let reopened = try SQLiteVoiceSessionHistory(rootDirectory: root)
     let sessions = try await reopened.recentSessions(limit: 10)
 
@@ -425,13 +406,26 @@ struct VoiceHistoryReconcilerTest {
     )
   }
 
-  private func record(
+  /// Inserts crash-test evidence without starting live maintenance tasks.
+  private func insertFixture(
     _ document: VoiceSessionDocument,
-    in history: SQLiteVoiceSessionHistory
-  ) async throws {
-    history.begin(sessionID: document.id, startedAt: document.startedAt)
-    history.append(try makeVoiceAudioFixture())
-    try await history.complete(document)
+    root: URL
+  ) async throws -> URL {
+    let audioDirectory = root.appending(path: "audio")
+    try FileManager.default.createDirectory(
+      at: audioDirectory,
+      withIntermediateDirectories: true
+    )
+    let audioURL = try await recordFixture(
+      sessionID: document.id,
+      audioDirectory: audioDirectory
+    )
+    let store = try SQLiteVoiceSessionStore(
+      databaseURL: root.appending(path: "history.sqlite3"),
+      audioDirectory: audioDirectory
+    )
+    try await store.insert(document, audioURL: audioURL)
+    return audioURL
   }
 
   private func recordFixture(

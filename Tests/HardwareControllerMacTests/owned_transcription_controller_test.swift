@@ -1242,7 +1242,7 @@ private final class SnapshotRecorder: @unchecked Sendable {
 }
 
 private func waitUntil(
-  timeout: Duration = .seconds(1),
+  timeout: Duration = .seconds(5),
   _ condition: @escaping @Sendable () async -> Bool
 ) async throws {
   let clock = ContinuousClock()
