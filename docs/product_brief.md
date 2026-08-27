@@ -281,7 +281,9 @@ isolates corruption. M9 enforces provider locality and retains captured audio
 after ASR failure. M10 converges every macOS Voice trigger; M11 proves the first
 portable retention policy and C ABI without changing the shipped Swift runtime.
 M12 imports bounded user-selected audio into app-owned History and runs the same
-local ASR and formatting boundaries without automatic delivery. Remaining
+local ASR and formatting boundaries without automatic delivery. M13 admits
+only bounded, digest-complete portable Model packages and distinguishes
+catalog-authenticated downloads from explicit manual imports. Remaining
 portable engine work and iOS remain pending. See
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 [`voice_platform_design.md`](voice_platform_design.md), and

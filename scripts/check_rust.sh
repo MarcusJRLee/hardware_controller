@@ -35,4 +35,4 @@ else
     -lm \
     -o "$smoke_binary"
 fi
-"$smoke_binary"
+"$smoke_binary" "Tests/cuj/voice_model_package_v1/valid"

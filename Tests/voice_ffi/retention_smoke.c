@@ -14,8 +14,14 @@ _Static_assert(sizeof(VoiceRetentionDecisionV1) == 32,
                "VoiceRetentionDecisionV1 layout");
 _Static_assert(sizeof(VoiceRetentionPlanV1) == 56,
                "VoiceRetentionPlanV1 layout");
+_Static_assert(sizeof(VoiceUtf8BufferV1) == 24, "VoiceUtf8BufferV1 layout");
+_Static_assert(sizeof(VoiceModelPackageRequestV1) == 72,
+               "VoiceModelPackageRequestV1 layout");
+_Static_assert(sizeof(VoiceModelPackageInfoV1) == 224,
+               "VoiceModelPackageInfoV1 layout");
 
-int main(void) {
+int main(int argc, char **argv) {
+  assert(argc == 2);
   VoiceRetentionCandidateV1 candidates[2] = {0};
   memset(candidates[0].session_id.bytes, 1, 16);
   candidates[0].ended_at_unix_milliseconds = 1000;
@@ -44,5 +50,44 @@ int main(void) {
   assert(decision.session_id.bytes[0] == 1);
   assert(decision.reason == VOICE_EXPIRATION_ARTIFACT_LIMIT);
   assert(decision.audio_bytes == 10);
+
+  VoiceModelPackageRequestV1 model_request = {0};
+  model_request.root_path_utf8 = (const uint8_t *)argv[1];
+  model_request.root_path_length = strlen(argv[1]);
+  model_request.maximum_manifest_bytes = 1024 * 1024;
+  model_request.maximum_installed_bytes = 1024 * 1024;
+  model_request.maximum_file_count = 16;
+
+  uint8_t package_id[128] = {0};
+  uint8_t version[64] = {0};
+  uint8_t display_name[128] = {0};
+  uint8_t spdx_expression[256] = {0};
+  uint8_t notice_file[1024] = {0};
+  uint8_t source_url[2048] = {0};
+  VoiceModelPackageInfoV1 model_output = {0};
+  model_output.package_id =
+      (VoiceUtf8BufferV1){package_id, sizeof(package_id), 0};
+  model_output.version = (VoiceUtf8BufferV1){version, sizeof(version), 0};
+  model_output.display_name =
+      (VoiceUtf8BufferV1){display_name, sizeof(display_name), 0};
+  model_output.spdx_expression =
+      (VoiceUtf8BufferV1){spdx_expression, sizeof(spdx_expression), 0};
+  model_output.notice_file =
+      (VoiceUtf8BufferV1){notice_file, sizeof(notice_file), 0};
+  model_output.source_url =
+      (VoiceUtf8BufferV1){source_url, sizeof(source_url), 0};
+
+  assert(voice_model_package_validate_v1(&model_request, &model_output) ==
+         VOICE_STATUS_OK);
+  assert(model_output.package_id.length == 36);
+  assert(memcmp(package_id, "com.longdevity.fixture.streaming_asr", 36) == 0);
+  assert(model_output.runtime == VOICE_MODEL_RUNTIME_SHERPA_ONNX);
+  assert(model_output.stage == VOICE_MODEL_STAGE_ASR);
+  assert(model_output.capability_mask == (VOICE_MODEL_CAPABILITY_STREAMING_ASR |
+                                          VOICE_MODEL_CAPABILITY_FILE_ASR));
+  assert(model_output.file_count == 2);
+  assert(model_output.verified_bytes == 73);
+  uint8_t zero_digest[32] = {0};
+  assert(memcmp(model_output.manifest_sha256, zero_digest, 32) != 0);
   return 0;
 }

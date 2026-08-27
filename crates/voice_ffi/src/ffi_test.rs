@@ -1,11 +1,119 @@
-use std::{mem::size_of, ptr};
+use std::{mem::size_of, path::PathBuf, ptr};
 
 use crate::{
     VOICE_STATUS_BUFFER_TOO_SMALL, VOICE_STATUS_INVALID_ARGUMENT,
-    VOICE_STATUS_INVALID_RECLAIM_REQUEST, VOICE_STATUS_NULL_POINTER, VOICE_STATUS_OK,
-    VoiceRetentionCandidateV1, VoiceRetentionDecisionV1, VoiceRetentionPlanV1,
-    VoiceRetentionRequestV1, VoiceRetentionSettingsV1, VoiceSessionIdV1, voice_retention_plan_v1,
+    VOICE_STATUS_INVALID_RECLAIM_REQUEST, VOICE_STATUS_INVALID_UTF8_PATH,
+    VOICE_STATUS_MODEL_PACKAGE_DIGEST_MISMATCH, VOICE_STATUS_NULL_POINTER, VOICE_STATUS_OK,
+    VoiceModelPackageInfoV1, VoiceModelPackageRequestV1, VoiceRetentionCandidateV1,
+    VoiceRetentionDecisionV1, VoiceRetentionPlanV1, VoiceRetentionRequestV1,
+    VoiceRetentionSettingsV1, VoiceSessionIdV1, VoiceUtf8BufferV1, voice_model_package_validate_v1,
+    voice_retention_plan_v1,
 };
+
+#[test]
+fn model_package_validation_returns_verified_portable_metadata() {
+    let root = fixture_path();
+    let root = root.to_string_lossy();
+    let request = model_request(root.as_bytes());
+    let mut package_id = [0_u8; 128];
+    let mut version = [0_u8; 64];
+    let mut display_name = [0_u8; 128];
+    let mut spdx = [0_u8; 256];
+    let mut notice = [0_u8; 1_024];
+    let mut source_url = [0_u8; 2_048];
+    let mut output = model_output(
+        &mut package_id,
+        &mut version,
+        &mut display_name,
+        &mut spdx,
+        &mut notice,
+        &mut source_url,
+    );
+
+    // Safety: Every pointer references live, aligned, nonoverlapping storage.
+    let status = unsafe { voice_model_package_validate_v1(&raw const request, &raw mut output) };
+
+    assert_eq!(status, VOICE_STATUS_OK);
+    assert_eq!(
+        utf8(&package_id, output.package_id.length),
+        "com.longdevity.fixture.streaming_asr"
+    );
+    assert_eq!(utf8(&version, output.version.length), "1.0.0");
+    assert_eq!(
+        utf8(&display_name, output.display_name.length),
+        "Fixture Streaming ASR"
+    );
+    assert_eq!(utf8(&spdx, output.spdx_expression.length), "Apache-2.0");
+    assert_eq!(utf8(&notice, output.notice_file.length), "NOTICE.txt");
+    assert_eq!(output.runtime, 1);
+    assert_eq!(output.stage, 1);
+    assert_eq!(output.capability_mask, 3);
+    assert_eq!(output.file_count, 2);
+    assert_eq!(output.verified_bytes, 73);
+    assert_ne!(output.manifest_sha256, [0; 32]);
+}
+
+#[test]
+fn model_output_buffers_negotiate_without_partial_text() {
+    let root = fixture_path();
+    let root = root.to_string_lossy();
+    let request = model_request(root.as_bytes());
+    let mut package_id = [b'x'; 1];
+    let mut output = model_output(&mut package_id, &mut [], &mut [], &mut [], &mut [], &mut []);
+
+    // Safety: Every non-null pointer references live writable storage.
+    let status = unsafe { voice_model_package_validate_v1(&raw const request, &raw mut output) };
+
+    assert_eq!(status, VOICE_STATUS_BUFFER_TOO_SMALL);
+    assert_eq!(output.package_id.length, 36);
+    assert_eq!(output.version.length, 5);
+    assert_eq!(package_id, [b'x']);
+}
+
+#[test]
+fn model_package_failures_remain_typed_across_the_abi() {
+    let invalid_path = [0xff_u8];
+    let invalid_request = model_request(&invalid_path);
+    let mut output = empty_model_output();
+    // Safety: The input byte and output structures remain live for the call.
+    assert_eq!(
+        unsafe { voice_model_package_validate_v1(&raw const invalid_request, &raw mut output) },
+        VOICE_STATUS_INVALID_UTF8_PATH
+    );
+
+    let root = fixture_path();
+    let root = root.to_string_lossy();
+    let mut wrong_digest_request = model_request(root.as_bytes());
+    wrong_digest_request.has_expected_manifest_sha256 = 1;
+    // Safety: The path and output structures remain live for the call.
+    assert_eq!(
+        unsafe {
+            voice_model_package_validate_v1(&raw const wrong_digest_request, &raw mut output)
+        },
+        VOICE_STATUS_MODEL_PACKAGE_DIGEST_MISMATCH
+    );
+    let mut ambiguous_request = model_request(root.as_bytes());
+    ambiguous_request.expected_manifest_sha256[0] = 1;
+    // Safety: The path and output structures remain live for the call.
+    assert_eq!(
+        unsafe { voice_model_package_validate_v1(&raw const ambiguous_request, &raw mut output) },
+        VOICE_STATUS_INVALID_ARGUMENT
+    );
+
+    let temporary = temporary_package();
+    let model_path = temporary.join("model.bin");
+    let mut bytes = std::fs::read(&model_path).expect("The model fixture must be readable.");
+    bytes[0] ^= 1;
+    std::fs::write(model_path, bytes).expect("The temporary model must be writable.");
+    let path = temporary.to_string_lossy();
+    let request = model_request(path.as_bytes());
+    // Safety: The path and output structures remain live for the call.
+    assert_eq!(
+        unsafe { voice_model_package_validate_v1(&raw const request, &raw mut output) },
+        VOICE_STATUS_MODEL_PACKAGE_DIGEST_MISMATCH
+    );
+    std::fs::remove_dir_all(temporary).expect("The exact temporary package must be removable.");
+}
 
 #[test]
 fn caller_owned_buffer_negotiates_then_receives_one_decision() {
@@ -99,6 +207,82 @@ fn version_one_layout_is_fixed() {
     assert_eq!(size_of::<VoiceRetentionRequestV1>(), 56);
     assert_eq!(size_of::<VoiceRetentionDecisionV1>(), 32);
     assert_eq!(size_of::<VoiceRetentionPlanV1>(), 56);
+    assert_eq!(size_of::<VoiceUtf8BufferV1>(), 24);
+    assert_eq!(size_of::<VoiceModelPackageRequestV1>(), 72);
+    assert_eq!(size_of::<VoiceModelPackageInfoV1>(), 224);
+}
+
+fn fixture_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../Tests/cuj/voice_model_package_v1/valid")
+}
+
+fn temporary_package() -> PathBuf {
+    let path = std::env::temp_dir().join(format!(
+        "hardware_controller_voice_model_ffi_{}",
+        std::process::id()
+    ));
+    std::fs::create_dir(&path).expect("The temporary package must be creatable.");
+    for name in ["manifest.json", "model.bin", "NOTICE.txt"] {
+        std::fs::copy(fixture_path().join(name), path.join(name))
+            .expect("The model fixture must be copyable.");
+    }
+    path
+}
+
+fn model_request(path: &[u8]) -> VoiceModelPackageRequestV1 {
+    VoiceModelPackageRequestV1 {
+        root_path_utf8: path.as_ptr(),
+        root_path_length: path.len(),
+        maximum_manifest_bytes: 1_048_576,
+        maximum_installed_bytes: 1_048_576,
+        maximum_file_count: 16,
+        has_expected_manifest_sha256: 0,
+        reserved: [0; 3],
+        expected_manifest_sha256: [0; 32],
+    }
+}
+
+fn model_output<'a>(
+    package_id: &'a mut [u8],
+    version: &'a mut [u8],
+    display_name: &'a mut [u8],
+    spdx_expression: &'a mut [u8],
+    notice_file: &'a mut [u8],
+    source_url: &'a mut [u8],
+) -> VoiceModelPackageInfoV1 {
+    VoiceModelPackageInfoV1 {
+        package_id: utf8_buffer(package_id),
+        version: utf8_buffer(version),
+        display_name: utf8_buffer(display_name),
+        spdx_expression: utf8_buffer(spdx_expression),
+        notice_file: utf8_buffer(notice_file),
+        source_url: utf8_buffer(source_url),
+        runtime: 0,
+        stage: 0,
+        capability_mask: 0,
+        file_count: 0,
+        verified_bytes: 0,
+        minimum_memory_bytes: 0,
+        recommended_memory_bytes: 0,
+        manifest_sha256: [0; 32],
+        reserved: [0; 8],
+    }
+}
+
+fn empty_model_output() -> VoiceModelPackageInfoV1 {
+    model_output(&mut [], &mut [], &mut [], &mut [], &mut [], &mut [])
+}
+
+fn utf8_buffer(bytes: &mut [u8]) -> VoiceUtf8BufferV1 {
+    VoiceUtf8BufferV1 {
+        bytes: bytes.as_mut_ptr(),
+        capacity: bytes.len(),
+        length: 0,
+    }
+}
+
+fn utf8(bytes: &[u8], length: usize) -> &str {
+    std::str::from_utf8(&bytes[..length]).expect("Validated output must be UTF-8.")
 }
 
 fn candidates() -> [VoiceRetentionCandidateV1; 2] {

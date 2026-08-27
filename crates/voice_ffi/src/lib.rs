@@ -1,10 +1,14 @@
 //! Versioned synchronous C ABI for the portable Voice engine.
 
-use std::{panic::AssertUnwindSafe, slice};
+use std::{panic::AssertUnwindSafe, path::Path, slice};
 
 use voice_core::{
     AudioExpirationReason, RetentionCandidate, RetentionError, RetentionSettings, SessionId,
     plan_retention,
+};
+use voice_models::{
+    ModelCapability, ModelPackageError, ModelPackageLimits, ModelRuntime, ModelStage,
+    ValidatedModelPackage, validate_model_package,
 };
 
 /// The request completed successfully.
@@ -35,6 +39,313 @@ pub const VOICE_STATUS_DUPLICATE_SESSION_ID: u32 = 11;
 pub const VOICE_STATUS_INVALID_TIMESTAMP: u32 = 12;
 /// Candidate or decision count exceeds the portable representation.
 pub const VOICE_STATUS_TOO_MANY_CANDIDATES: u32 = 13;
+/// A package root path is not valid UTF-8.
+pub const VOICE_STATUS_INVALID_UTF8_PATH: u32 = 14;
+/// A package root is absent, linked, or not a directory.
+pub const VOICE_STATUS_INVALID_MODEL_PACKAGE_ROOT: u32 = 15;
+/// A package manifest or its typed metadata is invalid.
+pub const VOICE_STATUS_INVALID_MODEL_PACKAGE_MANIFEST: u32 = 16;
+/// A package exceeds a configured manifest, byte, or file-count limit.
+pub const VOICE_STATUS_MODEL_PACKAGE_LIMIT_EXCEEDED: u32 = 17;
+/// A package inventory is incomplete, linked, duplicated, or undeclared.
+pub const VOICE_STATUS_MODEL_PACKAGE_INVENTORY_INVALID: u32 = 18;
+/// A declared file size or digest does not match its bytes.
+pub const VOICE_STATUS_MODEL_PACKAGE_DIGEST_MISMATCH: u32 = 19;
+/// Package verification could not read the complete input.
+pub const VOICE_STATUS_MODEL_PACKAGE_IO_FAILURE: u32 = 20;
+
+/// One caller-owned UTF-8 output buffer.
+#[repr(C)]
+#[derive(Debug)]
+pub struct VoiceUtf8BufferV1 {
+    /// Writable bytes, or null only when `capacity` is zero.
+    pub bytes: *mut u8,
+    /// Number of writable bytes.
+    pub capacity: usize,
+    /// Required or written byte count, without a null terminator.
+    pub length: usize,
+}
+
+/// Versioned local Model-package validation request.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct VoiceModelPackageRequestV1 {
+    /// UTF-8 package-root path bytes.
+    pub root_path_utf8: *const u8,
+    /// Number of readable path bytes.
+    pub root_path_length: usize,
+    /// Maximum readable manifest bytes.
+    pub maximum_manifest_bytes: u64,
+    /// Maximum declared payload bytes.
+    pub maximum_installed_bytes: u64,
+    /// Maximum declared payload files.
+    pub maximum_file_count: u32,
+    /// Whether an authenticated manifest digest is supplied.
+    pub has_expected_manifest_sha256: u8,
+    /// Must contain only zeroes.
+    pub reserved: [u8; 3],
+    /// Expected exact manifest SHA-256 when present.
+    pub expected_manifest_sha256: [u8; 32],
+}
+
+/// Verified Model-package metadata in caller-owned buffers.
+#[repr(C)]
+#[derive(Debug)]
+pub struct VoiceModelPackageInfoV1 {
+    /// Stable package identifier.
+    pub package_id: VoiceUtf8BufferV1,
+    /// Publisher-controlled package version.
+    pub version: VoiceUtf8BufferV1,
+    /// User-visible package name.
+    pub display_name: VoiceUtf8BufferV1,
+    /// SPDX license expression.
+    pub spdx_expression: VoiceUtf8BufferV1,
+    /// Package-relative notice path.
+    pub notice_file: VoiceUtf8BufferV1,
+    /// Publisher or upstream source URL.
+    pub source_url: VoiceUtf8BufferV1,
+    /// Runtime code: sherpa-onnx 1, whisper.cpp 2, mistral.rs 3, llama.cpp 4.
+    pub runtime: u32,
+    /// Stage code: ASR 1, formatting 2, VAD 3.
+    pub stage: u32,
+    /// Capability bits: streaming ASR 1, file ASR 2, formatting 4, VAD 8.
+    pub capability_mask: u32,
+    /// Number of verified payload files.
+    pub file_count: u32,
+    /// Sum of verified payload bytes.
+    pub verified_bytes: u64,
+    /// Declared minimum working memory.
+    pub minimum_memory_bytes: u64,
+    /// Declared recommended working memory.
+    pub recommended_memory_bytes: u64,
+    /// SHA-256 of the exact verified manifest bytes.
+    pub manifest_sha256: [u8; 32],
+    /// Written as zeroes.
+    pub reserved: [u8; 8],
+}
+
+/// Validates a package without retaining caller pointers or file handles.
+///
+/// The caller must provide valid, aligned pointers for declared lengths. Keep
+/// the staging directory private from concurrent mutation for the call. Output
+/// text is UTF-8 without null terminators. On `VOICE_STATUS_BUFFER_TOO_SMALL`,
+/// every text length reports its required capacity and no text buffer changes.
+///
+/// # Safety
+///
+/// Every non-null pointer must be aligned and valid for its declared readable
+/// or writable byte count for the duration of this call. Input, output, and all
+/// declared buffers must not overlap.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn voice_model_package_validate_v1(
+    request: *const VoiceModelPackageRequestV1,
+    output: *mut VoiceModelPackageInfoV1,
+) -> u32 {
+    std::panic::catch_unwind(AssertUnwindSafe(|| {
+        // Safety: Pointer validity and alignment are the documented C precondition.
+        unsafe { validate_package(request, output) }
+    }))
+    .unwrap_or(VOICE_STATUS_INTERNAL_FAILURE)
+}
+
+unsafe fn validate_package(
+    request: *const VoiceModelPackageRequestV1,
+    output: *mut VoiceModelPackageInfoV1,
+) -> u32 {
+    if request.is_null() || output.is_null() {
+        return VOICE_STATUS_NULL_POINTER;
+    }
+    // Safety: Null pointers were rejected and validity is the caller contract.
+    let request = unsafe { &*request };
+    // Safety: Null pointers were rejected and exclusive output is the caller contract.
+    let output = unsafe { &mut *output };
+    reset_model_output(output);
+    if request.root_path_utf8.is_null() {
+        return VOICE_STATUS_NULL_POINTER;
+    }
+    if request.reserved != [0; 3]
+        || request.has_expected_manifest_sha256 > 1
+        || (request.has_expected_manifest_sha256 == 0
+            && request.expected_manifest_sha256 != [0; 32])
+        || request.maximum_manifest_bytes == 0
+        || request.maximum_installed_bytes == 0
+        || request.maximum_file_count == 0
+    {
+        return VOICE_STATUS_INVALID_ARGUMENT;
+    }
+    if has_null_output_buffer(output) {
+        return VOICE_STATUS_NULL_POINTER;
+    }
+
+    // Safety: The caller promises this many readable path bytes.
+    let path_bytes =
+        unsafe { slice::from_raw_parts(request.root_path_utf8, request.root_path_length) };
+    let Ok(path) = std::str::from_utf8(path_bytes) else {
+        return VOICE_STATUS_INVALID_UTF8_PATH;
+    };
+    if path.is_empty() {
+        return VOICE_STATUS_INVALID_ARGUMENT;
+    }
+    let package = match validate_model_package(
+        Path::new(path),
+        ModelPackageLimits {
+            maximum_manifest_bytes: request.maximum_manifest_bytes,
+            maximum_installed_bytes: request.maximum_installed_bytes,
+            maximum_file_count: request.maximum_file_count,
+        },
+        (request.has_expected_manifest_sha256 == 1).then_some(request.expected_manifest_sha256),
+    ) {
+        Ok(value) => value,
+        Err(error) => return model_status(&error),
+    };
+    set_model_metadata(output, &package);
+    if model_output_is_too_small(output) {
+        return VOICE_STATUS_BUFFER_TOO_SMALL;
+    }
+
+    // Safety: Buffer capacities were checked and their validity is the caller contract.
+    unsafe { write_model_text(output, &package) };
+    VOICE_STATUS_OK
+}
+
+fn reset_model_output(output: &mut VoiceModelPackageInfoV1) {
+    for buffer in [
+        &mut output.package_id,
+        &mut output.version,
+        &mut output.display_name,
+        &mut output.spdx_expression,
+        &mut output.notice_file,
+        &mut output.source_url,
+    ] {
+        buffer.length = 0;
+    }
+    output.runtime = 0;
+    output.stage = 0;
+    output.capability_mask = 0;
+    output.file_count = 0;
+    output.verified_bytes = 0;
+    output.minimum_memory_bytes = 0;
+    output.recommended_memory_bytes = 0;
+    output.manifest_sha256 = [0; 32];
+    output.reserved = [0; 8];
+}
+
+fn has_null_output_buffer(output: &VoiceModelPackageInfoV1) -> bool {
+    [
+        &output.package_id,
+        &output.version,
+        &output.display_name,
+        &output.spdx_expression,
+        &output.notice_file,
+        &output.source_url,
+    ]
+    .iter()
+    .any(|buffer| buffer.capacity > 0 && buffer.bytes.is_null())
+}
+
+fn set_model_metadata(output: &mut VoiceModelPackageInfoV1, package: &ValidatedModelPackage) {
+    output.package_id.length = package.package_id.len();
+    output.version.length = package.version.len();
+    output.display_name.length = package.display_name.len();
+    output.spdx_expression.length = package.license.spdx_expression.len();
+    output.notice_file.length = package.license.notice_file.len();
+    output.source_url.length = package.license.source_url.len();
+    output.runtime = match package.runtime {
+        ModelRuntime::SherpaOnnx => 1,
+        ModelRuntime::WhisperCpp => 2,
+        ModelRuntime::MistralRs => 3,
+        ModelRuntime::LlamaCpp => 4,
+    };
+    output.stage = match package.stage {
+        ModelStage::Asr => 1,
+        ModelStage::Formatting => 2,
+        ModelStage::Vad => 3,
+    };
+    output.capability_mask = package.capabilities.iter().fold(0, |mask, capability| {
+        mask | match capability {
+            ModelCapability::StreamingAsr => 1,
+            ModelCapability::FileAsr => 2,
+            ModelCapability::Formatting => 4,
+            ModelCapability::Vad => 8,
+        }
+    });
+    output.file_count = package.file_count;
+    output.verified_bytes = package.verified_bytes;
+    output.minimum_memory_bytes = package.resources.minimum_memory_bytes;
+    output.recommended_memory_bytes = package.resources.recommended_memory_bytes;
+    output.manifest_sha256 = package.manifest_sha256;
+}
+
+fn model_output_is_too_small(output: &VoiceModelPackageInfoV1) -> bool {
+    [
+        &output.package_id,
+        &output.version,
+        &output.display_name,
+        &output.spdx_expression,
+        &output.notice_file,
+        &output.source_url,
+    ]
+    .iter()
+    .any(|buffer| buffer.capacity < buffer.length)
+}
+
+unsafe fn write_model_text(output: &mut VoiceModelPackageInfoV1, package: &ValidatedModelPackage) {
+    for (buffer, value) in [
+        (&mut output.package_id, package.package_id.as_str()),
+        (&mut output.version, package.version.as_str()),
+        (&mut output.display_name, package.display_name.as_str()),
+        (
+            &mut output.spdx_expression,
+            package.license.spdx_expression.as_str(),
+        ),
+        (
+            &mut output.notice_file,
+            package.license.notice_file.as_str(),
+        ),
+        (&mut output.source_url, package.license.source_url.as_str()),
+    ] {
+        if !value.is_empty() {
+            // Safety: Capacity was checked and the caller promises writable storage.
+            unsafe { std::ptr::copy_nonoverlapping(value.as_ptr(), buffer.bytes, value.len()) };
+        }
+    }
+}
+
+fn model_status(error: &ModelPackageError) -> u32 {
+    match error {
+        ModelPackageError::InvalidPackageRoot => VOICE_STATUS_INVALID_MODEL_PACKAGE_ROOT,
+        ModelPackageError::ManifestBytesExceeded
+        | ModelPackageError::FileCountExceeded
+        | ModelPackageError::InstalledBytesExceeded => VOICE_STATUS_MODEL_PACKAGE_LIMIT_EXCEEDED,
+        ModelPackageError::InvalidFilePath { .. }
+        | ModelPackageError::DuplicateFilePath { .. }
+        | ModelPackageError::MissingModelFile
+        | ModelPackageError::MissingNoticeFile
+        | ModelPackageError::SymbolicLink { .. }
+        | ModelPackageError::UndeclaredFile { .. }
+        | ModelPackageError::UndeclaredDirectory { .. }
+        | ModelPackageError::MissingFile { .. } => VOICE_STATUS_MODEL_PACKAGE_INVENTORY_INVALID,
+        ModelPackageError::ManifestDigestMismatch
+        | ModelPackageError::FileSizeMismatch { .. }
+        | ModelPackageError::DigestMismatch { .. } => VOICE_STATUS_MODEL_PACKAGE_DIGEST_MISMATCH,
+        ModelPackageError::Io => VOICE_STATUS_MODEL_PACKAGE_IO_FAILURE,
+        ModelPackageError::InvalidManifestFile
+        | ModelPackageError::InvalidManifest
+        | ModelPackageError::UnsupportedSchemaVersion
+        | ModelPackageError::InvalidPackageId
+        | ModelPackageError::InvalidVersion
+        | ModelPackageError::InvalidDisplayName
+        | ModelPackageError::InvalidLicense
+        | ModelPackageError::InvalidResources
+        | ModelPackageError::InvalidLanguage
+        | ModelPackageError::DuplicateLanguage
+        | ModelPackageError::DuplicateCapability
+        | ModelPackageError::CapabilityStageMismatch
+        | ModelPackageError::MissingCapability
+        | ModelPackageError::InvalidDigest { .. }
+        | ModelPackageError::InvalidFileSize { .. } => VOICE_STATUS_INVALID_MODEL_PACKAGE_MANIFEST,
+    }
+}
 
 /// Voice session UUID bytes in network order.
 #[repr(C)]
