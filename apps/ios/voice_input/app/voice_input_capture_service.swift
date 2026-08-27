@@ -7,6 +7,7 @@ import VoiceInputShared
 enum VoiceInputCaptureError: Error, LocalizedError, Sendable {
   case alreadyRecording
   case microphoneDenied
+  case localModelUnavailable
   case recordingFailed
 
   var errorDescription: String? {
@@ -15,6 +16,8 @@ enum VoiceInputCaptureError: Error, LocalizedError, Sendable {
       "A recording is already active."
     case .microphoneDenied:
       "Microphone access is required. Enable it in Settings."
+    case .localModelUnavailable:
+      "Choose a compatible local speech-to-text model before recording."
     case .recordingFailed:
       "The local recorder could not start."
     }
@@ -24,15 +27,21 @@ enum VoiceInputCaptureError: Error, LocalizedError, Sendable {
 actor VoiceInputCaptureService {
   private let store: any VoiceInputStateStoring
   private let captureURL: URL
+  private let asrWorkflow: VoiceInputASRWorkflow?
   private var recorder: AVAudioRecorder?
   private var activityID: String?
   private var heartbeatTask: Task<Void, Never>?
   private var sessionID: UUID?
   private var sequence: UInt64
 
-  init(store: any VoiceInputStateStoring, captureURL: URL) {
+  init(
+    store: any VoiceInputStateStoring,
+    captureURL: URL,
+    asrWorkflow: VoiceInputASRWorkflow? = nil
+  ) {
     self.store = store
     self.captureURL = captureURL
+    self.asrWorkflow = asrWorkflow
     sequence = (try? store.readSnapshot().sequence) ?? 0
   }
 
@@ -41,12 +50,23 @@ actor VoiceInputCaptureService {
   }
 
   func start(sessionID requestedSessionID: UUID = UUID()) async throws {
-    guard recorder == nil else {
+    guard recorder == nil, sessionID == nil else {
       throw VoiceInputCaptureError.alreadyRecording
     }
+    sessionID = requestedSessionID
     do {
+      guard let asrWorkflow else {
+        throw VoiceInputCaptureError.localModelUnavailable
+      }
+      try await asrWorkflow.prewarmSelectedModel()
+      guard sessionID == requestedSessionID, recorder == nil else {
+        throw VoiceInputCaptureError.recordingFailed
+      }
       guard await AVAudioApplication.requestRecordPermission() else {
         throw VoiceInputCaptureError.microphoneDenied
+      }
+      guard sessionID == requestedSessionID, recorder == nil else {
+        throw VoiceInputCaptureError.recordingFailed
       }
 
       let audioSession = AVAudioSession.sharedInstance()
@@ -68,7 +88,6 @@ actor VoiceInputCaptureService {
       }
 
       recorder = newRecorder
-      sessionID = requestedSessionID
       try writeSnapshot(
         .recording(
           sessionID: requestedSessionID,
@@ -113,17 +132,15 @@ actor VoiceInputCaptureService {
         )
       )
 
-      let byteCount =
-        ((try? FileManager.default.attributesOfItem(atPath: captureURL.path)[.size])
-        as? NSNumber)?.uint64Value ?? 0
-      let result =
-        "K0 local capture completed (\(byteCount) audio bytes). "
-        + "This probe validates keyboard handoff; local transcription follows in the iOS implementation."
+      guard let asrWorkflow else {
+        throw VoiceInputCaptureError.localModelUnavailable
+      }
+      let result = try await asrWorkflow.transcribe(audioURL: captureURL)
       try writeSnapshot(
         .ready(
           sessionID: sessionID,
           sequence: nextSequence(),
-          text: result
+          text: result.text
         )
       )
       await relinquishCapture(endingPhase: .ready)

@@ -111,12 +111,27 @@ pub struct ValidatedModelPackage {
     pub license: ModelLicense,
     /// Declared memory requirements.
     pub resources: ModelResources,
+    /// Verified payload files in manifest order.
+    pub files: Vec<ValidatedModelFile>,
     /// Number of verified payload files.
     pub file_count: u32,
     /// Sum of verified payload bytes.
     pub verified_bytes: u64,
     /// SHA-256 of the exact manifest bytes.
     pub manifest_sha256: [u8; 32],
+}
+
+/// One digest-verified file belonging to a validated Model package.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ValidatedModelFile {
+    /// Canonical package-relative path.
+    pub path: String,
+    /// Semantic role used by runtime adapters.
+    pub role: ModelFileRole,
+    /// Verified byte count.
+    pub bytes: u64,
+    /// Verified lowercase SHA-256 text from the manifest.
+    pub sha256: String,
 }
 
 /// A package validation failure that must prevent installation or inference.
@@ -255,13 +270,19 @@ struct ManifestResources {
     recommended_memory_bytes: u64,
 }
 
-#[derive(Clone, Copy, Deserialize, Eq, PartialEq)]
+/// Semantic purpose of one verified package file.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
-enum ModelFileRole {
+pub enum ModelFileRole {
+    /// Primary inference weights or graph.
     Model,
+    /// Runtime tokenizer data.
     Tokenizer,
+    /// Runtime configuration data.
     Configuration,
+    /// Runtime vocabulary data.
     Vocabulary,
+    /// Human-readable license notice.
     Notice,
 }
 
@@ -364,6 +385,8 @@ fn validate_manifest(
         verify_file(root, file)?;
     }
 
+    let file_count =
+        u32::try_from(manifest.files.len()).map_err(|_| ModelPackageError::FileCountExceeded)?;
     Ok(ValidatedModelPackage {
         package_id: manifest.package_id,
         version: manifest.version,
@@ -381,8 +404,17 @@ fn validate_manifest(
             minimum_memory_bytes: manifest.resources.minimum_memory_bytes,
             recommended_memory_bytes: manifest.resources.recommended_memory_bytes,
         },
-        file_count: u32::try_from(manifest.files.len())
-            .map_err(|_| ModelPackageError::FileCountExceeded)?,
+        files: manifest
+            .files
+            .into_iter()
+            .map(|file| ValidatedModelFile {
+                path: file.path,
+                role: file.role,
+                bytes: file.bytes,
+                sha256: file.sha256,
+            })
+            .collect(),
+        file_count,
         verified_bytes: installed_bytes,
         manifest_sha256,
     })

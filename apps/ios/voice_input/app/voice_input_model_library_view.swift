@@ -83,6 +83,11 @@ struct VoiceInputModelLibraryView: View {
         Text(installed.package.displayName)
           .font(.headline)
         Spacer()
+        if model.isActiveASRModel(installed) {
+          Text("Active")
+            .font(.caption.bold())
+            .accessibilityIdentifier("active_asr_model")
+        }
         Text("v\(installed.package.version)")
           .font(.caption.monospacedDigit())
           .foregroundStyle(.secondary)
@@ -93,6 +98,17 @@ struct VoiceInputModelLibraryView: View {
       Text(installed.publisherVerified ? "Pinned manifest" : "Manual import")
         .font(.caption)
         .foregroundStyle(.secondary)
+      if canSelectForASR(installed.package) && !model.isActiveASRModel(installed) {
+        Button {
+          Task {
+            await model.selectASRModel(installed)
+          }
+        } label: {
+          Label("Use for speech to text", systemImage: "checkmark.circle")
+        }
+        .disabled(model.isImporting || model.isRemoving)
+        .accessibilityIdentifier("select_asr_model")
+      }
       Button(role: .destructive) {
         pendingRemoval = installed
       } label: {
@@ -111,6 +127,12 @@ struct VoiceInputModelLibraryView: View {
       in: RoundedRectangle(cornerRadius: 16, style: .continuous)
     )
     .accessibilityIdentifier("model_package_card")
+  }
+
+  private func canSelectForASR(_ package: PortableModelPackage) -> Bool {
+    package.runtime == .whisperCPP
+      && package.stage == .asr
+      && package.capabilities.contains(.fileASR)
   }
 
   private func packageSummary(_ package: PortableModelPackage) -> String {

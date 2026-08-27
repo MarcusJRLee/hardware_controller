@@ -1,8 +1,8 @@
 # Local-first voice platform design
 
-**Status:** Accepted roadmap; macOS M1–M15, iOS Gate K0, and the I1 onboarding
-foundation are implemented on the current stacked branches. Current evidence is
-called out explicitly. The durable decision is
+**Status:** Accepted roadmap; macOS M1–M15, iOS Gate K0, I1 onboarding and Model
+admission, and the first I2 Raw-ASR slice are implemented on the current stacked
+branches. Current evidence is called out explicitly. The durable decision is
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 and [`voice_cujs.md`](voice_cujs.md) is the acceptance contract.
 
@@ -277,7 +277,7 @@ may be benchmarked, but it must emit the same evidence-bearing stages.
 | Apple Speech/SpeechAnalyzer                                                  | Native live and file capabilities vary by OS | macOS/iOS only                                                                    | Existing baseline and Apple fallback.                       |
 | sherpa-onnx with a streaming Zipformer or supported Whisper/Parakeet package | Strong local streaming/offline surface       | macOS, iOS, Android, Linux, and Windows; Rust API over optimized native kernels | Leading portable spike.                                     |
 | WhisperKit/Core ML                                                           | Live and file                                | macOS/iOS                                                                         | Apple-optimized comparator.                                 |
-| whisper.cpp with quantized Whisper                                           | Live chunking and file                       | Broad native and WASM; C++ kernel with Rust binding                               | Portability and model-quality comparator.                   |
+| whisper.cpp with quantized Whisper                                           | Live chunking and file                       | Broad native and WASM; C++ kernel behind Rust validation and a narrow C bridge     | Selected first iOS file-ASR provider.                       |
 | Candle Whisper                                                               | Model-dependent                              | Rust-first with Metal/CUDA/CPU                                                    | Rust-purity research candidate, not assumed mobile default. |
 
 Model packages initially benchmark:
@@ -323,6 +323,13 @@ make ownership explicit and let thin Swift/Kotlin wrappers remain typed. The
 dependency-free Rust domain imports no Apple type. Reevaluate UniFFI for a later
 object-heavy or asynchronous boundary when its Swift 6 `Sendable` support meets
 the same gates. WASM compatibility is not a current selection gate.
+
+Decision [0042](decisions/0042_ios_whisper_file_asr.md) selects the official
+whisper.cpp `b4938` XCFramework for the first iOS completed-file adapter. Rust
+revalidates the active package and resolves the digest-verified model role; a
+Swift actor exclusively owns the opaque C runtime context and prewarms it.
+Framework and model binaries stay out of source control. sherpa-onnx remains
+the streaming challenger and must beat the same physical-device corpus.
 
 ## Formatting and backtracking
 
@@ -601,7 +608,15 @@ test first or batch the entire implementation behind mocked internals.
   eviction. Fourteen focused unit/integration cases cover the model library,
   real linked fixture, limits, links, tampering, identity, idempotence, cleanup,
   removal, and corrupt records; the cold-launch UI CUJ requires the import
-  surface. Runtime activation remains separate.
+  surface.
+- **Current ASR evidence:** one compatible package can become the persisted
+  active ASR model; app launch, selection, and capture prewarm its exclusive
+  whisper.cpp context. Rust revalidates the exact manifest and every payload
+  before returning one model path. Stop converts the real CAF to timed Raw text
+  through bounded caller-owned buffers. A pinned native integration corpus
+  measured warm CPU RTF 0.0111 on the reference Mac; the UI fails explicitly when no
+  model is selected. Physical-iPhone percentiles and the remaining
+  formatting/History delivery path are still open.
 - Implement I1–I11 one failing CUJ at a time: keyboard typing fallback, mic
   control, app switching where required, insertion, Styles, interruption,
   recovery, storage caps, secure fields, and airplane mode.

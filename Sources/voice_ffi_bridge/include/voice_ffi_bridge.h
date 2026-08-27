@@ -36,6 +36,11 @@ enum VoiceFFIBridgeStatusV1 {
       VOICE_STATUS_HISTORY_ARCHIVE_IDENTITY_INVALID,
   VoiceFFIBridgeStatusHistoryArchiveIoFailure =
       VOICE_STATUS_HISTORY_ARCHIVE_IO_FAILURE,
+  VoiceFFIBridgeStatusASRRuntimeUnsupported =
+      VOICE_STATUS_ASR_RUNTIME_UNSUPPORTED,
+  VoiceFFIBridgeStatusASRCapabilityUnsupported =
+      VOICE_STATUS_ASR_CAPABILITY_UNSUPPORTED,
+  VoiceFFIBridgeStatusASRModelAmbiguous = VOICE_STATUS_ASR_MODEL_AMBIGUOUS,
 };
 
 enum VoiceFFIBridgeModelRuntimeV1 {

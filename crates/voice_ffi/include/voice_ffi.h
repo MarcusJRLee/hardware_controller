@@ -36,6 +36,9 @@ extern "C" {
 #define VOICE_STATUS_HISTORY_ARCHIVE_INTEGRITY_MISMATCH UINT32_C(25)
 #define VOICE_STATUS_HISTORY_ARCHIVE_IDENTITY_INVALID UINT32_C(26)
 #define VOICE_STATUS_HISTORY_ARCHIVE_IO_FAILURE UINT32_C(27)
+#define VOICE_STATUS_ASR_RUNTIME_UNSUPPORTED UINT32_C(28)
+#define VOICE_STATUS_ASR_CAPABILITY_UNSUPPORTED UINT32_C(29)
+#define VOICE_STATUS_ASR_MODEL_AMBIGUOUS UINT32_C(30)
 
 #define VOICE_EXPIRATION_AGE_LIMIT UINT32_C(1)
 #define VOICE_EXPIRATION_ARTIFACT_LIMIT UINT32_C(2)
@@ -98,6 +101,12 @@ typedef struct VoiceModelPackageInfoV2 {
   VoiceModelPackageInfoV1 base;
   VoiceUtf8BufferV1 languages_csv;
 } VoiceModelPackageInfoV2;
+
+typedef struct VoiceASRModelInfoV1 {
+  VoiceUtf8BufferV1 model_path;
+  uint8_t manifest_sha256[32];
+  uint8_t reserved[8];
+} VoiceASRModelInfoV1;
 
 typedef struct VoiceHistoryArchiveRequestV1 {
   const uint8_t *root_path_utf8;
@@ -201,6 +210,14 @@ voice_model_package_validate_v1(const VoiceModelPackageRequestV1 *request,
 VoiceStatusV1
 voice_model_package_validate_v2(const VoiceModelPackageRequestV1 *request,
                                 VoiceModelPackageInfoV2 *output);
+
+/*
+ * Revalidates a digest-pinned package and resolves one whisper.cpp model path
+ * immediately before runtime load. Output path text is not null terminated.
+ */
+VoiceStatusV1
+voice_asr_model_resolve_v1(const VoiceModelPackageRequestV1 *request,
+                           VoiceASRModelInfoV1 *output);
 
 /*
  * The archive-root path is UTF-8 and pointers are never retained. Keep the

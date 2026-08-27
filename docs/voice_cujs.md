@@ -1,8 +1,8 @@
 # Voice critical user journeys
 
-**Status:** Accepted behavior contract; macOS M1–M15, iOS Gate K0, and I1 local
-onboarding and Model-package admission are implemented. The
-authority is
+**Status:** Accepted behavior contract; macOS M1–M15, iOS Gate K0, I1 local
+onboarding and Model-package admission, and the first I2 Raw-ASR slice are
+implemented. The authority is
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md).
 
 ## Purpose
@@ -376,11 +376,20 @@ stop and reflects bounded status; final text is inserted once through
 `textDocumentProxy`; and the containing app stores History. No audio is captured
 by the extension.
 
+**Current C4 evidence:** the containing app can persist one compatible active
+ASR package, prewarm a pinned whisper.cpp context, revalidate all selected bytes
+through Rust immediately before use, convert its CAF to timed Raw text, and
+publish only that real result. Wrong runtimes, missing selection, changed bytes,
+and bounded-output failures remain explicit and do not invent text. A native C
+integration test crosses the production framework with pinned model/audio and
+enforces a permissive RTF gate. Formatting, History commit, and the complete
+signed-device keyboard loop remain required before I2 is accepted.
+
 **Gate K0 evidence:** a signed app, keyboard, and Control Center extension share
 only bounded this-device-only Keychain records. The containing app records a real
 16-kHz mono CAF; the enabled keyboard types in Messages, requests a result, and
 inserts the matching result once. Policy, persistence, latency, capture, and UI
-tests cover the deterministic behavior. Production ASR/formatting remains C4.
+tests cover the deterministic handoff behavior.
 
 ### I3 — Start when the containing app is cold or suspended
 

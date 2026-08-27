@@ -8,8 +8,8 @@ use voice_core::{
     plan_retention,
 };
 use voice_models::{
-    ModelCapability, ModelPackageError, ModelPackageLimits, ModelRuntime, ModelStage,
-    ValidatedModelPackage, validate_model_package,
+    ASRModelError, ModelCapability, ModelPackageError, ModelPackageLimits, ModelRuntime,
+    ModelStage, ValidatedModelPackage, resolve_whisper_file_asr_model, validate_model_package,
 };
 
 /// The request completed successfully.
@@ -68,6 +68,12 @@ pub const VOICE_STATUS_HISTORY_ARCHIVE_INTEGRITY_MISMATCH: u32 = 25;
 pub const VOICE_STATUS_HISTORY_ARCHIVE_IDENTITY_INVALID: u32 = 26;
 /// Voice History archive verification could not read the complete input.
 pub const VOICE_STATUS_HISTORY_ARCHIVE_IO_FAILURE: u32 = 27;
+/// The selected ASR package targets a runtime this adapter does not implement.
+pub const VOICE_STATUS_ASR_RUNTIME_UNSUPPORTED: u32 = 28;
+/// The selected package does not provide completed-file ASR.
+pub const VOICE_STATUS_ASR_CAPABILITY_UNSUPPORTED: u32 = 29;
+/// The selected package has no unambiguous primary model payload.
+pub const VOICE_STATUS_ASR_MODEL_AMBIGUOUS: u32 = 30;
 
 /// Versioned Voice History archive validation request.
 #[repr(C)]
@@ -278,6 +284,114 @@ pub struct VoiceModelPackageInfoV2 {
     pub base: VoiceModelPackageInfoV1,
     /// Comma-separated BCP-47-like language tags in manifest order.
     pub languages_csv: VoiceUtf8BufferV1,
+}
+
+/// Revalidated runtime input returned in caller-owned storage.
+#[repr(C)]
+#[derive(Debug)]
+pub struct VoiceASRModelInfoV1 {
+    /// Verified absolute model payload path.
+    pub model_path: VoiceUtf8BufferV1,
+    /// SHA-256 of the exact revalidated manifest bytes.
+    pub manifest_sha256: [u8; 32],
+    /// Written as zeroes.
+    pub reserved: [u8; 8],
+}
+
+/// Revalidates and resolves a whisper.cpp file-ASR package immediately before load.
+///
+/// # Safety
+///
+/// The Model-package request contract applies. `output` and its path buffer
+/// must be valid, aligned, writable, and nonoverlapping with the request.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn voice_asr_model_resolve_v1(
+    request: *const VoiceModelPackageRequestV1,
+    output: *mut VoiceASRModelInfoV1,
+) -> u32 {
+    std::panic::catch_unwind(AssertUnwindSafe(|| {
+        // Safety: Pointer validity and alignment are the documented C precondition.
+        unsafe { resolve_asr_model(request, output) }
+    }))
+    .unwrap_or(VOICE_STATUS_INTERNAL_FAILURE)
+}
+
+unsafe fn resolve_asr_model(
+    request: *const VoiceModelPackageRequestV1,
+    output: *mut VoiceASRModelInfoV1,
+) -> u32 {
+    if request.is_null() || output.is_null() {
+        return VOICE_STATUS_NULL_POINTER;
+    }
+    // Safety: Null pointers were rejected and validity is the caller contract.
+    let request = unsafe { &*request };
+    // Safety: Null pointers were rejected and exclusive output is the caller contract.
+    let output = unsafe { &mut *output };
+    output.model_path.length = 0;
+    output.manifest_sha256 = [0; 32];
+    output.reserved = [0; 8];
+    if request.root_path_utf8.is_null()
+        || (output.model_path.capacity > 0 && output.model_path.bytes.is_null())
+    {
+        return VOICE_STATUS_NULL_POINTER;
+    }
+    if request.reserved != [0; 3]
+        || request.has_expected_manifest_sha256 != 1
+        || request.maximum_manifest_bytes == 0
+        || request.maximum_installed_bytes == 0
+        || request.maximum_file_count == 0
+    {
+        return VOICE_STATUS_INVALID_ARGUMENT;
+    }
+    // Safety: The caller promises this many readable path bytes.
+    let path_bytes =
+        unsafe { slice::from_raw_parts(request.root_path_utf8, request.root_path_length) };
+    let Ok(path) = std::str::from_utf8(path_bytes) else {
+        return VOICE_STATUS_INVALID_UTF8_PATH;
+    };
+    if path.is_empty() {
+        return VOICE_STATUS_INVALID_ARGUMENT;
+    }
+    let resolved = match resolve_whisper_file_asr_model(
+        Path::new(path),
+        ModelPackageLimits {
+            maximum_manifest_bytes: request.maximum_manifest_bytes,
+            maximum_installed_bytes: request.maximum_installed_bytes,
+            maximum_file_count: request.maximum_file_count,
+        },
+        request.expected_manifest_sha256,
+    ) {
+        Ok(value) => value,
+        Err(error) => return asr_model_status(&error),
+    };
+    let model_path = resolved.model_path.to_string_lossy();
+    output.model_path.length = model_path.len();
+    output.manifest_sha256 = resolved.manifest_sha256;
+    if output.model_path.capacity < output.model_path.length {
+        return VOICE_STATUS_BUFFER_TOO_SMALL;
+    }
+    if !model_path.is_empty() {
+        // Safety: Capacity was checked and the caller promises writable storage.
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                model_path.as_ptr(),
+                output.model_path.bytes,
+                model_path.len(),
+            );
+        }
+    }
+    VOICE_STATUS_OK
+}
+
+fn asr_model_status(error: &ASRModelError) -> u32 {
+    match error {
+        ASRModelError::Package(error) => model_status(error),
+        ASRModelError::UnsupportedRuntime => VOICE_STATUS_ASR_RUNTIME_UNSUPPORTED,
+        ASRModelError::UnsupportedStage | ASRModelError::MissingFileCapability => {
+            VOICE_STATUS_ASR_CAPABILITY_UNSUPPORTED
+        }
+        ASRModelError::AmbiguousModelPayload => VOICE_STATUS_ASR_MODEL_AMBIGUOUS,
+    }
 }
 
 /// Validates a package without retaining caller pointers or file handles.

@@ -39,9 +39,10 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 
 ## Approved next program
 
-The local Voice expansion is accepted; macOS M1–M15, iOS Gate K0, and I1 local
-onboarding and Model admission are implemented across the current stacked
-branches. macOS and iOS are the active roadmap; Android, Windows, and Linux
+The local Voice expansion is accepted; macOS M1–M15, iOS Gate K0, I1 local
+onboarding and Model admission, and the first I2 Raw-ASR slice are implemented
+across the current stacked branches. macOS and iOS are the active roadmap;
+Android, Windows, and Linux
 remain architectural line-of-sight platforms; web and mobile web are deferred.
 The acceptance and execution authorities are:
 
@@ -67,8 +68,9 @@ promotion.
 | Local AI refinement | Warm raw-final-to-refined p95 ≤ 1 s on the reference Mac. | Prompt-5 Qwen 3.5 4B p95 0.908 s. |
 | Local AI end to end | Warm release-to-insertion p95 ≤ 1.5 s on the reference Mac. | Prompt-5 prewarmed M4 production-controller p95 1.004 s. |
 | Local AI deadline | Preparation plus generation must fall back within three seconds after final speech text. | Deterministic deadline and late-output tests. |
-| Voice History | Warm 5,000-session search p95 ≤ 250 ms; startup recovery precedes retention without delaying the input runtime. | M8 current-source p95 2.639 ms; current source passes 511 Swift tests in 76 suites plus 29 Rust domain/archive/model/ABI tests and one linked C consumer. |
+| Voice History | Warm 5,000-session search p95 ≤ 250 ms; startup recovery precedes retention without delaying the input runtime. | M8 current-source p95 2.639 ms; current source passes 512 Swift tests in 76 suites plus 34 Rust domain/archive/model/ABI tests and two linked/native C consumers. |
 | Privacy | Voice artifacts remain app-owned and local; no speech content is logged; no remote-capable provider receives a call; Ollama cannot reach a nonloopback endpoint. | Deterministic provider-boundary, SQLite/CAF, fallback, static-scan, and fixed-endpoint transport tests. |
+| iOS local ASR | File-ASR RTF ≤ 0.75 on the pinned native integration corpus; selected bytes are revalidated immediately before load. | whisper.cpp `b4938` + `tiny.en` reference warm CPU RTF 0.0111; Rust digest/runtime/capability/tamper tests and timed C/Swift result tests pass. |
 | Documentation | Canonical docs describe current behavior and all links resolve. | All local links resolve. |
 
 Reference Local AI measurements and reproduction commands are in

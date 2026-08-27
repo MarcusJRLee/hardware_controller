@@ -18,9 +18,13 @@ targets:
     platform: iOS
     sources:
       - app
+      - path: resources/third_party_notices.txt
+        buildPhase: resources
     dependencies:
       - target: VoiceInputShared
       - target: HardwareControllerVoiceFFI
+        embed: false
+      - target: VoiceWhisperBridge
         embed: false
       - target: VoiceInputKeyboard
         embed: true
@@ -28,6 +32,8 @@ targets:
         embed: true
       - framework: ../../../.build/ios_voice_ffi/VoiceFFI.xcframework
         embed: false
+      - framework: ../../../.build/ios_asr_runtime/build-apple/whisper.xcframework
+        embed: true
     entitlements:
       path: config/app.entitlements
       properties:
@@ -72,6 +78,26 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.voiceffi
+
+  VoiceWhisperBridge:
+    type: framework.static
+    platform: iOS
+    sources:
+      - path: ../../../Sources/voice_whisper_bridge/voice_whisper_bridge.c
+        group: portable
+        createIntermediateGroups: false
+      - path: ../../../Sources/voice_whisper_bridge/include/voice_whisper_bridge.h
+        group: portable
+        headerVisibility: public
+    dependencies:
+      - framework: ../../../.build/ios_asr_runtime/build-apple/whisper.xcframework
+    settings:
+      base:
+        DEFINES_MODULE: YES
+        GENERATE_INFOPLIST_FILE: YES
+        HEADER_SEARCH_PATHS: $(inherited) $(SRCROOT)/../../../Sources/voice_whisper_bridge/include
+        MODULEMAP_FILE: $(SRCROOT)/../../../Sources/voice_whisper_bridge/include/module.modulemap
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.whisperbridge
 
   VoiceInputKeyboard:
     type: app-extension

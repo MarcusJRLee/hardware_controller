@@ -11,6 +11,7 @@ command -v xcodegen >/dev/null || {
 }
 
 scripts/build_ios_rust_ffi.sh
+scripts/fetch_ios_asr_runtime.sh
 
 xcodegen generate \
   --spec apps/ios/voice_input/project.yml \
