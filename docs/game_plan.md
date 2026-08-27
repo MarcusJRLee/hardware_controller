@@ -32,6 +32,7 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 | iOS Gate K0 | A signed iOS app, full keyboard, and Control Center extension prove app-owned local capture, bounded same-team Keychain handoff, Live Activity ownership, honest cold activation, and one-time insertion. | [`decisions/0040_ios_keyboard_activation_and_handoff.md`](decisions/0040_ios_keyboard_activation_and_handoff.md) |
 | iOS I1 onboarding and Model admission | The production app explains local-only behavior, guides permission and keyboard setup, confirms Full Access handoff, and atomically imports bounded Model packages through the linked Rust validator without network code. | [`voice_cujs.md`](voice_cujs.md#i1--onboard-locally) |
 | iOS I2 local finalization and History | The containing app runs real file ASR, shared deterministic spoken edits and semantic formatting, then durably stores searchable/playable Raw, Edited, Formatted, model, timing, digest, and bounded-audio evidence before publishing text. | [`decisions/0043_ios_local_formatting_and_history.md`](decisions/0043_ios_local_formatting_and_history.md) |
+| iOS I2/I6 Style-qualified delivery | App and keyboard defaults remain separate; an exact schema-V2 stop carries one Style into commit-before-publish formatting, and insertion deduplicates by session identity. | [`decisions/0044_ios_style_qualified_keyboard_delivery.md`](decisions/0044_ios_style_qualified_keyboard_delivery.md) |
 | Model recommendation | Qwen 3.5 4B is digest-pinned from the fixed evaluation corpus. | [`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md) |
 | Profiles | Transactional named Profiles with independent per-Device setups and active-Action cleanup. | [`decisions/0014_multi_profile_device_configuration.md`](decisions/0014_multi_profile_device_configuration.md) |
 | Application | Controller, History, Profiles, and General in one native foreground window with Dock and menu-bar presence. | [`ux_spec.md`](ux_spec.md) |
@@ -41,8 +42,9 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 ## Approved next program
 
 The local Voice expansion is accepted; macOS M1–M15, iOS Gate K0, I1 local
-onboarding and Model admission, and I2 through local formatting and History are
-implemented across the current stacked branches. macOS and iOS are the active
+onboarding and Model admission, and I2 through Style-qualified local formatting,
+History, and warm keyboard delivery are implemented across the current stacked
+branches. macOS and iOS are the active
 roadmap; Android, Windows, and Linux remain architectural line-of-sight
 platforms; web and mobile web are deferred.
 The acceptance and execution authorities are:
@@ -73,6 +75,7 @@ promotion.
 | Privacy | Voice artifacts remain app-owned and local; no speech content is logged; no remote-capable provider receives a call; Ollama cannot reach a nonloopback endpoint. | Deterministic provider-boundary, SQLite/CAF, fallback, static-scan, and fixed-endpoint transport tests. |
 | iOS local ASR | File-ASR RTF ≤ 0.75 on the pinned native integration corpus; selected bytes are revalidated immediately before load. | `HC_RUN_IOS_ASR_PERFORMANCE=1` enforces the named-hardware gate; whisper.cpp `b4938` + `tiny.en` reference warm CPU RTF 0.0111. Every check runs real transcription correctness; Rust digest/runtime/capability/tamper and timed C/Swift result tests pass. |
 | iOS local History | Final output is unavailable until Raw/Edited/Formatted plus audio evidence commit; 90-day/1-GiB/2,000-artifact defaults retain transcripts after audio expiry. | Real SQLite/filesystem tests cover reload, escaped search, playback state, SHA-256 evidence, cap expiry, transcript preservation, partial cleanup, and orphan cleanup. |
+| iOS keyboard delivery | One exact session and Style stop command produces at most one insertion; stale or malformed state cannot revive delivery. | Stable-Style, exhaustive-mapping, schema-migration, durable-Keychain-claim, real-Keychain warm-journey, re-published-ready, and app-stop tests. |
 | Documentation | Canonical docs describe current behavior and all links resolve. | All local links resolve. |
 
 Reference Local AI measurements and reproduction commands are in

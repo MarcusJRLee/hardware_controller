@@ -89,6 +89,22 @@ final class VoiceInputKeyboardPolicyTest: XCTestCase {
     )
     XCTAssertEqual(
       policy.microphoneDecision(
+        snapshot: VoiceInputSnapshot.ready(
+          sessionID: sessionID,
+          sequence: 4,
+          text: "Re-published local result"
+        ),
+        hasFullAccess: true,
+        lastInsertionReceipt: VoiceInputInsertionReceipt(
+          sessionID: sessionID,
+          sequence: 3
+        ),
+        now: Date()
+      ),
+      .alreadyInserted
+    )
+    XCTAssertEqual(
+      policy.microphoneDecision(
         snapshot: snapshot,
         hasFullAccess: true,
         lastInsertionReceipt: VoiceInputInsertionReceipt(
@@ -98,6 +114,64 @@ final class VoiceInputKeyboardPolicyTest: XCTestCase {
         now: Date()
       ),
       .insert(sessionID: sessionID, sequence: 3, text: "Local result")
+    )
+  }
+
+  func testWarmKeyboardJourneyCarriesStyleAndInsertsOneMatchingResult() {
+    let sessionID = UUID()
+    let policy = VoiceInputKeyboardPolicy()
+    let now = Date(timeIntervalSince1970: 10)
+    let recording = VoiceInputSnapshot.recording(
+      sessionID: sessionID,
+      sequence: 1,
+      heartbeatAt: now
+    )
+
+    XCTAssertEqual(
+      policy.microphoneDecision(
+        snapshot: recording,
+        hasFullAccess: true,
+        lastInsertionReceipt: nil,
+        now: now
+      ),
+      .requestStop(sessionID: sessionID)
+    )
+    let stop = VoiceInputCommand.stop(
+      sessionID: sessionID,
+      styleKind: .formal,
+      issuedAt: now
+    )
+    XCTAssertEqual(stop.styleKind, .formal)
+
+    let ready = VoiceInputSnapshot.ready(
+      sessionID: sessionID,
+      sequence: 2,
+      text: "Formatted once."
+    )
+    XCTAssertEqual(
+      policy.microphoneDecision(
+        snapshot: ready,
+        hasFullAccess: true,
+        lastInsertionReceipt: nil,
+        now: now
+      ),
+      .insert(
+        sessionID: sessionID,
+        sequence: 2,
+        text: "Formatted once."
+      )
+    )
+    XCTAssertEqual(
+      policy.microphoneDecision(
+        snapshot: ready,
+        hasFullAccess: true,
+        lastInsertionReceipt: VoiceInputInsertionReceipt(
+          sessionID: sessionID,
+          sequence: 2
+        ),
+        now: now
+      ),
+      .alreadyInserted
     )
   }
 
@@ -141,8 +215,32 @@ final class VoiceInputKeyboardPolicyTest: XCTestCase {
 
     XCTAssertFalse(
       VoiceInputCommandPolicy().accepts(
-        .stop(sessionID: UUID(), issuedAt: now.addingTimeInterval(0.001)),
+        .stop(
+          sessionID: UUID(),
+          styleKind: .natural,
+          issuedAt: now.addingTimeInterval(0.001)
+        ),
         now: now
+      )
+    )
+  }
+
+  func testLegacyStopWithoutStyleCannotFinalizeAResult() throws {
+    let sessionID = UUID()
+    let data = Data(
+      """
+      {"issuedAt":100000,"kind":"stop","schemaRevision":1,"sessionID":"\(sessionID.uuidString)"}
+      """.utf8
+    )
+    let command = try VoiceInputJSON.decoder.decode(
+      VoiceInputCommand.self,
+      from: data
+    )
+
+    XCTAssertFalse(
+      VoiceInputCommandPolicy().accepts(
+        command,
+        now: Date(timeIntervalSince1970: 100)
       )
     )
   }

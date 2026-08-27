@@ -16,16 +16,13 @@ extension VoiceInputHistoryRepository: VoiceInputHistoryStoring {}
 struct VoiceInputSessionFinalizer: Sendable {
   private let pipeline: VoiceInputDocumentPipeline
   private let history: any VoiceInputHistoryStoring
-  private let style: VoiceStyle
 
   init(
     pipeline: VoiceInputDocumentPipeline = VoiceInputDocumentPipeline(),
-    history: any VoiceInputHistoryStoring,
-    style: VoiceStyle = .natural
+    history: any VoiceInputHistoryStoring
   ) {
     self.pipeline = pipeline
     self.history = history
-    self.style = style
   }
 
   func finalize(
@@ -33,7 +30,8 @@ struct VoiceInputSessionFinalizer: Sendable {
     startedAt: Date,
     endedAt: Date,
     rawTranscript: VoiceInputRawTranscript,
-    sourceAudioURL: URL
+    sourceAudioURL: URL,
+    style: VoiceStyle
   ) async throws -> VoiceInputProcessedTranscript {
     let processed = try pipeline.process(rawTranscript, style: style)
     _ = try await history.save(

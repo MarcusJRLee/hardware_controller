@@ -15,6 +15,7 @@ final class VoiceInputUITest: XCTestCase {
     XCTAssertTrue(app.descendants(matching: .any)["local_model_library"].exists)
     XCTAssertTrue(app.buttons["import_model_package"].exists)
     XCTAssertTrue(app.descendants(matching: .any)["capture_status"].exists)
+    XCTAssertTrue(app.descendants(matching: .any)["capture_style"].exists)
     let history = app.descendants(matching: .any)["voice_history"]
     let search = app.textFields["history_search"]
     for _ in 0..<6 where !search.exists {
@@ -39,6 +40,27 @@ final class VoiceInputUITest: XCTestCase {
     waitForExpectations(timeout: 5)
     XCTAssertTrue(app.staticTexts["capture_error"].exists)
     XCTAssertFalse(app.buttons["stop_capture"].exists)
+  }
+
+  @MainActor
+  func testStyleMenuIsReachableAndExposesEveryCanonicalStyle() {
+    let app = XCUIApplication()
+    app.launch()
+
+    let style = app.descendants(matching: .any)["capture_style"]
+    for _ in 0..<6 where !style.isHittable {
+      app.swipeUp()
+    }
+    XCTAssertTrue(style.isHittable)
+    style.tap()
+    for label in ["Natural", "Casual", "Formal", "Technical", "Verbatim"] {
+      XCTAssertTrue(app.buttons[label].waitForExistence(timeout: 2))
+    }
+
+    let attachment = XCTAttachment(screenshot: app.screenshot())
+    attachment.name = "style_menu"
+    attachment.lifetime = .keepAlways
+    add(attachment)
   }
 
   @MainActor

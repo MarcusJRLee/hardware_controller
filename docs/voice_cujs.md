@@ -391,9 +391,14 @@ expiry, transcript preservation, and partial/orphan cleanup pass real
 SQLite/filesystem tests. Wrong runtimes, missing selection, changed bytes,
 bounded-output failures, and unavailable History remain explicit and do not
 invent or deliver text. A native C integration test crosses the production
-framework with pinned model/audio and enforces a permissive RTF gate. Style
-selection and the complete signed-device keyboard loop remain required before
-I2 is accepted.
+framework with pinned model/audio and enforces a permissive RTF gate. App and
+keyboard expose separate persisted surface defaults for all five Styles. The
+schema-V2 stop command freezes one explicit Style for the matching session,
+real-Keychain tests cross recording/stop/ready, and insertion receipts reject a
+re-published result by session identity. The keyboard persists its claim before
+host-field insertion, so a crash can omit delivery but cannot replay it; History
+remains available for recovery. Physical signed-device keyboard evidence
+remains required before I2 is accepted.
 
 **Gate K0 evidence:** a signed app, keyboard, and Control Center extension share
 only bounded this-device-only Keychain records. The containing app records a real
@@ -411,9 +416,11 @@ approved `AudioRecordingIntent`, then return to the field. The containing app
 confirms capture and publishes a Live Activity before background continuation.
 
 Gate K0 confirms the documented ownership and handoff design in the simulator
-and a correctly entitled generic-device build. A physical iPhone run remains a
-required production evidence check because the available phone was locked during
-installation; this does not block independent C4 implementation. Decision
+and a correctly entitled generic-device build. The paired physical iPhone is
+reachable, but installation remains required production evidence because its
+free provisioning profile already contains three unrelated development apps.
+No existing app is removed automatically. This does not block independent C4
+implementation. Decision
 [`0040`](decisions/0040_ios_keyboard_activation_and_handoff.md) owns the boundary.
 
 ### I4 — Type without Full Access
@@ -436,6 +443,15 @@ The keyboard exposes a compact Style selector and remembers the explicit
 keyboard/surface default. It does not infer the host application's identity.
 Casual, Formal, Technical, Natural, and Verbatim outputs pass the same shared
 formatting fixtures as macOS.
+
+**Current evidence:** both surfaces persist only a validated stable identifier.
+The keyboard displays a compact menu without widening its extension boundary,
+and the containing app exhaustively maps every identifier to the canonical
+shared `VoiceStyle`. The exact stop command, History record, and rendered result
+retain the selected Style; later preference changes cannot alter the in-flight
+session. Decision
+[`0044`](decisions/0044_ios_style_qualified_keyboard_delivery.md) owns the
+boundary.
 
 ### I7 — Survive interruption and background transitions
 

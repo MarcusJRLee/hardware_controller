@@ -1,7 +1,7 @@
 import Foundation
 
 public struct VoiceInputCommand: Codable, Equatable, Sendable {
-  public static let schemaRevision = 1
+  public static let schemaRevision = 2
 
   public enum Kind: String, Codable, Equatable, Sendable {
     case start
@@ -11,13 +11,19 @@ public struct VoiceInputCommand: Codable, Equatable, Sendable {
   public let schemaRevision: Int
   public let kind: Kind
   public let sessionID: UUID
+  public let styleKind: VoiceInputStyleKind?
   public let issuedAt: Date
 
-  public static func stop(sessionID: UUID, issuedAt: Date) -> VoiceInputCommand {
+  public static func stop(
+    sessionID: UUID,
+    styleKind: VoiceInputStyleKind,
+    issuedAt: Date
+  ) -> VoiceInputCommand {
     VoiceInputCommand(
       schemaRevision: schemaRevision,
       kind: .stop,
       sessionID: sessionID,
+      styleKind: styleKind,
       issuedAt: issuedAt
     )
   }
@@ -27,6 +33,7 @@ public struct VoiceInputCommand: Codable, Equatable, Sendable {
       schemaRevision: schemaRevision,
       kind: .start,
       sessionID: sessionID,
+      styleKind: nil,
       issuedAt: issuedAt
     )
   }
@@ -41,9 +48,19 @@ public struct VoiceInputCommandPolicy: Equatable, Sendable {
 
   public func accepts(_ command: VoiceInputCommand, now: Date) -> Bool {
     let age = now.timeIntervalSince(command.issuedAt)
-    return command.schemaRevision == VoiceInputCommand.schemaRevision
-      && age >= 0
-      && age <= maximumAge
+    guard
+      command.schemaRevision == VoiceInputCommand.schemaRevision,
+      age >= 0,
+      age <= maximumAge
+    else {
+      return false
+    }
+    switch command.kind {
+    case .start:
+      return command.styleKind == nil
+    case .stop:
+      return command.styleKind != nil
+    }
   }
 }
 
@@ -51,6 +68,7 @@ public enum VoiceInputStoreError: Error, Equatable, Sendable {
   case invalidSnapshot
   case invalidCommand
   case invalidKeyboardPresence
+  case invalidInsertionReceipt
   case commandPending
   case recordTooLarge(limit: Int)
   case keychain(status: Int32)

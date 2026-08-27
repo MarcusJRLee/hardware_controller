@@ -340,6 +340,13 @@ SQLite before publishing keyboard-ready text, and applies the accepted iOS
 90-day/1-GiB/2,000-artifact limits. A later local text-model adapter may improve
 surface style, but it must preserve these stages and deterministic fallback.
 
+Decision [0044](decisions/0044_ios_style_qualified_keyboard_delivery.md) keeps
+separate app and keyboard surface defaults, freezes the keyboard selection on
+the exact schema-V2 stop command, and maps its stable identifier into the
+canonical formatter only inside the containing app. A session insertion receipt
+wins over any later sequence for the same session and is durably claimed before
+the host field changes.
+
 ## Formatting and backtracking
 
 The spoken-edit engine handles high-confidence commands before generative
@@ -371,8 +378,8 @@ The current macOS M4 baseline implements the machine-wide General selection,
 product-default fallback, and typed replayable spoken edits. Its Swift spoken-
 edit schema/engine/replayer, formatting schema, validator, renderer, and
 fixtures are the conformance source for the later Rust extraction; target-,
-Profile-, surface-, and device-specific Style overrides remain future
-resolution inputs.
+Profile- and device-specific Style overrides remain future resolution inputs;
+iOS now implements explicit app and keyboard surface defaults.
 
 ## Durable local History and storage caps
 
@@ -595,8 +602,9 @@ test first or batch the entire implementation behind mocked internals.
   100-round-trip Keychain handoff measured p50 0.819 ms, p95 1.047 ms, and max
   2.990 ms on the reference Mac/simulator pair.
 - **Open evidence:** install and exercise the same build on the available
-  physical iPhone after it is unlocked; benchmark production ASR/formatting on
-  the lowest intended iPhone during C4. Neither blocks independent C4 work.
+  physical iPhone after one of its three unrelated free-profile development
+  apps is removed; benchmark production ASR/formatting on the lowest intended
+  iPhone during C4. Neither blocks independent C4 work.
 
 ### C4 — iOS containing app and keyboard
 
@@ -623,9 +631,12 @@ test first or batch the entire implementation behind mocked internals.
   whisper.cpp context. Rust revalidates the exact manifest and every payload
   before returning one model path. Stop converts the real CAF to timed Raw text
   through bounded caller-owned buffers. A pinned native integration corpus
-  measured warm CPU RTF 0.0111 on the reference Mac; the UI fails explicitly when no
-  model is selected. Physical-iPhone percentiles and the remaining
-  formatting/History delivery path are still open.
+  measured warm CPU RTF 0.0111 on the reference Mac; the UI fails explicitly
+  when no model is selected. The containing app now applies shared deterministic
+  formatting, commits bounded History before publish, and accepts an exact
+  Style-qualified keyboard stop. Real-Keychain tests prove warm stop/ready and
+  session-level exactly-once insertion. Physical-iPhone percentiles and keyboard
+  evidence remain open because its free profile is at the three-app limit.
 - Every repository check runs the real pinned native transcription and output
   safety assertions. `HC_RUN_IOS_ASR_PERFORMANCE=1` additionally enforces the
   RTF ≤ 0.75 gate only on named hardware; shared virtual CI is not performance
