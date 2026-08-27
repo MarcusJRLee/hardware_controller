@@ -477,6 +477,9 @@ public final class SQLiteVoiceSessionHistory:
         "Microphone completion requires capture input provenance."
       )
     }
+    try await reconcileAtStartupIfNeeded(
+      excludingSessionIDs: [document.id]
+    )
     let recorder: (any VoiceAudioArtifactRecording)? = state.withLock { current in
       guard current?.sessionID == document.id else {
         return nil
@@ -519,6 +522,7 @@ public final class SQLiteVoiceSessionHistory:
         "An imported recording requires imported-audio provenance."
       )
     }
+    try await reconcileAtStartupIfNeeded()
     let audioURL = try await audioImporter.importAudio(
       from: sourceURL,
       sessionID: document.id,
@@ -538,6 +542,7 @@ public final class SQLiteVoiceSessionHistory:
   public func restoreArchive(
     _ session: VoiceSessionHistoryItem
   ) async throws {
+    try await reconcileAtStartupIfNeeded()
     let finalAudioURL = session.audioArtifactURL.map { _ in
       audioDirectory.appending(path: "\(session.id.uuidString).caf")
     }
@@ -677,8 +682,12 @@ public final class SQLiteVoiceSessionHistory:
     try await enforceAtStartupIfNeeded()
   }
 
-  private func reconcileAtStartupIfNeeded() async throws {
-    if let report = try await reconciler.reconcileIfNeeded() {
+  private func reconcileAtStartupIfNeeded(
+    excludingSessionIDs: Set<UUID> = []
+  ) async throws {
+    if let report = try await reconciler.reconcileIfNeeded(
+      excludingSessionIDs: excludingSessionIDs
+    ) {
       recoveryState.withLock { existing in
         let priorIssues = existing?.issues ?? []
         existing = VoiceHistoryRecoveryReport(
