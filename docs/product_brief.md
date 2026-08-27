@@ -304,8 +304,12 @@ target content. Typed iOS lifecycle policy requires Live Activity ownership for
 background recording, stops privacy-sensitive interruptions without automatic
 resume, and preserves exact partial audio in 24-hour Recovery History. Active-
 phase heartbeats bound stale keyboard waits to three seconds; a strictly newer
-result and durable session receipt prevent replay after completion. Physical-
-device keyboard, lifecycle, and performance evidence remain pending. See
+result and durable session receipt prevent automatic replay after completion.
+An unconfirmed host update exposes one explicit same-process retry and local-
+only ten-minute copy only while the exact result and target still match; every
+ambiguity recovers through History. Physical-device keyboard, lifecycle, and
+performance evidence remain pending. See
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
+[`0048_ios_bounded_insertion_recovery.md`](decisions/0048_ios_bounded_insertion_recovery.md),
 [`voice_platform_design.md`](voice_platform_design.md), and
 [`voice_cujs.md`](voice_cujs.md).

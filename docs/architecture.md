@@ -163,7 +163,8 @@ flowchart LR
 
 The containing app alone owns microphone permission, `AVAudioSession`, the
 recorder, audio artifacts, and Live Activity. The keyboard is a full QWERTY
-extension with voice status, stop, and one-time insertion. It cannot record or
+extension with voice status, stop, one automatic insertion attempt, and bounded
+explicit recovery. It cannot record or
 launch the app. A cold session starts through the app or a documented system
 surface invoking `AudioRecordingIntent`.
 
@@ -216,8 +217,14 @@ family, and audio.
 The app and keyboard retain separate surface Style defaults. A schema-revision-2
 stop command captures the keyboard's explicit Style for its exact session; the
 app maps that bounded identifier exhaustively into the canonical formatter.
-A bounded same-device Keychain claim is written before host-field insertion and
-deduplicates by session identity, including re-published ready snapshots. See
+A bounded same-device Keychain claim is written before the first host-field
+insertion and deduplicates every automatic path by session identity, including
+re-published ready snapshots. If UIKit provides no text-change callback within
+500 milliseconds, the keyboard offers one explicit same-process retry and one
+local-only copy expiring after ten minutes. Both actions revalidate the exact
+Ready result, receipt, document, and host-change revision; any mismatch or
+extension restart recovers through History. The copy path is capped at 256 KiB
+of UTF-8 and never reads the pasteboard. See
 [decision 0040](decisions/0040_ios_keyboard_activation_and_handoff.md),
 [decision 0041](decisions/0041_ios_model_package_admission.md),
 [decision 0042](decisions/0042_ios_whisper_file_asr.md),
@@ -227,6 +234,8 @@ recognized general-text UIKit traits permit Voice. An ephemeral session UUID,
 opaque document UUID, and text/selection revision bind delivery without
 retaining target text or app identity; mismatch recovers from History. See
 [decision 0045](decisions/0045_ios_host_field_and_delivery_target_safety.md).
+The bounded insertion-recovery contract is in
+[decision 0048](decisions/0048_ios_bounded_insertion_recovery.md).
 The capture actor maps interruption, route, media-service, background, power,
 and thermal signals into explicit lifecycle policy. Visible Live Activity
 ownership is mandatory for background recording; stopped capture gets one

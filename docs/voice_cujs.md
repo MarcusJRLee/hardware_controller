@@ -513,10 +513,18 @@ completion from an earlier session never overwrites a newer field.
 
 **Current evidence:** writing a keyboard stop captures only the session UUID,
 UIKit's opaque document UUID, and an in-memory revision advanced by every text
-or selection callback. All must still match before the durable insertion claim.
-Field, cursor, text, session, and extension-process changes decline insertion
-and direct recovery to containing-app History without retaining target text or
-host identity. An explicit same-target retry surface remains future work.
+or selection callback. All must still match before the durable insertion claim
+and first automatic attempt. If no text-change callback arrives within 500
+milliseconds, `Recover…` offers one explicit same-process retry and one local-
+only copy capped at 256 KiB and expiring after ten minutes. Every action
+revalidates Full Access, field eligibility, exact Ready session/sequence/text,
+durable receipt, document, and revision. Text change confirms delivery;
+selection, field, session, result, receipt, or extension-process change directs
+recovery to containing-app History. History also exposes bounded copy. No path
+retains target text or host identity, and no automatic path retries. Pure policy
+tests cover exact matches, every mismatch class, retry exhaustion, copy bounds,
+and expiry. Physical host rejection/callback evidence remains open. Decision
+[`0048`](decisions/0048_ios_bounded_insertion_recovery.md) owns the boundary.
 
 ### I10 — Remain offline and within storage limits
 

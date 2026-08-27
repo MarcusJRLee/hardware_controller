@@ -54,6 +54,14 @@ then use **Voice Input → Local models → Import Model package → Use for spe
 text**. Runtime/model downloads occur only in repository build preparation;
 the installed app does not require a network connection.
 
+The custom keyboard records through the containing app or its Control Center
+control; iOS does not permit microphone capture inside a keyboard extension.
+After local finalization, the keyboard makes one automatic insertion attempt.
+If no field update is confirmed, **Recover…** permits one explicit same-target
+retry or an on-device clipboard copy that expires after ten minutes and cannot
+cross Universal Clipboard. Any field, session, or process change falls back to
+**Voice Input → History**, where completed text remains copyable.
+
 ## Signed hardware build
 
 For a signed local build, create ignored private settings once:

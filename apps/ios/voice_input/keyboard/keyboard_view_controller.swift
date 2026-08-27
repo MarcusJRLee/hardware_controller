@@ -7,16 +7,21 @@ final class KeyboardViewController: UIInputViewController {
   private let hostFieldPolicy = VoiceInputHostFieldPolicy()
   private let fieldMapper = VoiceInputUIKitFieldMapper()
   private let deliveryTargetPolicy = VoiceInputDeliveryTargetPolicy()
+  private let insertionRecoveryPolicy = VoiceInputInsertionRecoveryPolicy()
+  private let localClipboard = VoiceInputSystemLocalClipboard()
   private let store = VoiceInputKeychainStore()
   private let stylePreference = VoiceInputStylePreferenceStore(
     key: VoiceInputEnvironment.keyboardStyleKindKey
   )
   private let statusLabel = UILabel()
+  private let insertionRecoveryButton = UIButton(type: .system)
   private let restartButton = UIButton(type: .system)
   private let styleButton = UIButton(type: .system)
   private let microphoneButton = UIButton(type: .system)
   private var pollTimer: Timer?
+  private var insertionConfirmationTask: Task<Void, Never>?
   private var deliveryTarget: VoiceInputDeliveryTarget?
+  private var insertionRecovery: VoiceInputInsertionRecovery?
   private var hostChangeRevision: UInt64 = 0
   private var selectedStyleKind = VoiceInputStyleKind.natural
   private var isUppercase = false
@@ -48,6 +53,7 @@ final class KeyboardViewController: UIInputViewController {
   override func viewDidDisappear(_ animated: Bool) {
     super.viewDidDisappear(animated)
     stopPolling()
+    clearInsertionRecovery()
   }
 
   private func stopPolling() {
@@ -56,15 +62,25 @@ final class KeyboardViewController: UIInputViewController {
   }
 
   override func textDidChange(_ textInput: (any UITextInput)?) {
+    let insertionWasPending = insertionRecovery != nil
     hostChangeRevision &+= 1
     super.textDidChange(textInput)
     refreshStatus()
+    if insertionWasPending {
+      clearInsertionRecovery()
+      showStatus("Field update confirmed.")
+    }
   }
 
   override func selectionDidChange(_ textInput: (any UITextInput)?) {
+    let insertionWasPending = insertionRecovery != nil
     hostChangeRevision &+= 1
     super.selectionDidChange(textInput)
     refreshStatus()
+    if insertionWasPending {
+      clearInsertionRecovery()
+      showStatus("The field changed. The transcript remains in Voice Input History.")
+    }
   }
 
   private func buildKeyboard() {
@@ -97,6 +113,13 @@ final class KeyboardViewController: UIInputViewController {
   }
 
   private var statusAndStyleRow: UIStackView {
+    insertionRecoveryButton.setTitle("Recover…", for: .normal)
+    insertionRecoveryButton.accessibilityLabel = "Recover unconfirmed voice insertion"
+    insertionRecoveryButton.accessibilityIdentifier = "voice_insertion_recovery"
+    insertionRecoveryButton.showsMenuAsPrimaryAction = true
+    insertionRecoveryButton.isHidden = true
+    insertionRecoveryButton.setContentHuggingPriority(.required, for: .horizontal)
+
     restartButton.setTitle("Restart…", for: .normal)
     restartButton.accessibilityLabel = "Show voice restart steps"
     restartButton.accessibilityIdentifier = "voice_restart"
@@ -110,7 +133,12 @@ final class KeyboardViewController: UIInputViewController {
     styleButton.setContentHuggingPriority(.required, for: .horizontal)
     configureStyleMenu()
 
-    let row = UIStackView(arrangedSubviews: [statusLabel, restartButton, styleButton])
+    let row = UIStackView(arrangedSubviews: [
+      statusLabel,
+      insertionRecoveryButton,
+      restartButton,
+      styleButton,
+    ])
     row.axis = .horizontal
     row.spacing = 8
     return row
@@ -218,6 +246,7 @@ final class KeyboardViewController: UIInputViewController {
   }
 
   @objc private func handleMicrophone() {
+    clearInsertionRecovery()
     guard hasFullAccess else {
       restartButton.isHidden = true
       showStatus("Typing works. Enable Full Access for local voice handoff.")
@@ -290,6 +319,7 @@ final class KeyboardViewController: UIInputViewController {
   }
 
   private func applyDecision(for snapshot: VoiceInputSnapshot) {
+    clearInsertionRecovery()
     restartButton.isHidden = true
     let insertionReceipt: VoiceInputInsertionReceipt?
     do {
@@ -353,6 +383,7 @@ final class KeyboardViewController: UIInputViewController {
       showStaleService("The app-owned capture is not responding.")
     case .insert(let sessionID, let sequence, let text):
       guard
+        let deliveryTarget,
         deliveryTargetPolicy.decision(
           sessionID: sessionID,
           resultSequence: sequence,
@@ -361,7 +392,7 @@ final class KeyboardViewController: UIInputViewController {
           target: deliveryTarget
         ) == .deliver
       else {
-        deliveryTarget = nil
+        self.deliveryTarget = nil
         stopPolling()
         showStatus("The field changed. Recover the completed transcript from Voice Input History.")
         return
@@ -372,7 +403,7 @@ final class KeyboardViewController: UIInputViewController {
       )
       do {
         guard try store.claimInsertion(receipt) else {
-          deliveryTarget = nil
+          self.deliveryTarget = nil
           stopPolling()
           showStatus("This result was already inserted.")
           return
@@ -381,11 +412,17 @@ final class KeyboardViewController: UIInputViewController {
         showStatus("The local insertion receipt could not be saved.")
         return
       }
-      // The durable claim precedes the host-app side effect to guarantee at-most-once delivery.
-      deliveryTarget = nil
+      // The durable claim precedes the first side effect; one explicit retry remains process-local.
+      self.deliveryTarget = nil
       stopPolling()
-      textDocumentProxy.insertText(text)
-      showStatus("Inserted once.")
+      beginInsertionAttempt(
+        VoiceInputInsertionRecovery(
+          sessionID: sessionID,
+          resultSequence: sequence,
+          text: text,
+          target: deliveryTarget
+        )
+      )
     case .alreadyInserted:
       deliveryTarget = nil
       stopPolling()
@@ -395,6 +432,7 @@ final class KeyboardViewController: UIInputViewController {
 
   private func refreshStatus() {
     let deliveryTargetWasInvalidated = invalidateDeliveryTargetIfNeeded()
+    let insertionRecoveryWasInvalidated = invalidateInsertionRecoveryIfNeeded()
     let fullAccess = hasFullAccess
     let fieldEligibility = currentFieldEligibility
     let voiceAvailable = fullAccess && fieldEligibility == .supported
@@ -417,6 +455,8 @@ final class KeyboardViewController: UIInputViewController {
     } else if deliveryTargetWasInvalidated {
       restartButton.isHidden = true
       showStatus("The field changed. Recover the completed transcript from Voice Input History.")
+    } else if insertionRecoveryWasInvalidated {
+      showStatus("The field changed. The transcript remains in Voice Input History.")
     } else if statusLabel.text == nil {
       showStatus("Tap the mic after starting capture in Voice Input or Control Center.")
     }
@@ -446,11 +486,27 @@ final class KeyboardViewController: UIInputViewController {
     return false
   }
 
+  private func invalidateInsertionRecoveryIfNeeded() -> Bool {
+    guard let insertionRecovery else {
+      return false
+    }
+    guard
+      currentFieldEligibility == .supported,
+      insertionRecovery.target.documentIdentifier == textDocumentProxy.documentIdentifier,
+      insertionRecovery.target.hostChangeRevision == hostChangeRevision
+    else {
+      clearInsertionRecovery()
+      return true
+    }
+    return false
+  }
+
   private func showStatus(_ text: String) {
     statusLabel.text = text
   }
 
   private func showStaleService(_ text: String) {
+    clearInsertionRecovery()
     deliveryTarget = nil
     stopPolling()
     restartButton.isHidden = false
@@ -461,6 +517,124 @@ final class KeyboardViewController: UIInputViewController {
     restartButton.isHidden = true
     showStatus(
       "Open Voice Input or use its Control Center control to start again, then return here.")
+  }
+
+  private func beginInsertionAttempt(_ recovery: VoiceInputInsertionRecovery) {
+    insertionRecovery = recovery
+    insertionRecoveryButton.isHidden = true
+    insertionConfirmationTask?.cancel()
+    showStatus(recovery.retryCount == 0 ? "Confirming insertion…" : "Confirming retry…")
+    insertionConfirmationTask = Task { [weak self] in
+      try? await Task.sleep(for: .milliseconds(500))
+      guard !Task.isCancelled else {
+        return
+      }
+      self?.offerInsertionRecovery(for: recovery)
+    }
+    textDocumentProxy.insertText(recovery.text)
+  }
+
+  private func offerInsertionRecovery(for expected: VoiceInputInsertionRecovery) {
+    guard insertionRecovery == expected else {
+      return
+    }
+    configureInsertionRecoveryMenu(expected)
+    insertionRecoveryButton.isHidden = false
+    showStatus(
+      expected.retryCount == 0
+        ? "No field update was confirmed. Retry once or copy locally."
+        : "No field update was confirmed. Copy locally or recover from History."
+    )
+  }
+
+  private func configureInsertionRecoveryMenu(_ recovery: VoiceInputInsertionRecovery) {
+    var actions: [UIAction] = []
+    if recovery.retryCount < insertionRecoveryPolicy.maximumRetryCount {
+      actions.append(
+        UIAction(title: "Retry insertion once", image: UIImage(systemName: "arrow.clockwise")) {
+          [weak self] _ in
+          self?.retryInsertion()
+        }
+      )
+    }
+    actions.append(
+      UIAction(
+        title: "Copy on this device for 10 minutes",
+        image: UIImage(systemName: "doc.on.doc")
+      ) {
+        [weak self] _ in
+        self?.copyInsertionLocally()
+      }
+    )
+    insertionRecoveryButton.menu = UIMenu(title: "Recover insertion", children: actions)
+  }
+
+  private func retryInsertion() {
+    guard
+      let recovery = validatedInsertionRecovery(for: .retry),
+      recovery.retryCount < insertionRecoveryPolicy.maximumRetryCount
+    else {
+      return
+    }
+    beginInsertionAttempt(recovery.recordingRetry())
+  }
+
+  private func copyInsertionLocally() {
+    guard let recovery = validatedInsertionRecovery(for: .copy) else {
+      return
+    }
+    do {
+      try localClipboard.copy(recovery.text)
+      clearInsertionRecovery()
+      showStatus("Copied on this device. The clipboard entry expires in 10 minutes.")
+    } catch {
+      recoverInsertionFromHistory("The transcript is too large to copy safely.")
+    }
+  }
+
+  private func validatedInsertionRecovery(
+    for action: VoiceInputInsertionRecoveryAction
+  ) -> VoiceInputInsertionRecovery? {
+    guard
+      hasFullAccess,
+      currentFieldEligibility == .supported,
+      let recovery = insertionRecovery,
+      let snapshot = try? store.readSnapshot(),
+      let receipt = try? store.readInsertionReceipt()
+    else {
+      recoverInsertionFromHistory("Insertion recovery is no longer available.")
+      return nil
+    }
+    switch insertionRecoveryPolicy.decision(
+      for: action,
+      recovery: recovery,
+      snapshot: snapshot,
+      receipt: receipt,
+      documentIdentifier: textDocumentProxy.documentIdentifier,
+      hostChangeRevision: hostChangeRevision
+    ) {
+    case .perform:
+      return recovery
+    case .retryLimitReached:
+      offerInsertionRecovery(for: recovery)
+    case .recoverFromHistory:
+      recoverInsertionFromHistory(
+        "The target changed. Recover the transcript from Voice Input History.")
+    }
+    return nil
+  }
+
+  private func recoverInsertionFromHistory(_ message: String) {
+    clearInsertionRecovery()
+    showStatus(message)
+  }
+
+  private func clearInsertionRecovery() {
+    insertionConfirmationTask?.cancel()
+    insertionConfirmationTask = nil
+    insertionRecovery = nil
+    insertionRecoveryButton.isHidden = true
+    insertionRecoveryButton.menu = nil
   }
 
   private func configureStyleMenu() {
