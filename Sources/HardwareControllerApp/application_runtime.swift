@@ -210,6 +210,9 @@ protocol ApplicationProcessControlling: Sendable {
   /// Runs a sanitized generation test without microphone or target access.
   func testLocalAIProvider() async -> LocalAIRefinementFailure?
 
+  /// Submits one app-initiated command to the shared Voice dispatcher.
+  func submitVoiceCapture(_ command: DictationCommand) -> Bool
+
   /// Runs one configured Binding without physical input.
   func testBinding(_ controlID: ControlID)
 
@@ -618,6 +621,14 @@ private final class LiveApplicationProcess:
       return nil
     }
     return await localAIDictationController.testProvider()
+  }
+
+  /// Uses the same Local AI dispatcher as Controls and the Voice chord.
+  func submitVoiceCapture(_ command: DictationCommand) -> Bool {
+    guard isRunning else {
+      return false
+    }
+    return voiceDictationDispatcher.submit(command)
   }
 
   private static let demoLocalAIReadiness = LocalAIReadinessSnapshot(
@@ -1447,6 +1458,24 @@ actor ApplicationRuntime {
   /// Runs one Binding through the process implementation.
   func testBinding(_ controlID: ControlID) {
     process.testBinding(controlID)
+  }
+
+  /// Routes one in-app command through the process-owned Voice session.
+  @discardableResult
+  func submitVoiceCapture(_ command: DictationCommand) -> Bool {
+    guard isStarted, !isStopped, !isSuspended else {
+      return false
+    }
+    if command == .begin, !canExecuteLocalAIDictation {
+      return false
+    }
+    let accepted = process.submitVoiceCapture(command)
+    if !accepted {
+      snapshot.lastError =
+        "Voice capture is busy. Wait for the current session to finish."
+      publish()
+    }
+    return accepted
   }
 
   /// Sends one demo transition through the process implementation.

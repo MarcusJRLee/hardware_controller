@@ -23,6 +23,7 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 | Voice M7 retention | Versioned age, byte, count, and low-disk rules expire only eligible audio, retain searchable transcript evidence, protect active/pinned/recovery artifacts, and disclose typed reasons. | [`decisions/0031_bounded_voice_history_audio.md`](decisions/0031_bounded_voice_history_audio.md) |
 | Voice M8 recovery | Startup deterministically repairs partial, orphan, and expiration-quarantine audio; isolates corrupt rows; preserves a corrupt database; retains text on audio failure; and exposes recovered audio for playback/retranscription for 24 hours. | [`decisions/0032_voice_history_crash_recovery.md`](decisions/0032_voice_history_crash_recovery.md) |
 | Voice M9 local enforcement | Typed provider locality rejects remote-capable adapters before invocation; formatting degrades to validated Edited text; ASR loss preserves captured audio without target mutation. | [`decisions/0033_local_only_voice_enforcement.md`](decisions/0033_local_only_voice_enforcement.md) |
+| Voice M10 trigger convergence | Physical Controls, Hold/latch Voice chords, and the menu-bar record action submit typed commands to one Local AI session workflow without changing History or delivery meaning. | [`decisions/0034_voice_trigger_convergence.md`](decisions/0034_voice_trigger_convergence.md) |
 | Model recommendation | Qwen 3.5 4B is digest-pinned from the fixed evaluation corpus. | [`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md) |
 | Profiles | Transactional named Profiles with independent per-Device setups and active-Action cleanup. | [`decisions/0014_multi_profile_device_configuration.md`](decisions/0014_multi_profile_device_configuration.md) |
 | Application | Controller, History, Profiles, and General in one native foreground window with Dock and menu-bar presence. | [`ux_spec.md`](ux_spec.md) |
@@ -31,7 +32,7 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 
 ## Approved next program
 
-The local Voice expansion is accepted; macOS M1–M9 are implemented across the
+The local Voice expansion is accepted; macOS M1–M10 are implemented across the
 current stacked branches. macOS and iOS are the active roadmap; Android,
 Windows, and Linux remain architectural line-of-sight platforms; web and mobile
 web are deferred. The acceptance and execution authorities are:
@@ -58,7 +59,7 @@ promotion.
 | Local AI refinement | Warm raw-final-to-refined p95 ≤ 1 s on the reference Mac. | Prompt-5 Qwen 3.5 4B p95 0.908 s. |
 | Local AI end to end | Warm release-to-insertion p95 ≤ 1.5 s on the reference Mac. | Prompt-5 prewarmed M4 production-controller p95 1.004 s. |
 | Local AI deadline | Preparation plus generation must fall back within three seconds after final speech text. | Deterministic deadline and late-output tests. |
-| Voice History | Warm 5,000-session search p95 ≤ 250 ms; startup recovery precedes retention without delaying the input runtime. | M8 current-source p95 2.639 ms; the M9 corpus passes 475 tests in 71 suites across recovery, storage, local-only fallback, presentation, and existing behavior. |
+| Voice History | Warm 5,000-session search p95 ≤ 250 ms; startup recovery precedes retention without delaying the input runtime. | M8 current-source p95 2.639 ms; the M10 corpus passes 480 tests in 72 suites across recovery, storage, trigger convergence, presentation, and existing behavior. |
 | Privacy | Voice artifacts remain app-owned and local; no speech content is logged; no remote-capable provider receives a call; Ollama cannot reach a nonloopback endpoint. | Deterministic provider-boundary, SQLite/CAF, fallback, static-scan, and fixed-endpoint transport tests. |
 | Documentation | Canonical docs describe current behavior and all links resolve. | All local links resolve. |
 
@@ -89,6 +90,11 @@ evidence, explains the 24-hour recovery limit, and keeps unavailable reuse
 actions disabled. Light, dark, increased-contrast, reduced-motion, and large-
 text modes preserve the hierarchy; keyboard-only sidebar navigation and the
 combined accessibility stage/source/from description remain synchronized.
+
+The signed M10 packaged menu exposes an enabled **Record Voice** action beside
+the connected-Device and active-Profile state. Its native accessibility tree
+uses the same label, and the installed app retains Controller readiness after a
+verified quit and exact-bundle relaunch.
 
 ## Remaining evidence
 

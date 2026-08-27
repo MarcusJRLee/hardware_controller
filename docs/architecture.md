@@ -246,6 +246,20 @@ separate orchestration, presentation state, settings, and failure paths. Shared
 audio, recognition, target, writer, permission, and lifecycle services are
 composed rather than copied.
 
+Every macOS Local AI trigger converges before that orchestration boundary:
+
+| Trigger | Adapter semantics | Shared command destination |
+| --- | --- | --- |
+| Physical Control or exact Binding fallback | Binding-owned Hold or Toggle | Local AI `DictationCommand` dispatcher through the Action executor. |
+| Independent Voice chord | Hold or double-press latch | The same Local AI dispatcher through `VoiceKeyboardTriggerController`. |
+| Menu-bar record action | Phase-derived Record or Stop | The same Local AI dispatcher through the lifecycle-gated application runtime. |
+
+The menu-bar action does not open or activate the main window, preserving the
+external application's target opportunity. Presentation derives availability
+from the Local AI snapshot; the serialized dispatcher and session controller
+own idempotence and reject overlap. No trigger owns recognition, formatting,
+History, retention, target validation, or delivery.
+
 Local AI providers implement `TranscriptRefining`:
 
 - Every adapter declares one immutable `LocalAIProviderCapability` containing

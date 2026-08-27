@@ -122,6 +122,11 @@ without a physical Device:
 - Repeats, lost key-up, sleep, permission loss, process termination, and target
   replacement end ownership through the same idempotent state machine.
 
+The menu-bar **Record Voice** action starts or finishes that same process-owned
+session without opening the main window or replacing the external text target.
+Controls, chord interpretation, and the menu action remain input adapters; none
+owns ASR, formatting, History, retention, or delivery.
+
 The HUD shows capture state and provisional text. It does not become a permanent
 floating widget, follow the pointer, or submit the target.
 

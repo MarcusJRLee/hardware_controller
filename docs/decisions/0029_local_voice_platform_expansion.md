@@ -1,6 +1,6 @@
 # 0029: Local Voice platform expansion
 
-- **Status:** Accepted; macOS M1–M9 implemented
+- **Status:** Accepted; macOS M1–M10 implemented
 - **Date:** 2026-08-25
 - **Amends:**
   [`0001_native_macos_stack.md`](0001_native_macos_stack.md),
@@ -199,3 +199,9 @@ remote-capable adapter before invoking it, validates provider identity, and
 preserves deterministic Edited fallback. Recognition failure after capture
 finalizes playable audio with delivery not attempted and never mutates the
 target.
+
+M10 converges physical Controls, Hold/latch Voice chords, and the menu-bar
+record action on one process-owned Local AI command dispatcher under
+[decision 0034](0034_voice_trigger_convergence.md). Trigger adapters retain only
+their interaction semantics; session lifecycle, ASR, formatting, History,
+retention, target validation, and delivery stay shared.
