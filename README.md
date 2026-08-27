@@ -30,8 +30,8 @@ identity, or privacy permission.
 | Explore the app | `scripts/run_demo.sh` | rustup |
 | Contribute | `scripts/check.sh` | Xcode 26 or compatible Swift 6 toolchain |
 | Verify only the portable core | `scripts/check_rust.sh` | rustup and a C17 compiler |
-| Verify the iOS Gate K0 probe | `scripts/check_ios_probe.sh` | Xcode 26, XcodeGen, and an iOS simulator |
-| Build the iOS Gate K0 probe | `scripts/build_ios_probe_device.sh` | Apple Development identity and private Team ID |
+| Verify the iOS app | `scripts/check_ios.sh` | Xcode 26, XcodeGen, and an iOS simulator |
+| Build the iOS app | `scripts/build_ios_device.sh` | Apple Development identity and private Team ID |
 | Use real hardware | [Signed hardware build](#signed-hardware-build) | Apple Development identity and supported Device |
 | Install as a nondeveloper | [Public distribution](docs/public_distribution.md) | Notarized public release; not yet available |
 
@@ -91,6 +91,11 @@ near-black surface, joined by one low-latency signal path with an active amber
 center. The menu-bar template uses the same three-node geometry. Neither mark
 copies a supported Device or manufacturer branding. The source raster is
 [`packaging/app_icon_source.png`](packaging/app_icon_source.png).
+
+Across macOS and iOS, the interface is restrained and purpose-led: neutral
+surfaces, no decorative borders, system typography, and one strong action per
+workflow. Color is reserved for state or recovery that cannot be communicated
+as clearly through hierarchy and symbols.
 
 A source change or version number is not release approval. Do not run
 `scripts/build_release.sh`, create a DMG, tag, GitHub Release, or release record

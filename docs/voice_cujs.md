@@ -1,7 +1,7 @@
 # Voice critical user journeys
 
-**Status:** Accepted behavior contract; macOS M1–M15 and iOS Gate K0 are
-implemented. The
+**Status:** Accepted behavior contract; macOS M1–M15, iOS Gate K0, and the I1
+onboarding foundation are implemented. The
 authority is
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md).
 
@@ -348,6 +348,13 @@ user through adding the custom keyboard, and explains Full Access only when
 needed for same-team local handoff. Denial leaves a usable app/keyboard
 with exact recovery instructions. No permission prompt originates in the
 keyboard extension.
+
+**Current evidence:** the production `apps/ios/voice_input/` target explains
+local-only processing before permission, never prompts at cold launch, models
+undetermined/denied/authorized microphone recovery as pure policy, and guides
+the exact keyboard setup path. The keyboard writes a bounded this-device-only
+presence marker only after Full Access exists; the app uses it to confirm local
+handoff. Model-package admission remains the next I1 slice.
 
 ### I2 — Dictate from a warm custom keyboard
 

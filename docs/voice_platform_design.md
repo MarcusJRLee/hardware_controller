@@ -1,7 +1,8 @@
 # Local-first voice platform design
 
-**Status:** Accepted roadmap; macOS M1–M15 and iOS Gate K0 are implemented on
-the current stacked branches. Current evidence is called out explicitly. The durable decision is
+**Status:** Accepted roadmap; macOS M1–M15, iOS Gate K0, and the I1 onboarding
+foundation are implemented on the current stacked branches. Current evidence is
+called out explicitly. The durable decision is
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 and [`voice_cujs.md`](voice_cujs.md) is the acceptance contract.
 
@@ -584,6 +585,13 @@ test first or batch the entire implementation behind mocked internals.
 ### C4 — iOS containing app and keyboard
 
 - Implement onboarding, model management, History, and in-app local capture.
+- **Current evidence:** the K0 project is promoted to
+  `apps/ios/voice_input/` with the production identity, local-first permission
+  disclosure, explicit microphone request/recovery, exact keyboard guidance,
+  and same-device Full Access confirmation. Four policy tests and one real
+  Keychain integration test extend the 14-test K0 baseline. Four
+  presentation-model tests isolate permission and handoff failures, and a
+  focused UI test keeps capture reachable at an accessibility text size.
 - Implement I1–I11 one failing CUJ at a time: keyboard typing fallback, mic
   control, app switching where required, insertion, Styles, interruption,
   recovery, storage caps, secure fields, and airplane mode.

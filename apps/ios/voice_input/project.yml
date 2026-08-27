@@ -1,0 +1,161 @@
+name: VoiceInput
+
+options:
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "18.0"
+
+settings:
+  base:
+    CLANG_ENABLE_MODULES: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_VERSION: 6.0
+
+targets:
+  VoiceInput:
+    type: application
+    platform: iOS
+    sources:
+      - app
+    dependencies:
+      - target: VoiceInputShared
+      - target: VoiceInputKeyboard
+        embed: true
+      - target: VoiceInputWidgets
+        embed: true
+    entitlements:
+      path: config/app.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.longdevity.hardwarecontroller.voiceinput.shared
+    info:
+      path: config/app_info.plist
+      properties:
+        CFBundleDisplayName: Voice Input
+        NSMicrophoneUsageDescription: Voice Input records audio locally for transcription.
+        NSSupportsLiveActivities: true
+        UIBackgroundModes:
+          - audio
+        UILaunchScreen: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput
+        TARGETED_DEVICE_FAMILY: 1
+
+  VoiceInputShared:
+    type: framework.static
+    platform: iOS
+    sources:
+      - shared
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.shared
+
+  VoiceInputKeyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - keyboard
+    dependencies:
+      - target: VoiceInputShared
+    entitlements:
+      path: config/keyboard.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.longdevity.hardwarecontroller.voiceinput.shared
+    info:
+      path: config/keyboard_info.plist
+      properties:
+        CFBundleDisplayName: Voice Keyboard
+        NSExtension:
+          NSExtensionAttributes:
+            IsASCIICapable: true
+            PrefersRightToLeft: false
+            PrimaryLanguage: en-US
+            RequestsOpenAccess: true
+          NSExtensionPointIdentifier: com.apple.keyboard-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.keyboard
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: 1
+
+  VoiceInputWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - widgets
+    dependencies:
+      - target: VoiceInputShared
+    entitlements:
+      path: config/widgets.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.longdevity.hardwarecontroller.voiceinput.shared
+    info:
+      path: config/widgets_info.plist
+      properties:
+        CFBundleDisplayName: Voice Input Controls
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.widgets
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: 1
+
+  VoiceInputTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - tests
+    dependencies:
+      - target: VoiceInputShared
+      - target: VoiceInput
+    entitlements:
+      path: config/tests.entitlements
+      properties:
+        application-identifier: $(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.longdevity.hardwarecontroller.voiceinput.shared
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.tests
+
+  VoiceInputUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - ui_tests
+    dependencies:
+      - target: VoiceInput
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.uitests
+        TEST_TARGET_NAME: VoiceInput
+
+schemes:
+  VoiceInput:
+    build:
+      targets:
+        VoiceInput: all
+        VoiceInputTests: [test]
+        VoiceInputUITests: [test]
+    test:
+      targets:
+        - VoiceInputTests
+        - VoiceInputUITests
+
+  VoiceInputShared:
+    build:
+      targets:
+        VoiceInputShared: all
+        VoiceInputTests: [test]
+    test:
+      targets:
+        - VoiceInputTests

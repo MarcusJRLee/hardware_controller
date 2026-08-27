@@ -66,9 +66,9 @@ and a superseding decision.
 
 ## Evidence
 
-- `apps/ios_probe/`
-- `scripts/check_ios_probe.sh`
-- `scripts/build_ios_probe_device.sh`
+- `apps/ios/voice_input/`
+- `scripts/check_ios.sh`
+- `scripts/build_ios_device.sh`
 - [Apple custom keyboard open-access capabilities](https://developer.apple.com/documentation/uikit/configuring-open-access-for-a-custom-keyboard)
 - [Apple App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)
 - [Apple Audio Recording Intent](https://developer.apple.com/documentation/appintents/audiorecordingintent)

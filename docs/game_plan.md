@@ -30,6 +30,7 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 | Voice M14 portable archive | History exports and restores bounded V1 session evidence through one Swift/Rust/schema/C contract; identical imports are idempotent, conflicts fail closed, and revision 4 migrates. | [`decisions/0038_portable_voice_history_archives.md`](decisions/0038_portable_voice_history_archives.md) |
 | Voice M15 Apple adapter | The optimized Rust validators are statically linked behind typed Swift values; production V1 import invokes Rust against its private snapshot before Swift restore. | [`decisions/0039_linked_apple_voice_adapter.md`](decisions/0039_linked_apple_voice_adapter.md) |
 | iOS Gate K0 | A signed iOS app, full keyboard, and Control Center extension prove app-owned local capture, bounded same-team Keychain handoff, Live Activity ownership, honest cold activation, and one-time insertion. | [`decisions/0040_ios_keyboard_activation_and_handoff.md`](decisions/0040_ios_keyboard_activation_and_handoff.md) |
+| iOS I1 onboarding foundation | The production `apps/ios/voice_input/` target explains local-only behavior before permission, distinguishes microphone recovery states, guides keyboard setup, and confirms Full Access handoff without network code. | [`voice_cujs.md`](voice_cujs.md#i1--onboard-locally) |
 | Model recommendation | Qwen 3.5 4B is digest-pinned from the fixed evaluation corpus. | [`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md) |
 | Profiles | Transactional named Profiles with independent per-Device setups and active-Action cleanup. | [`decisions/0014_multi_profile_device_configuration.md`](decisions/0014_multi_profile_device_configuration.md) |
 | Application | Controller, History, Profiles, and General in one native foreground window with Dock and menu-bar presence. | [`ux_spec.md`](ux_spec.md) |
@@ -38,7 +39,8 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 
 ## Approved next program
 
-The local Voice expansion is accepted; macOS M1–M15 and iOS Gate K0 are
+The local Voice expansion is accepted; macOS M1–M15, iOS Gate K0, and the I1
+onboarding foundation are
 implemented across the current stacked branches. macOS and iOS are the active roadmap; Android,
 Windows, and Linux remain architectural line-of-sight platforms; web and mobile
 web are deferred. The acceptance and execution authorities are:
