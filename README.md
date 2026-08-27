@@ -275,6 +275,8 @@ HC_RUN_LOCAL_AI_MODEL_EVALUATION=1 swift test \
   --filter LocalAIModelEvaluationTest
 HC_RUN_LOCAL_AI_END_TO_END_BENCHMARK=1 swift test \
   --filter measuresWarmReleaseToInsertionWithTheRecommendedModel
+
+HC_RUN_IOS_ASR_PERFORMANCE=1 scripts/check_voice_whisper_bridge.sh
 ```
 
 The web, terminal, foreground-event, and complete speech-to-field commands are
