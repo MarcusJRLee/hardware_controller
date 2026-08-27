@@ -212,7 +212,11 @@ deduplicates by session identity, including re-published ready snapshots. See
 [decision 0041](decisions/0041_ios_model_package_admission.md),
 [decision 0042](decisions/0042_ios_whisper_file_asr.md),
 [decision 0043](decisions/0043_ios_local_formatting_and_history.md), and
-[decision 0044](decisions/0044_ios_style_qualified_keyboard_delivery.md).
+[decision 0044](decisions/0044_ios_style_qualified_keyboard_delivery.md). Only
+recognized general-text UIKit traits permit Voice. An ephemeral session UUID,
+opaque document UUID, and text/selection revision bind delivery without
+retaining target text or app identity; mismatch recovers from History. See
+[decision 0045](decisions/0045_ios_host_field_and_delivery_target_safety.md).
 
 ### HID transport
 

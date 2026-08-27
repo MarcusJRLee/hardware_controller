@@ -437,6 +437,15 @@ banking, managed-device, and custom host fields follow declared capabilities.
 The keyboard never starts capture where insertion or privacy cannot be assured;
 it reports unsupported state without retaining target context.
 
+**Current evidence:** iOS itself replaces the extension for secure and phone-pad
+fields and permits hosts to reject custom keyboards. If the extension is
+present, a typed UIKit boundary allows only recognized general-text traits;
+numeric, credential, one-time-code, payment, sensitive-identifier, and unknown
+custom traits keep typing available while disabling Voice. Unsupported controls
+do not read shared capture state. Decision
+[`0045`](decisions/0045_ios_host_field_and_delivery_target_safety.md) owns the
+boundary. Physical-iPhone host-field evidence remains required.
+
 ### I6 — Choose a Style without target identity
 
 The keyboard exposes a compact Style selector and remembers the explicit
@@ -474,6 +483,13 @@ If the host field disappears, rejects insertion, or changes during finalization,
 the transcript remains in containing-app History. The keyboard offers bounded
 retry/copy behavior only for the same confirmed session and target state. A late
 completion from an earlier session never overwrites a newer field.
+
+**Current evidence:** writing a keyboard stop captures only the session UUID,
+UIKit's opaque document UUID, and an in-memory revision advanced by every text
+or selection callback. All must still match before the durable insertion claim.
+Field, cursor, text, session, and extension-process changes decline insertion
+and direct recovery to containing-app History without retaining target text or
+host identity. An explicit same-target retry surface remains future work.
 
 ### I10 — Remain offline and within storage limits
 
