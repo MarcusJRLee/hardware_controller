@@ -617,6 +617,10 @@ test first or batch the entire implementation behind mocked internals.
   measured warm CPU RTF 0.0111 on the reference Mac; the UI fails explicitly when no
   model is selected. Physical-iPhone percentiles and the remaining
   formatting/History delivery path are still open.
+- Every repository check runs the real pinned native transcription and output
+  safety assertions. `HC_RUN_IOS_ASR_PERFORMANCE=1` additionally enforces the
+  RTF ≤ 0.75 gate only on named hardware; shared virtual CI is not performance
+  evidence.
 - Implement I1–I11 one failing CUJ at a time: keyboard typing fallback, mic
   control, app switching where required, insertion, Styles, interruption,
   recovery, storage caps, secure fields, and airplane mode.

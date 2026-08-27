@@ -56,11 +56,13 @@ owned state transition, not hidden inside Stop.
 Rust tests reject wrong runtime/stage/capability, ambiguous payloads, wrong
 manifest digests, and changed payload bytes. Swift tests cover active selection,
 removal, corruption, orchestration, timed-segment decoding, and bounded runtime
-results. A real C consumer loads the pinned framework/model, transcribes the
-pinned WAV, verifies segment offsets/timestamps, and enforces RTF at most 0.75;
-the reference warm CPU run measured RTF 0.0111. Simulator unit/UI tests keep the
-no-model path explicit. Signed physical-iPhone latency, thermal, energy, and
-microphone-to-keyboard insertion evidence remains a C4 gate.
+results. A real C consumer loads the pinned framework/model and transcribes the
+pinned WAV on every repository check. It verifies segment offsets/timestamps
+and buffer safety everywhere; `HC_RUN_IOS_ASR_PERFORMANCE=1` additionally
+enforces RTF at most 0.75 on declared hardware. The reference warm CPU run
+measured RTF 0.0111. Simulator unit/UI tests keep the no-model path explicit.
+Signed physical-iPhone latency, thermal, energy, and microphone-to-keyboard
+insertion evidence remains a C4 gate.
 
 ## Implications
 

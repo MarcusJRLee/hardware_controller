@@ -70,7 +70,7 @@ promotion.
 | Local AI deadline | Preparation plus generation must fall back within three seconds after final speech text. | Deterministic deadline and late-output tests. |
 | Voice History | Warm 5,000-session search p95 ≤ 250 ms; startup recovery precedes retention without delaying the input runtime. | M8 current-source p95 2.639 ms; current source passes 512 Swift tests in 76 suites plus 34 Rust domain/archive/model/ABI tests and two linked/native C consumers. |
 | Privacy | Voice artifacts remain app-owned and local; no speech content is logged; no remote-capable provider receives a call; Ollama cannot reach a nonloopback endpoint. | Deterministic provider-boundary, SQLite/CAF, fallback, static-scan, and fixed-endpoint transport tests. |
-| iOS local ASR | File-ASR RTF ≤ 0.75 on the pinned native integration corpus; selected bytes are revalidated immediately before load. | whisper.cpp `b4938` + `tiny.en` reference warm CPU RTF 0.0111; Rust digest/runtime/capability/tamper tests and timed C/Swift result tests pass. |
+| iOS local ASR | File-ASR RTF ≤ 0.75 on the pinned native integration corpus; selected bytes are revalidated immediately before load. | `HC_RUN_IOS_ASR_PERFORMANCE=1` enforces the named-hardware gate; whisper.cpp `b4938` + `tiny.en` reference warm CPU RTF 0.0111. Every check runs real transcription correctness; Rust digest/runtime/capability/tamper and timed C/Swift result tests pass. |
 | Documentation | Canonical docs describe current behavior and all links resolve. | All local links resolve. |
 
 Reference Local AI measurements and reproduction commands are in

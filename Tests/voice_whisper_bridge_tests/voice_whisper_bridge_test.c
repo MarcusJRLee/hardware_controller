@@ -1,5 +1,7 @@
 #include "voice_whisper_bridge.h"
 
+#include <errno.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -85,8 +87,19 @@ static int read_wave(const char *path, float **samples, size_t *sample_count) {
 }
 
 int main(int argument_count, char **arguments) {
-  if (argument_count != 3) {
+  if (argument_count != 3 && argument_count != 4) {
     return 2;
+  }
+  double maximum_real_time_factor = 0.0;
+  if (argument_count == 4) {
+    char *end = NULL;
+    errno = 0;
+    maximum_real_time_factor = strtod(arguments[3], &end);
+    if (errno != 0 || end == arguments[3] || *end != '\0' ||
+        !isfinite(maximum_real_time_factor) ||
+        maximum_real_time_factor <= 0.0) {
+      return 2;
+    }
   }
   float *samples = NULL;
   size_t sample_count = 0;
@@ -168,7 +181,8 @@ int main(int argument_count, char **arguments) {
           "real_time_factor=%.6f\n",
           elapsed_seconds(load_start, load_end), inference_seconds,
           audio_seconds, inference_seconds / audio_seconds);
-  if (inference_seconds / audio_seconds > 0.75) {
+  if (maximum_real_time_factor > 0.0 &&
+      inference_seconds / audio_seconds > maximum_real_time_factor) {
     return 9;
   }
   size_t expected_offset = 0;
