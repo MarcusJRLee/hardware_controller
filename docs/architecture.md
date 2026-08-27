@@ -40,7 +40,7 @@ diagnostics observe that path but cannot block it.
 | Concern             | Choice                                                                        |
 | ------------------- | ----------------------------------------------------------------------------- |
 | Languages           | Swift 6 with strict concurrency; Rust 1.98 for portable Voice policy.         |
-| App UI              | SwiftUI four-destination shell hosted by one AppKit window controller.        |
+| App UI              | SwiftUI four-destination macOS shell; SwiftUI iOS probe plus UIKit keyboard.  |
 | Hardware            | IOKit `IOHIDManager` and `IOHIDDevice` APIs.                                  |
 | Synthetic shortcuts | Core Graphics `CGEvent`, guarded by Accessibility trust.                      |
 | Keyboard fallback   | Carbon `RegisterEventHotKey`; exact active-Profile chords only.                |
@@ -50,8 +50,8 @@ diagnostics observe that path but cannot block it.
 | Transcript delivery  | Accessibility insertion plus guarded buffered Unicode event routes.            |
 | Persistence         | Versioned Codable JSON for configuration; system SQLite plus atomic CAF artifacts for Voice History. |
 | Logging and timing  | Unified Logging, `OSSignposter`, and a monotonic clock.                       |
-| Tests               | Swift Testing, Rust/C conformance, and scripted packaged-UI and Accessibility inspection. |
-| Dependencies        | Apple frameworks only in the app; portable retention has no production dependency; the unlinked Model-package verifier uses serde and RustCrypto SHA-2; Ollama is an optional separately installed local service. |
+| Tests               | Swift Testing, XCTest, Rust/C conformance, and scripted packaged-UI and Accessibility inspection. |
+| Dependencies        | Apple frameworks only in the apps; portable Rust validators use serde and RustCrypto SHA-2 and link statically; Ollama is an optional separately installed local service. |
 | Distribution        | Apache License 2.0 source; Apple Development-signed personal iterations; gated Developer ID, notarization, and free-DMG workflow for a future approved public release. |
 
 [`decisions/0001_native_macos_stack.md`](decisions/0001_native_macos_stack.md)
@@ -137,6 +137,40 @@ the manifest and optional CAF, and returns fixed verified metadata. Swift and
 Rust consume the same fixture; the C ABI retains no archive path or file. The
 archive hashes establish internal integrity, not external authenticity. See
 [decision 0038](decisions/0038_portable_voice_history_archives.md).
+
+### iOS Gate K0 boundary
+
+```mermaid
+flowchart LR
+  SYSTEM[Containing app or system control] --> OWNER[iOS capture owner]
+  OWNER --> AUDIO[(Private CAF)]
+  OWNER --> ACTIVITY[Live Activity]
+  OWNER --> HANDOFF[(Bounded shared Keychain)]
+  KEYBOARD[Custom keyboard] --> HANDOFF
+  HANDOFF --> KEYBOARD
+  KEYBOARD --> TARGET[Text document proxy]
+```
+
+The containing app alone owns microphone permission, `AVAudioSession`, the
+recorder, audio artifacts, and Live Activity. The keyboard is a full QWERTY
+extension with voice status, stop, and one-time insertion. It cannot record or
+launch the app. A cold session starts through the app or a documented system
+surface invoking `AudioRecordingIntent`.
+
+The app, keyboard, and Control Center extension share one same-team generic-
+password Keychain service. Snapshot and single-slot command JSON is limited to
+64 KiB per record, marked this-device-only, and excluded from Keychain
+synchronization. Session identity, monotonic sequence, 30-second command
+freshness, bounded heartbeat, and a keyboard-local insertion receipt reject
+stale, duplicate, and late results. The
+keyboard polls Keychain only while awaiting a matching result. Audio, models,
+History, logs, host identity, and target context stay outside the handoff.
+
+Gate K0 uses a standalone generated Xcode project so it can establish signing,
+extension, and lifecycle feasibility without pretending to be the production
+iOS app. C4 replaces the explicit placeholder result with portable local ASR,
+formatting, and History behind the same state-store protocol. See
+[decision 0040](decisions/0040_ios_keyboard_activation_and_handoff.md).
 
 ### HID transport
 

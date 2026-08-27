@@ -1,6 +1,7 @@
 # Voice critical user journeys
 
-**Status:** Accepted behavior contract; macOS M1–M14 are implemented. The
+**Status:** Accepted behavior contract; macOS M1–M15 and iOS Gate K0 are
+implemented. The
 authority is
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md).
 
@@ -44,7 +45,7 @@ wall clock only for displayed dates.
 | Level               | Scope                                                                                                | Required environment                                                         |
 | ------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | Contract            | Voice engine, repository, retention, spoken edits, validation, and renderer through public behavior  | Deterministic audio fixtures, temporary storage, fake clock/target/providers |
-| Adapter integration | App Group, SQLite/files, audio conversion, platform delivery, model package validation               | macOS/iOS test host and sanitized fixtures                                   |
+| Adapter integration | Shared Keychain, SQLite/files, audio conversion, platform delivery, model package validation         | macOS/iOS test host and sanitized fixtures                                   |
 | System UI           | Global chord, real focused fields, iOS keyboard switching, permissions, backgrounding, Live Activity | Signed Mac or physical iPhone; simulator only where behavior is equivalent   |
 | Performance/quality | Audio corpus through production model packages                                                       | Named device tiers with cold/warm and thermal metadata                       |
 
@@ -65,7 +66,7 @@ cheaply below the UI/system boundary:
 
 Contract tests cover deterministic state, formatting, retention, recovery, and
 privacy combinations. Adapter integration tests cover real persistence, FFI,
-App Group, audio, and delivery boundaries. Do not duplicate every combination
+shared Keychain, audio, and delivery boundaries. Do not duplicate every combination
 as E2E.
 
 E2E tests use accessibility identifiers and user-visible outcomes, not screen
@@ -344,41 +345,49 @@ an optimized C17 consumer. Decision
 The containing app explains local processing and History retention, requests
 microphone permission, validates an installed/imported Model package, guides the
 user through adding the custom keyboard, and explains Full Access only when
-needed for App Group voice coordination. Denial leaves a usable app/keyboard
+needed for same-team local handoff. Denial leaves a usable app/keyboard
 with exact recovery instructions. No permission prompt originates in the
 keyboard extension.
 
 ### I2 — Dictate from a warm custom keyboard
 
 **Given** the custom keyboard is visible in an editable nonsecure field and the
-containing app can own capture.
+containing app already owns a confirmed capture.
 
-**When** the user taps mic, speaks, and taps stop.
+**When** the user speaks and taps the keyboard mic to stop.
 
-**Then** the keyboard waits for confirmed Capture-owner state before showing
-recording; the containing app records and runs local ASR/formatting; the keyboard
-reflects bounded status; final text is inserted once through
+**Then** the keyboard reflects only confirmed Capture-owner state; the containing
+app records and runs local ASR/formatting; the keyboard requests one matching
+stop and reflects bounded status; final text is inserted once through
 `textDocumentProxy`; and the containing app stores History. No audio is captured
 by the extension.
 
+**Gate K0 evidence:** a signed app, keyboard, and Control Center extension share
+only bounded this-device-only Keychain records. The containing app records a real
+16-kHz mono CAF; the enabled keyboard types in Messages, requests a result, and
+inserts the matching result once. Policy, persistence, latency, capture, and UI
+tests cover the deterministic behavior. Production ASR/formatting remains C4.
+
 ### I3 — Start when the containing app is cold or suspended
 
-The mic action follows the approved documented activation path. If iOS transfers
-the user to the containing app, the app clearly confirms capture and tells the
-user to return manually; capture may continue only with the required system
-indicator/Live Activity. If activation is unavailable, the keyboard presents a
-single accurate recovery action and does not show false recording state.
+Apple does not permit a keyboard extension to launch its containing app, and a
+custom keyboard has no microphone access even with Full Access. The keyboard mic
+therefore never claims to start a cold capture. It presents one accurate action:
+start Voice from the containing app, its Control Center control, or another
+approved `AudioRecordingIntent`, then return to the field. The containing app
+confirms capture and publishes a Live Activity before background continuation.
 
-Production implementation of this CUJ requires Gate K0 evidence from a physical
-device and current App Review rules. That evidence gate does not stop unrelated
-macOS, iOS containing-app, engine, or keyboard work. The journey may not be
-weakened into an undocumented launch mechanism.
+Gate K0 confirms the documented ownership and handoff design in the simulator
+and a correctly entitled generic-device build. A physical iPhone run remains a
+required production evidence check because the available phone was locked during
+installation; this does not block independent C4 implementation. Decision
+[`0040`](decisions/0040_ios_keyboard_activation_and_handoff.md) owns the boundary.
 
 ### I4 — Type without Full Access
 
 Without Full Access, QWERTY typing, deletion, shift, return, space, and the globe
 key remain functional. Mic is visibly unavailable with concise setup guidance.
-No text, audio, or model operation crosses the unavailable shared-container
+No text, audio, or model operation crosses the unavailable shared-Keychain
 boundary.
 
 ### I5 — Respect unsupported fields
@@ -407,7 +416,7 @@ sensitive interruptions without an approved rule.
 
 If the containing app is killed, upgraded, or no longer publishing a valid
 heartbeat, the keyboard stops showing active state, never queues unbounded audio
-commands, and offers one restart action. Duplicate or late App Group messages
+commands, and offers one restart action. Duplicate or late shared-Keychain messages
 cannot insert text twice or revive a completed session.
 
 ### I9 — Recover failed insertion
