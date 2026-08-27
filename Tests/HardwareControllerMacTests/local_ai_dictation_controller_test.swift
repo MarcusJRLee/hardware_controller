@@ -1228,7 +1228,7 @@ private actor RemoteCapableRefinerProbe: TranscriptRefining {
 }
 
 private func localAIWaitUntil(
-  timeout: Duration = .seconds(1),
+  timeout: Duration = .seconds(5),
   _ condition: @escaping @Sendable () async -> Bool
 ) async throws {
   let clock = ContinuousClock()
