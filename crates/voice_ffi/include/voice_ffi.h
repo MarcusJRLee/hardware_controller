@@ -94,6 +94,11 @@ typedef struct VoiceModelPackageInfoV1 {
   uint8_t reserved[8];
 } VoiceModelPackageInfoV1;
 
+typedef struct VoiceModelPackageInfoV2 {
+  VoiceModelPackageInfoV1 base;
+  VoiceUtf8BufferV1 languages_csv;
+} VoiceModelPackageInfoV2;
+
 typedef struct VoiceHistoryArchiveRequestV1 {
   const uint8_t *root_path_utf8;
   size_t root_path_length;
@@ -188,6 +193,14 @@ VoiceStatusV1 voice_retention_plan_v1(const VoiceRetentionRequestV1 *request,
 VoiceStatusV1
 voice_model_package_validate_v1(const VoiceModelPackageRequestV1 *request,
                                 VoiceModelPackageInfoV1 *output);
+
+/*
+ * V2 preserves the complete V1 prefix and adds ordered language tags. The
+ * language text is comma-separated UTF-8 without a null terminator.
+ */
+VoiceStatusV1
+voice_model_package_validate_v2(const VoiceModelPackageRequestV1 *request,
+                                VoiceModelPackageInfoV2 *output);
 
 /*
  * The archive-root path is UTF-8 and pointers are never retained. Keep the

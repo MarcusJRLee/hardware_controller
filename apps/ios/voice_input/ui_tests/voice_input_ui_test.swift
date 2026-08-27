@@ -12,6 +12,8 @@ final class VoiceInputUITest: XCTestCase {
     XCTAssertTrue(app.staticTexts["Local processing"].exists)
     XCTAssertTrue(app.staticTexts["Voice Keyboard"].exists)
     XCTAssertTrue(app.descendants(matching: .any)["onboarding_card"].exists)
+    XCTAssertTrue(app.descendants(matching: .any)["local_model_library"].exists)
+    XCTAssertTrue(app.buttons["import_model_package"].exists)
     XCTAssertTrue(app.descendants(matching: .any)["capture_status"].exists)
   }
 

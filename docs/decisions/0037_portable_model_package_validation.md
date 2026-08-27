@@ -47,6 +47,10 @@ Use an optionally pinned exact manifest digest plus mandatory per-file digests.
 - V1 carries package identity/version, display name, runtime family, one stage,
   stage-compatible capabilities, languages, SPDX expression, notice path,
   HTTPS source, memory metadata, file roles, exact bytes, and SHA-256 digests.
+- V1 accepts at most 256 canonical language tags. C output V2 preserves the
+  complete V1 prefix and adds their ordered comma-separated representation in
+  caller-owned storage; the typed Apple adapter restores the list without
+  retaining that buffer. C output V1 remains byte-for-byte compatible.
 - Defaults cap the manifest at 1 MiB, one package at 8 GiB, and payload count at
   4,096. Every limit is caller-configurable. Empty payloads and arithmetic
   overflow fail closed.
@@ -84,3 +88,4 @@ gates.
 - `crates/voice_models/src/model_package_file_system_test.rs`
 - `crates/voice_ffi/src/ffi_test.rs`
 - `Tests/voice_ffi/retention_smoke.c`
+- `apps/ios/voice_input/tests/voice_input_model_package_validator_test.swift`

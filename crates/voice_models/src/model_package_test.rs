@@ -147,6 +147,17 @@ fn traversal_duplicate_capability_and_stage_mismatch_are_rejected() {
         Err(ModelPackageError::DuplicateLanguage)
     );
 
+    let excessive_languages = TemporaryPackage::copy_fixture();
+    let languages = (0..257)
+        .map(|index| format!("\"en-{index}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
+    excessive_languages.replace_manifest("[\"en-US\"]", &format!("[{languages}]"));
+    assert_eq!(
+        validate_model_package(excessive_languages.path(), limits(), None),
+        Err(ModelPackageError::InvalidLanguage)
+    );
+
     let empty_payload = TemporaryPackage::copy_fixture();
     empty_payload.replace_manifest("\"bytes\": 23", "\"bytes\": 0");
     assert_eq!(

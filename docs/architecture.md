@@ -40,7 +40,7 @@ diagnostics observe that path but cannot block it.
 | Concern             | Choice                                                                        |
 | ------------------- | ----------------------------------------------------------------------------- |
 | Languages           | Swift 6 with strict concurrency; Rust 1.98 for portable Voice policy.         |
-| App UI              | SwiftUI four-destination macOS shell; SwiftUI iOS probe plus UIKit keyboard.  |
+| App UI              | SwiftUI four-destination macOS shell and iOS containing app; UIKit keyboard. |
 | Hardware            | IOKit `IOHIDManager` and `IOHIDDevice` APIs.                                  |
 | Synthetic shortcuts | Core Graphics `CGEvent`, guarded by Accessibility trust.                      |
 | Keyboard fallback   | Carbon `RegisterEventHotKey`; exact active-Profile chords only.                |
@@ -121,6 +121,10 @@ instead of reusing a stale executable. The packaged app has no Rust dynamic
 library or non-system runtime dependency. See
 [decision 0039](decisions/0039_linked_apple_voice_adapter.md).
 
+The iOS build produces device and simulator static archives, wraps them in one
+generated XCFramework, and imports the same C module into the typed adapter.
+The XCFramework is a build artifact, not a source-controlled dependency.
+
 `voice_models` owns bounded Model-package admission before any runtime sees
 weights. It strictly decodes V1 manifests, rejects symbolic links and
 undeclared or nonportable paths, streams SHA-256 over exact declared bytes, and
@@ -142,6 +146,10 @@ archive hashes establish internal integrity, not external authenticity. See
 
 ```mermaid
 flowchart LR
+  FILES[User-selected Model package] --> STAGING[Bounded private staging]
+  STAGING --> RUST[Rust package admission]
+  RUST --> MODELS[(Private installed Models)]
+  MODELS --> OWNER
   SYSTEM[Containing app or system control] --> OWNER[iOS capture owner]
   OWNER --> AUDIO[(Private CAF)]
   OWNER --> ACTIVITY[Live Activity]
@@ -170,9 +178,18 @@ Gate K0 established signing, extension, and lifecycle feasibility. The same
 generated project now lives at `apps/ios/voice_input/` as the production iOS
 target. Its onboarding policy distinguishes undetermined, denied, authorized,
 keyboard-unobserved, and ready states without requesting permission at launch.
-C4 replaces the explicit placeholder result with portable local ASR, formatting,
+Its Model library imports one security-scoped folder, applies independent
+entry/file/byte limits, rejects links, validates through the statically linked
+Rust boundary, and atomically installs by identity/version. Packages use Data
+Protection, remain outside backup, and retain manual-versus-pinned provenance.
+The library separately defaults to 12 GiB and eight installed versions, with
+both limits injected as policy. It never age-evicts Model packages. Explicit
+removal revalidates and quarantines only the app-owned copy before deleting its
+provenance and bytes. No inference runtime is activated by admission. C4 next
+replaces the explicit placeholder result with portable local ASR, formatting,
 and History behind the same state-store protocol. See
-[decision 0040](decisions/0040_ios_keyboard_activation_and_handoff.md).
+[decision 0040](decisions/0040_ios_keyboard_activation_and_handoff.md) and
+[decision 0041](decisions/0041_ios_model_package_admission.md).
 
 ### HID transport
 

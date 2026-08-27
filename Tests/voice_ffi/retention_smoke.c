@@ -19,6 +19,8 @@ _Static_assert(sizeof(VoiceModelPackageRequestV1) == 72,
                "VoiceModelPackageRequestV1 layout");
 _Static_assert(sizeof(VoiceModelPackageInfoV1) == 224,
                "VoiceModelPackageInfoV1 layout");
+_Static_assert(sizeof(VoiceModelPackageInfoV2) == 248,
+               "VoiceModelPackageInfoV2 layout");
 _Static_assert(sizeof(VoiceHistoryArchiveRequestV1) == 48,
                "VoiceHistoryArchiveRequestV1 layout");
 _Static_assert(sizeof(VoiceHistoryArchiveInfoV1) == 64,
@@ -65,34 +67,43 @@ int main(int argc, char **argv) {
   uint8_t package_id[128] = {0};
   uint8_t version[64] = {0};
   uint8_t display_name[128] = {0};
+  uint8_t languages[10000] = {0};
   uint8_t spdx_expression[256] = {0};
   uint8_t notice_file[1024] = {0};
   uint8_t source_url[2048] = {0};
-  VoiceModelPackageInfoV1 model_output = {0};
-  model_output.package_id =
+  VoiceModelPackageInfoV2 model_output = {0};
+  model_output.base.package_id =
       (VoiceUtf8BufferV1){package_id, sizeof(package_id), 0};
-  model_output.version = (VoiceUtf8BufferV1){version, sizeof(version), 0};
-  model_output.display_name =
+  model_output.base.version = (VoiceUtf8BufferV1){version, sizeof(version), 0};
+  model_output.base.display_name =
       (VoiceUtf8BufferV1){display_name, sizeof(display_name), 0};
-  model_output.spdx_expression =
+  model_output.languages_csv =
+      (VoiceUtf8BufferV1){languages, sizeof(languages), 0};
+  model_output.base.spdx_expression =
       (VoiceUtf8BufferV1){spdx_expression, sizeof(spdx_expression), 0};
-  model_output.notice_file =
+  model_output.base.notice_file =
       (VoiceUtf8BufferV1){notice_file, sizeof(notice_file), 0};
-  model_output.source_url =
+  model_output.base.source_url =
       (VoiceUtf8BufferV1){source_url, sizeof(source_url), 0};
 
-  assert(voice_model_package_validate_v1(&model_request, &model_output) ==
+  assert(voice_model_package_validate_v1(&model_request, &model_output.base) ==
          VOICE_STATUS_OK);
-  assert(model_output.package_id.length == 36);
+  assert(model_output.base.package_id.length == 36);
+  assert(voice_model_package_validate_v2(&model_request, &model_output) ==
+         VOICE_STATUS_OK);
+  assert(model_output.base.package_id.length == 36);
   assert(memcmp(package_id, "com.longdevity.fixture.streaming_asr", 36) == 0);
-  assert(model_output.runtime == VOICE_MODEL_RUNTIME_SHERPA_ONNX);
-  assert(model_output.stage == VOICE_MODEL_STAGE_ASR);
-  assert(model_output.capability_mask == (VOICE_MODEL_CAPABILITY_STREAMING_ASR |
-                                          VOICE_MODEL_CAPABILITY_FILE_ASR));
-  assert(model_output.file_count == 2);
-  assert(model_output.verified_bytes == 73);
+  assert(model_output.base.runtime == VOICE_MODEL_RUNTIME_SHERPA_ONNX);
+  assert(model_output.base.stage == VOICE_MODEL_STAGE_ASR);
+  assert(model_output.languages_csv.length == 5);
+  assert(memcmp(languages, "en-US", 5) == 0);
+  assert(
+      model_output.base.capability_mask ==
+      (VOICE_MODEL_CAPABILITY_STREAMING_ASR | VOICE_MODEL_CAPABILITY_FILE_ASR));
+  assert(model_output.base.file_count == 2);
+  assert(model_output.base.verified_bytes == 73);
   uint8_t zero_digest[32] = {0};
-  assert(memcmp(model_output.manifest_sha256, zero_digest, 32) != 0);
+  assert(memcmp(model_output.base.manifest_sha256, zero_digest, 32) != 0);
 
   VoiceHistoryArchiveRequestV1 archive_request = {0};
   archive_request.root_path_utf8 = (const uint8_t *)argv[2];

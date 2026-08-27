@@ -592,6 +592,16 @@ test first or batch the entire implementation behind mocked internals.
   Keychain integration test extend the 14-test K0 baseline. Four
   presentation-model tests isolate permission and handoff failures, and a
   focused UI test keeps capture reachable at an accessibility text size.
+- **Current Model evidence:** the iOS app links the optimized portable Rust
+  validator for device and simulator, imports under security-scoped access,
+  applies independent staging limits, atomically installs valid packages into
+  protected backup-excluded storage, and labels unpinned origin honestly. The
+  library applies injected total-byte and package-version limits, defaulting to
+  12 GiB and eight versions, and supports explicit removal without silent age
+  eviction. Fourteen focused unit/integration cases cover the model library,
+  real linked fixture, limits, links, tampering, identity, idempotence, cleanup,
+  removal, and corrupt records; the cold-launch UI CUJ requires the import
+  surface. Runtime activation remains separate.
 - Implement I1–I11 one failing CUJ at a time: keyboard typing fallback, mic
   control, app switching where required, insertion, Styles, interruption,
   recovery, storage caps, secure fields, and airplane mode.

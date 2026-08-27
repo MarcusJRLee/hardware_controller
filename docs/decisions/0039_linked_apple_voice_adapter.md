@@ -43,6 +43,16 @@ The final revision 4 compatibility path remains Swift-only because it predates
 the portable V1 contract. Model-package admission is available through the same
 adapter for iOS model management.
 
+Model output V1 remains frozen at 224 bytes. V2 preserves that complete prefix
+and appends caller-owned language metadata; the Apple adapter uses V2 while the
+library continues exporting and testing V1.
+
+The iOS generator compiles the same optimized Rust crate for arm64 device and
+arm64 simulator, creates one ignored static XCFramework with the canonical C
+module, and links the typed Swift adapter into the containing app. iOS tests
+invoke the real Rust symbol against the shared Model-package fixture. See
+[decision 0041](0041_ios_model_package_admission.md).
+
 This synchronous boundary validates finite artifacts only. Streaming ASR,
 formatting inference, cancellation, and runtime handles require a separate
 versioned ownership decision.
@@ -67,4 +77,5 @@ versioned ownership decision.
 - `Tests/hardware_controller_voice_ffi_tests/portable_voice_validator_test.swift`
 - `Tests/HardwareControllerMacTests/voice_history_archive_importer_test.swift`
 - `scripts/build_rust_ffi.sh`
+- `scripts/build_ios_rust_ffi.sh`
 - `scripts/check.sh`

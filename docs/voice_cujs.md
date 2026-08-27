@@ -1,7 +1,7 @@
 # Voice critical user journeys
 
-**Status:** Accepted behavior contract; macOS M1–M15, iOS Gate K0, and the I1
-onboarding foundation are implemented. The
+**Status:** Accepted behavior contract; macOS M1–M15, iOS Gate K0, and I1 local
+onboarding and Model-package admission are implemented. The
 authority is
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md).
 
@@ -354,7 +354,14 @@ local-only processing before permission, never prompts at cold launch, models
 undetermined/denied/authorized microphone recovery as pure policy, and guides
 the exact keyboard setup path. The keyboard writes a bounded this-device-only
 presence marker only after Full Access exists; the app uses it to confirm local
-handoff. Model-package admission remains the next I1 slice.
+handoff. The app also imports a folder under security-scoped access, bounds and
+copies it into private storage, invokes the linked Rust validator, preserves
+language and provenance metadata, cleans failed staging, and lists a valid
+manual package without claiming runtime readiness. Focused tests execute the
+real iOS Rust symbol and cover limits, links, tampering, identity conflicts,
+idempotence, corrupt records, configured library byte/version caps, explicit
+removal, and user-visible import availability. The default library cap is 12
+GiB or eight installed versions; neither limit silently evicts a package.
 
 ### I2 — Dictate from a warm custom keyboard
 
@@ -438,7 +445,8 @@ completion from an earlier session never overwrites a newer field.
 Airplane mode completes keyboard and in-app capture with local models. iOS
 applies its age/byte quota, pinning, partial recovery, Data Protection, and low-
 disk rules without blocking capture. Installed active models are not silently
-evicted as History cache.
+evicted as History cache. The Model library separately rejects admission at its
+configured byte or installed-version cap and permits explicit package removal.
 
 ### I11 — Capture without an active keyboard
 

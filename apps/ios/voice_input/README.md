@@ -3,6 +3,7 @@
 ## Run
 
 ```bash
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim
 scripts/check_ios.sh
 scripts/build_ios_device.sh
 ```
@@ -34,9 +35,19 @@ remains a normal QWERTY keyboard and exchanges only bounded snapshot and command
 JSON through a same-team local Keychain access group. The records use a this-
 device-only protection class and never opt into iCloud synchronization.
 
+The containing app can import a local Model-package folder. It copies only a
+bounded, link-free inventory into private storage, validates the exact package
+through the linked Rust boundary, installs matching identity/version bytes
+atomically, and preserves the original folder. Installed models use Data
+Protection and stay outside OS backup. Files-picker imports are labeled manual;
+admission does not yet make a package an active transcription runtime. The
+library defaults to 12 GiB and eight installed versions. These limits are
+configurable policy; the app never age-evicts a model and provides explicit
+removal of only its private installed copy.
+
 The keyboard cannot access the microphone or launch the containing app. A cold
 capture starts from the containing app or its Control Center control. While the
 app owns capture, the keyboard can request stop, wait for a matching result, and
 insert it once. The current result text remains an explicit handoff placeholder;
-local ASR, formatting, History, retention, and model management follow in the
+local ASR, formatting, History, retention, and model activation follow in the
 next iOS vertical slices.

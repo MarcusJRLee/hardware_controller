@@ -270,6 +270,16 @@ pub struct VoiceModelPackageInfoV1 {
     pub reserved: [u8; 8],
 }
 
+/// V2 Model metadata preserving the complete V1 prefix.
+#[repr(C)]
+#[derive(Debug)]
+pub struct VoiceModelPackageInfoV2 {
+    /// Stable V1 metadata layout.
+    pub base: VoiceModelPackageInfoV1,
+    /// Comma-separated BCP-47-like language tags in manifest order.
+    pub languages_csv: VoiceUtf8BufferV1,
+}
+
 /// Validates a package without retaining caller pointers or file handles.
 ///
 /// The caller must provide valid, aligned pointers for declared lengths. Keep
@@ -289,7 +299,35 @@ pub unsafe extern "C" fn voice_model_package_validate_v1(
 ) -> u32 {
     std::panic::catch_unwind(AssertUnwindSafe(|| {
         // Safety: Pointer validity and alignment are the documented C precondition.
-        unsafe { validate_package(request, output) }
+        unsafe { validate_package(request, output, None) }
+    }))
+    .unwrap_or(VOICE_STATUS_INTERNAL_FAILURE)
+}
+
+/// Validates a package and returns the V1 metadata plus ordered languages.
+///
+/// # Safety
+///
+/// The V1 safety contract applies to the V2 output and its language buffer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn voice_model_package_validate_v2(
+    request: *const VoiceModelPackageRequestV1,
+    output: *mut VoiceModelPackageInfoV2,
+) -> u32 {
+    std::panic::catch_unwind(AssertUnwindSafe(|| {
+        if output.is_null() {
+            return VOICE_STATUS_NULL_POINTER;
+        }
+        // Safety: Null was rejected and validity is the caller contract.
+        let output = unsafe { &mut *output };
+        // Safety: Pointer validity and alignment are the documented C precondition.
+        unsafe {
+            validate_package(
+                request,
+                &raw mut output.base,
+                Some(&mut output.languages_csv),
+            )
+        }
     }))
     .unwrap_or(VOICE_STATUS_INTERNAL_FAILURE)
 }
@@ -297,6 +335,7 @@ pub unsafe extern "C" fn voice_model_package_validate_v1(
 unsafe fn validate_package(
     request: *const VoiceModelPackageRequestV1,
     output: *mut VoiceModelPackageInfoV1,
+    mut languages_csv: Option<&mut VoiceUtf8BufferV1>,
 ) -> u32 {
     if request.is_null() || output.is_null() {
         return VOICE_STATUS_NULL_POINTER;
@@ -306,6 +345,9 @@ unsafe fn validate_package(
     // Safety: Null pointers were rejected and exclusive output is the caller contract.
     let output = unsafe { &mut *output };
     reset_model_output(output);
+    if let Some(buffer) = languages_csv.as_deref_mut() {
+        buffer.length = 0;
+    }
     if request.root_path_utf8.is_null() {
         return VOICE_STATUS_NULL_POINTER;
     }
@@ -319,7 +361,11 @@ unsafe fn validate_package(
     {
         return VOICE_STATUS_INVALID_ARGUMENT;
     }
-    if has_null_output_buffer(output) {
+    if has_null_output_buffer(output)
+        || languages_csv
+            .as_deref()
+            .is_some_and(|buffer| buffer.capacity > 0 && buffer.bytes.is_null())
+    {
         return VOICE_STATUS_NULL_POINTER;
     }
 
@@ -345,12 +391,28 @@ unsafe fn validate_package(
         Err(error) => return model_status(&error),
     };
     set_model_metadata(output, &package);
-    if model_output_is_too_small(output) {
+    if let Some(buffer) = languages_csv.as_deref_mut() {
+        buffer.length = languages_length(&package);
+    }
+    if model_output_is_too_small(output)
+        || languages_csv
+            .as_deref()
+            .is_some_and(|buffer| buffer.capacity < buffer.length)
+    {
         return VOICE_STATUS_BUFFER_TOO_SMALL;
     }
 
     // Safety: Buffer capacities were checked and their validity is the caller contract.
     unsafe { write_model_text(output, &package) };
+    if let Some(buffer) = languages_csv {
+        let languages = package.languages.join(",");
+        if !languages.is_empty() {
+            // Safety: Capacity was checked and the caller promises writable storage.
+            unsafe {
+                std::ptr::copy_nonoverlapping(languages.as_ptr(), buffer.bytes, languages.len());
+            };
+        }
+    }
     VOICE_STATUS_OK
 }
 
@@ -455,6 +517,15 @@ unsafe fn write_model_text(output: &mut VoiceModelPackageInfoV1, package: &Valid
             unsafe { std::ptr::copy_nonoverlapping(value.as_ptr(), buffer.bytes, value.len()) };
         }
     }
+}
+
+fn languages_length(package: &ValidatedModelPackage) -> usize {
+    package
+        .languages
+        .iter()
+        .map(String::len)
+        .sum::<usize>()
+        .saturating_add(package.languages.len().saturating_sub(1))
 }
 
 fn model_status(error: &ModelPackageError) -> u32 {

@@ -25,8 +25,8 @@ swift build -c release --product HardwareController
 binary_directory="$(swift build -c release --show-bin-path)"
 linked_symbols="$(nm -gU "$binary_directory/HardwareController")"
 if [[ "$linked_symbols" != *"_voice_history_archive_validate_v1"* \
-  || "$linked_symbols" != *"_voice_model_package_validate_v1"* ]]; then
-  print -u2 "The macOS app does not contain both portable Voice validators."
+  || "$linked_symbols" != *"_voice_model_package_validate_v2"* ]]; then
+  print -u2 "The macOS app does not contain its active portable Voice validators."
   exit 1
 fi
 scripts/build_release_test.sh

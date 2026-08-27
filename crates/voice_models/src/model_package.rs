@@ -7,6 +7,8 @@ use crate::model_package_file_system::{
     verify_file, verify_inventory,
 };
 
+const MAXIMUM_LANGUAGE_COUNT: usize = 256;
+
 /// Resource limits applied before a package is accepted.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ModelPackageLimits {
@@ -454,7 +456,9 @@ fn validate_capabilities(
 }
 
 fn validate_languages(stage: ModelStage, languages: &[String]) -> Result<(), ModelPackageError> {
-    if stage == ModelStage::Asr && languages.is_empty() {
+    if (stage == ModelStage::Asr && languages.is_empty())
+        || languages.len() > MAXIMUM_LANGUAGE_COUNT
+    {
         return Err(ModelPackageError::InvalidLanguage);
     }
     let mut unique = BTreeSet::new();
