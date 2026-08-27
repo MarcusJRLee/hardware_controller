@@ -34,6 +34,11 @@ protocol VoiceInputCapturing: Sendable {
     _ event: VoiceInputLifecycleEvent
   ) async -> VoiceInputLifecycleDecision
   func processPendingCommand() async throws
+  func reconcileOnActivation() async throws
+}
+
+extension VoiceInputCapturing {
+  func reconcileOnActivation() async throws {}
 }
 
 actor VoiceInputCaptureService: VoiceInputCapturing {
@@ -47,6 +52,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
   private let recorderFactory: any VoiceInputAudioRecorderCreating
   private let activityManager: any VoiceInputLiveActivityManaging
   private let backgroundTaskManager: any VoiceInputBackgroundTaskManaging
+  private let controlReloader: @Sendable () -> Void
   private let lifecyclePolicy = VoiceInputLifecyclePolicy()
   private let heartbeatInterval: Duration
   private let now: @Sendable () -> Date
@@ -58,6 +64,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
   private var sessionStartedAt: Date?
   private var activeCaptureURL: URL?
   private var isTearingDown = false
+  private var lastControlRecordingState: Bool?
   private var sequence: UInt64
 
   init(
@@ -76,6 +83,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
       VoiceInputSystemLiveActivityManager(),
     backgroundTaskManager: any VoiceInputBackgroundTaskManaging =
       VoiceInputSystemBackgroundTaskManager(),
+    controlReloader: @escaping @Sendable () -> Void = {},
     heartbeatInterval: Duration = .milliseconds(500),
     now: @escaping @Sendable () -> Date = { .now }
   ) {
@@ -89,6 +97,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
     self.recorderFactory = recorderFactory
     self.activityManager = activityManager
     self.backgroundTaskManager = backgroundTaskManager
+    self.controlReloader = controlReloader
     self.heartbeatInterval = heartbeatInterval
     self.now = now
     sequence = (try? store.readSnapshot().sequence) ?? 0
@@ -96,6 +105,30 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
 
   func snapshot() throws -> VoiceInputSnapshot {
     try store.readSnapshot()
+  }
+
+  func reconcileOnActivation() async throws {
+    guard sessionID == nil, recorder == nil, !isTearingDown else {
+      return
+    }
+    await activityManager.endOrphanedActivities(at: now())
+    let snapshot = try store.readSnapshot()
+    guard
+      snapshot.schemaRevision == VoiceInputSnapshot.schemaRevision,
+      let orphanedSessionID = snapshot.sessionID,
+      snapshot.phase == .recording || snapshot.phase == .transcribing
+    else {
+      return
+    }
+    try writeSnapshot(
+      VoiceInputSnapshot(
+        phase: .interrupted,
+        sessionID: orphanedSessionID,
+        sequence: nextSequence(),
+        heartbeatAt: nil,
+        text: nil
+      )
+    )
   }
 
   func start(sessionID requestedSessionID: UUID = UUID()) async throws {
@@ -351,7 +384,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
     }
     switch command.kind {
     case .start:
-      if recorder == nil {
+      if recorder == nil, sessionID == nil {
         try await start(sessionID: command.sessionID)
       }
     case .stop:
@@ -490,5 +523,10 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
 
   private func writeSnapshot(_ snapshot: VoiceInputSnapshot) throws {
     try store.writeSnapshot(snapshot)
+    let isRecording = snapshot.phase == .recording
+    if lastControlRecordingState != isRecording {
+      lastControlRecordingState = isRecording
+      controlReloader()
+    }
   }
 }

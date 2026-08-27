@@ -32,6 +32,11 @@ protocol VoiceInputLiveActivityManaging: Sendable {
     phase: VoiceInputSnapshot.Phase,
     at date: Date
   ) async
+  func endOrphanedActivities(at date: Date) async
+}
+
+extension VoiceInputLiveActivityManaging {
+  func endOrphanedActivities(at _: Date) async {}
 }
 
 struct VoiceInputBackgroundTaskToken: Hashable, Sendable {
@@ -154,6 +159,16 @@ struct VoiceInputSystemLiveActivityManager: VoiceInputLiveActivityManaging {
       $0.id == id
     }
     await matchingActivity?.end(content, dismissalPolicy: .immediate)
+  }
+
+  func endOrphanedActivities(at _: Date) async {
+    let content = ActivityContent<VoiceInputActivityAttributes.ContentState>(
+      state: VoiceInputActivityAttributes.ContentState(phase: .interrupted),
+      staleDate: nil
+    )
+    for activity in Activity<VoiceInputActivityAttributes>.activities {
+      await activity.end(content, dismissalPolicy: .immediate)
+    }
   }
 }
 

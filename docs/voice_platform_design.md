@@ -1,6 +1,6 @@
 # Local-first voice platform design
 
-**Status:** Accepted roadmap; macOS M1–M15 and iOS Gate K0 through I10 are
+**Status:** Accepted roadmap; macOS M1–M15 and iOS Gate K0 through I11 are
 implemented in source across the current stacked branches. Current evidence is
 called out explicitly. The
 durable decision is
@@ -706,12 +706,21 @@ test first or batch the entire implementation behind mocked internals.
   unchanged. A static local-only check runs before every iOS build. Decision
   [`0049`](decisions/0049_ios_offline_storage_enforcement.md) owns I10;
   physical airplane-mode evidence remains final signed-device work.
+- **Current system-capture evidence:** a stateful Control Center/Lock
+  Screen/Action button control, Siri/App Shortcuts, and Live Activity stop use
+  Audio Recording intents and the bounded exact-session command slot. Control
+  state reloads only on Recording transitions. Relaunch ends orphaned visible
+  ownership, marks the stale session Interrupted, and preserves partial audio
+  for History. Copy/share and later keyboard retrieval are explicit; target
+  inference is absent. Decision
+  [`0050`](decisions/0050_ios_system_surface_capture.md) owns I11; physical
+  system-surface evidence remains final signed-device work.
 - Every repository check runs the real pinned native transcription and output
   safety assertions. `HC_RUN_IOS_ASR_PERFORMANCE=1` additionally enforces the
   RTF ≤ 0.75 gate only on named hardware; shared virtual CI is not performance
   evidence.
-- Implement I11 one failing CUJ at a time: approved system-surface capture,
-  visible ownership, lock/background finalization, and explicit recovery.
+- Keep I1–I11 regressions outcome-based: exact ownership, bounded commands,
+  visible recording, durable History, and explicit delivery.
 - Run signed-device UI tests for behaviors extension simulators cannot prove.
 
 ### C5 — preserve later portability

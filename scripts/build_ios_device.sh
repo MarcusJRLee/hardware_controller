@@ -30,6 +30,7 @@ xcodebuild build -quiet \
   CODE_SIGN_STYLE=Automatic
 
 app_bundle="$derived_data/Build/Products/Debug-iphoneos/VoiceInput.app"
+scripts/check_ios_system_capture_metadata.sh "$app_bundle"
 codesign --verify --deep --strict --verbose=2 "$app_bundle"
 linked_symbols="$(nm -gU "$app_bundle/VoiceInput" 2>/dev/null || true)"
 linked_dependencies="$(otool -L "$app_bundle/VoiceInput" 2>/dev/null || true)"

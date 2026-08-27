@@ -310,9 +310,13 @@ only ten-minute copy only while the exact result and target still match; every
 ambiguity recovers through History. I10 persists configurable iOS History caps
 and pinning, restores a 1 GiB basic-capacity reserve without invalidating a
 durable capture, keeps Model-package budgets independent, and statically rejects
-network/cloud product capabilities. Physical-device keyboard, lifecycle,
-airplane-mode, and performance evidence remain pending. See
+network/cloud product capabilities. I11 adds stateful system controls,
+Siri/App Shortcuts, Live Activity stop, orphan-ownership recovery, and explicit
+History copy/share without target inference. Physical-device keyboard,
+lifecycle, system-surface, airplane-mode, and performance evidence remain
+pending. See
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 [`0049_ios_offline_storage_enforcement.md`](decisions/0049_ios_offline_storage_enforcement.md),
+[`0050_ios_system_surface_capture.md`](decisions/0050_ios_system_surface_capture.md),
 [`voice_platform_design.md`](voice_platform_design.md), and
 [`voice_cujs.md`](voice_cujs.md).

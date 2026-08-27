@@ -109,6 +109,50 @@ final class VoiceInputAppModelTest: XCTestCase {
   }
 
   @MainActor
+  func testActivationReconcilesVisibleOwnershipBeforePolling() async {
+    let service = RecordingCaptureService()
+    let model = VoiceInputAppModel(
+      microphoneAuthorizationProvider: { .authorized },
+      microphonePermissionRequester: { true },
+      keyboardObservedAtReader: { nil },
+      service: service
+    )
+
+    model.activate()
+    await service.waitForCommandProcessing()
+    model.deactivate()
+
+    let activationEvents = await service.activationEvents
+    XCTAssertEqual(
+      Array(activationEvents.prefix(2)),
+      [.reconciled, .processedCommand]
+    )
+  }
+
+  @MainActor
+  func testActivationSurfacesReconciliationFailure() async {
+    let service = FailingReconciliationCaptureService()
+    let model = VoiceInputAppModel(
+      microphoneAuthorizationProvider: { .authorized },
+      microphonePermissionRequester: { true },
+      keyboardObservedAtReader: { nil },
+      service: service
+    )
+
+    model.activate()
+    await service.waitForAttempt()
+    for _ in 0..<100 where model.errorMessage == nil {
+      await Task.yield()
+    }
+    model.deactivate()
+
+    XCTAssertEqual(
+      model.errorMessage,
+      "The previous local capture state could not be recovered."
+    )
+  }
+
+  @MainActor
   func testLifecycleDecisionPublishesExplicitAdvisoryAndInterruptionState() async {
     let service = LifecycleCaptureService(
       decisions: [
@@ -175,8 +219,15 @@ private actor LifecycleCaptureService: VoiceInputCapturing {
 }
 
 private actor RecordingCaptureService: VoiceInputCapturing {
+  enum ActivationEvent: Equatable, Sendable {
+    case reconciled
+    case processedCommand
+  }
+
   private(set) var stoppedStyles: [VoiceInputStyleKind] = []
+  private(set) var activationEvents: [ActivationEvent] = []
   private var stopWaiters: [CheckedContinuation<Void, Never>] = []
+  private var commandProcessingWaiters: [CheckedContinuation<Void, Never>] = []
 
   func snapshot() throws -> VoiceInputSnapshot { .idle(sequence: 0) }
 
@@ -208,7 +259,64 @@ private actor RecordingCaptureService: VoiceInputCapturing {
     .ignore
   }
 
+  func processPendingCommand() async throws {
+    activationEvents.append(.processedCommand)
+    let waiters = commandProcessingWaiters
+    commandProcessingWaiters.removeAll()
+    for waiter in waiters {
+      waiter.resume()
+    }
+  }
+
+  func reconcileOnActivation() {
+    activationEvents.append(.reconciled)
+  }
+
+  func waitForCommandProcessing() async {
+    guard !activationEvents.contains(.processedCommand) else {
+      return
+    }
+    await withCheckedContinuation { continuation in
+      commandProcessingWaiters.append(continuation)
+    }
+  }
+}
+
+private actor FailingReconciliationCaptureService: VoiceInputCapturing {
+  private var attempted = false
+  private var waiters: [CheckedContinuation<Void, Never>] = []
+
+  func snapshot() throws -> VoiceInputSnapshot { .idle(sequence: 0) }
+  func start(sessionID _: UUID) async throws {}
+  func stop(styleKind _: VoiceInputStyleKind) async throws {}
+  func interrupt(reason _: VoiceInputCaptureInterruptionReason) async {}
+  func handleLifecycleEvent(
+    _: VoiceInputLifecycleEvent
+  ) async -> VoiceInputLifecycleDecision { .ignore }
   func processPendingCommand() async throws {}
+
+  func reconcileOnActivation() throws {
+    attempted = true
+    let pending = waiters
+    waiters.removeAll()
+    for waiter in pending {
+      waiter.resume()
+    }
+    throw ReconciliationFailure.expected
+  }
+
+  func waitForAttempt() async {
+    guard !attempted else {
+      return
+    }
+    await withCheckedContinuation { continuation in
+      waiters.append(continuation)
+    }
+  }
+}
+
+private enum ReconciliationFailure: Error {
+  case expected
 }
 
 private struct FailingSnapshotStore: VoiceInputStateStoring {

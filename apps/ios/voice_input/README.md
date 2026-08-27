@@ -64,7 +64,10 @@ reserve, and surfaces failures without invalidating a durable capture. Future or
 damaged preference state is preserved read-only instead of being overwritten.
 
 The keyboard cannot access the microphone or launch the containing app. A cold
-capture starts from the containing app or its Control Center control. While the
+capture starts from the containing app, its stateful Control Center/Lock Screen
+control, the Action button, Siri, or Shortcuts. The containing app owns capture
+and publishes a Live Activity with an exact stop action. System-surface stops
+use Natural; in-app and keyboard stops retain their selected Style. While the
 app owns capture, the keyboard can request stop, wait for a matching result, and
 make one automatic insertion attempt. If UIKit cannot confirm that update, one
 explicit same-process retry and one 10-minute local-only copy remain available
@@ -75,6 +78,11 @@ the exact stop command, and a matching session can insert only once. The durable
 insertion claim precedes the host-field change; after a crash, History is the
 recovery source for a claimed result that did not reach the field. Physical
 iPhone keyboard evidence remains required.
+
+After a keyboard-free capture, use History to copy or share the completed text,
+or retrieve the bounded Ready result from the keyboard later. The app never
+guesses a target field. On relaunch, orphaned Live Activities end and old active
+state becomes Interrupted while exact partial audio remains recoverable.
 
 Recording and Transcribing publish local heartbeats. If the app stops responding
 for three seconds, the keyboard clears its pending target, stops polling, and

@@ -4,31 +4,39 @@ import SwiftUI
 import VoiceInputShared
 import WidgetKit
 
-struct VoiceInputStartIntent: AudioRecordingIntent {
-  static let title: LocalizedStringResource = "Start local voice capture"
-  static let description = IntentDescription(
-    "Opens Voice Input and starts an app-owned local recording."
-  )
-  static let openAppWhenRun = true
-
-  func perform() async throws -> some IntentResult {
-    let store = VoiceInputKeychainStore()
-    try store.writeCommand(.start(sessionID: UUID(), issuedAt: .now))
-    return .result()
-  }
-}
-
 struct VoiceInputControl: ControlWidget {
-  static let kind = "com.longdevity.hardwarecontroller.voiceinput.start"
+  static let kind = VoiceInputEnvironment.systemCaptureControlKind
 
   var body: some ControlWidgetConfiguration {
-    StaticControlConfiguration(kind: Self.kind) {
-      ControlWidgetButton(action: VoiceInputStartIntent()) {
-        Label("Voice Capture", systemImage: "mic.fill")
+    StaticControlConfiguration(
+      kind: Self.kind,
+      provider: VoiceInputCaptureControlValueProvider()
+    ) { isRecording in
+      ControlWidgetToggle(
+        "Voice Capture",
+        isOn: isRecording,
+        action: VoiceInputSetCaptureIntent()
+      ) { value in
+        Label(
+          value ? "Recording" : "Ready",
+          systemImage: value ? "stop.fill" : "mic.fill"
+        )
       }
     }
     .displayName("Voice Capture")
-    .description("Start an app-owned local voice capture.")
+    .description("Start or stop app-owned local voice capture.")
+  }
+}
+
+private struct VoiceInputCaptureControlValueProvider: ControlValueProvider {
+  let previewValue = false
+
+  func currentValue() async throws -> Bool {
+    let snapshot = try VoiceInputKeychainStore().readSnapshot()
+    return VoiceInputSystemCapturePolicy().isRecording(
+      snapshot: snapshot,
+      now: .now
+    )
   }
 }
 
@@ -38,6 +46,13 @@ struct VoiceInputLiveActivity: Widget {
       HStack(spacing: 10) {
         Image(systemName: "waveform")
         Text(label(for: context.state.phase))
+        Spacer()
+        if context.state.phase == .recording {
+          Button(intent: VoiceInputStopIntent()) {
+            Label("Stop", systemImage: "stop.fill")
+          }
+          .buttonStyle(.borderedProminent)
+        }
       }
       .padding()
       .activityBackgroundTint(.black)
@@ -49,6 +64,14 @@ struct VoiceInputLiveActivity: Widget {
         }
         DynamicIslandExpandedRegion(.center) {
           Text(label(for: context.state.phase))
+        }
+        DynamicIslandExpandedRegion(.trailing) {
+          if context.state.phase == .recording {
+            Button(intent: VoiceInputStopIntent()) {
+              Image(systemName: "stop.fill")
+            }
+            .accessibilityLabel("Stop local capture")
+          }
         }
       } compactLeading: {
         Image(systemName: "mic.fill")
