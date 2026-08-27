@@ -362,6 +362,15 @@ private struct MenuBarContent: View {
         )
       }
 
+      Button(
+        model.voiceCaptureButtonState.title,
+        systemImage: model.voiceCaptureButtonState.systemImage
+      ) {
+        model.toggleVoiceCapture()
+      }
+      .disabled(!model.voiceCaptureButtonState.isEnabled)
+      .accessibilityIdentifier("voice_capture_button")
+
       Divider()
 
       Picker(

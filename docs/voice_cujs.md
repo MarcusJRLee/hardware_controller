@@ -246,6 +246,13 @@ same Voice-session state and History contract. Trigger-specific momentary/toggle
 semantics remain adapters; none changes ASR, formatting, retention, or delivery
 meaning.
 
+**Current evidence:** the physical Action path, exact Hold/latch chord adapter,
+and menu-bar record action all submit `DictationCommand` to the process-owned
+Local AI dispatcher. Phase-policy tests cover Record, Stop, unavailable, and
+post-capture states. Boundary tests cover Hold, double-press latch/finish, and
+runtime start/suspend/resume/stop gates. The complete 480-test/72-suite host
+corpus passes.
+
 ## iOS journeys
 
 ### I1 — Onboard locally

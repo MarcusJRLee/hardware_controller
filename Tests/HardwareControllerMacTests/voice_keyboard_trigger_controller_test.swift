@@ -27,6 +27,28 @@ struct VoiceKeyboardTriggerControllerTest {
   }
 
   @Test
+  func doublePressLatchesThenTheNextDoublePressFinishesOnce() async throws {
+    let dispatcher = DictationCommandRecorder()
+    let controller = try VoiceKeyboardTriggerController(
+      settings: .default,
+      dispatcher: dispatcher
+    )
+
+    await controller.handle(phase: .pressed, timestampNanoseconds: ms(0))
+    await controller.handle(phase: .released, timestampNanoseconds: ms(50))
+    await controller.handle(phase: .pressed, timestampNanoseconds: ms(100))
+    await controller.handle(phase: .released, timestampNanoseconds: ms(150))
+    #expect(dispatcher.commands == [.begin])
+
+    await controller.handle(phase: .pressed, timestampNanoseconds: ms(1_000))
+    await controller.handle(phase: .released, timestampNanoseconds: ms(1_050))
+    await controller.handle(phase: .pressed, timestampNanoseconds: ms(1_100))
+    await controller.handle(phase: .released, timestampNanoseconds: ms(1_150))
+
+    #expect(dispatcher.commands == [.begin, .finish])
+  }
+
+  @Test
   func pendingShortPressFinishesOnlyWhenItsDecisionExpires() async throws {
     let dispatcher = DictationCommandRecorder()
     let controller = try VoiceKeyboardTriggerController(

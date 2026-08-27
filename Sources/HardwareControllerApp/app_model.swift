@@ -224,6 +224,13 @@ final class AppModel {
         || selectedLocalAIReadiness.state.canRun)
   }
 
+  var voiceCaptureButtonState: VoiceCaptureButtonState {
+    VoiceCaptureButtonState(
+      phase: localAIDictationSnapshot.phase,
+      canBegin: canExecuteLocalAIDictation
+    )
+  }
+
   /// Reports whether one configured Action can currently execute.
   func canExecute(_ kind: ActionKind) -> Bool {
     switch kind {
@@ -583,6 +590,17 @@ final class AppModel {
   func testBinding(_ controlID: ControlID) {
     enqueueIntent { [runtime] in
       await runtime.testBinding(controlID)
+    }
+  }
+
+  /// Starts or finishes the shared Voice session from the menu bar.
+  func toggleVoiceCapture() {
+    let state = voiceCaptureButtonState
+    guard state.isEnabled, let command = state.command else {
+      return
+    }
+    enqueueIntent { [runtime] in
+      await runtime.submitVoiceCapture(command)
     }
   }
 

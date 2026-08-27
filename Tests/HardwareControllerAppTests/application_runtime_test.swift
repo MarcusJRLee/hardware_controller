@@ -23,6 +23,40 @@ struct ApplicationRuntimeTest {
     #expect(!fixture.snapshots.values.isEmpty)
   }
 
+  /// Routes app UI capture through the process Voice dispatcher while active.
+  @Test
+  func voiceCaptureSubmissionFollowsRuntimeLifecycle() async {
+    let fixture = RuntimeFixture(
+      localAIReadiness: LocalAIReadinessSnapshot(
+        apple: LocalAIProviderReadiness(
+          provider: .appleOnDevice,
+          state: .ready
+        ),
+        ollama: LocalAIProviderReadiness(
+          provider: .ollama,
+          state: .unavailable("Not selected.")
+        )
+      )
+    )
+    await fixture.runtime.start(
+      snapshotHandler: fixture.snapshots.append
+    )
+
+    #expect(await fixture.runtime.submitVoiceCapture(.begin))
+    #expect(await fixture.runtime.submitVoiceCapture(.finish))
+    await fixture.runtime.prepareForSleep()
+    #expect(!(await fixture.runtime.submitVoiceCapture(.begin)))
+    await fixture.runtime.resumeAfterWake()
+    #expect(await fixture.runtime.submitVoiceCapture(.begin))
+    await fixture.runtime.stop()
+    #expect(!(await fixture.runtime.submitVoiceCapture(.finish)))
+
+    #expect(
+      fixture.process.voiceCaptureCommands
+        == [.begin, .finish, .begin]
+    )
+  }
+
   /// Starts hardware before a slow optional provider readiness check returns.
   @Test(.timeLimit(.minutes(1)))
   func localAIReadinessNeverDelaysHardwareStartup() async {
@@ -898,6 +932,7 @@ private final class FakeApplicationProcess:
   private var retryStorage = HardwareInputStartResult.started
   private var preferredMicrophoneUIDStorage: [String?] = []
   private var voiceTriggerSettingsStorage: [VoiceTriggerSettings] = []
+  private var voiceCaptureCommandStorage: [DictationCommand] = []
   private var localAIReadinessStorage = LocalAIReadinessSnapshot.checking
   private var localAIReadinessContinuation: CheckedContinuation<Void, Never>?
   private var localAIReadinessObservers: [CheckedContinuation<Void, Never>] = []
@@ -947,6 +982,10 @@ private final class FakeApplicationProcess:
 
   var voiceTriggerSettings: [VoiceTriggerSettings] {
     lock.withLock { voiceTriggerSettingsStorage }
+  }
+
+  var voiceCaptureCommands: [DictationCommand] {
+    lock.withLock { voiceCaptureCommandStorage }
   }
 
   var retryResult: HardwareInputStartResult {
@@ -1124,6 +1163,14 @@ private final class FakeApplicationProcess:
       }
     }
     return nil
+  }
+
+  /// Records commands sent through the process Voice dispatcher.
+  func submitVoiceCapture(_ command: DictationCommand) -> Bool {
+    lock.withLock {
+      voiceCaptureCommandStorage.append(command)
+    }
+    return true
   }
 
   /// Accepts a deterministic test request.

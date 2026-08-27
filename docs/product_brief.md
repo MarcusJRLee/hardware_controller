@@ -172,6 +172,8 @@ failure path.
   provisional text inline.
 - A dedicated Local AI status card for preparing, listening, finalizing,
   refining, validating, delivering, completed, fallback, and failure states.
+- A menu-bar **Record Voice** action that preserves the external target and
+  starts or finishes the same session used by Controls and the Voice chord.
 - No Clean/Structured mode; target-aware formatting is automatic.
 - Optional launch at login and app-local microphone selection.
 
