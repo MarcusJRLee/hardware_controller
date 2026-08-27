@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import HardwareControllerVoiceFFI
 
 public struct VoiceHistoryArchiveLimits: Equatable, Sendable {
   public static let standard = VoiceHistoryArchiveLimits(
@@ -81,6 +82,7 @@ public protocol VoiceHistoryArchiveImporting: Sendable {
 public actor VoiceHistoryArchiveImporter: VoiceHistoryArchiveImporting {
   private let history: any VoiceSessionHistoryAccessing & VoiceSessionHistoryArchiveRestoring
   private let limits: VoiceHistoryArchiveLimits
+  private let portableValidator: any PortableVoiceHistoryArchiveValidating
 
   public init(
     history:
@@ -89,6 +91,18 @@ public actor VoiceHistoryArchiveImporter: VoiceHistoryArchiveImporting {
   ) {
     self.history = history
     self.limits = limits
+    self.portableValidator = RustPortableVoiceValidator()
+  }
+
+  init(
+    history:
+      any VoiceSessionHistoryAccessing & VoiceSessionHistoryArchiveRestoring,
+    limits: VoiceHistoryArchiveLimits = .standard,
+    portableValidator: any PortableVoiceHistoryArchiveValidating
+  ) {
+    self.history = history
+    self.limits = limits
+    self.portableValidator = portableValidator
   }
 
   public func importArchive(
@@ -163,18 +177,28 @@ public actor VoiceHistoryArchiveImporter: VoiceHistoryArchiveImporting {
     guard manifest.results.count <= limits.maximumResultCount else {
       throw VoiceHistoryArchiveError.sizeLimitExceeded
     }
-    guard
-      try checksum(at: inventory.manifest)
-        == checksums.files[inventory.manifestFilename]
-    else {
-      throw VoiceHistoryArchiveError.integrityCheckFailed
+    let isPortable = inventory.manifestFilename == "manifest.json"
+    if isPortable {
+      try validatePortableContract(
+        at: stagedRoot,
+        manifest: manifest,
+        hasAudio: inventory.audio != nil
+      )
     }
-    if let audio = inventory.audio {
-      guard try fileSize(at: audio) <= limits.maximumAudioBytes else {
-        throw VoiceHistoryArchiveError.sizeLimitExceeded
-      }
-      guard try checksum(at: audio) == checksums.files["audio.caf"] else {
+    if !isPortable {
+      guard
+        try checksum(at: inventory.manifest)
+          == checksums.files[inventory.manifestFilename]
+      else {
         throw VoiceHistoryArchiveError.integrityCheckFailed
+      }
+      if let audio = inventory.audio {
+        guard try fileSize(at: audio) <= limits.maximumAudioBytes else {
+          throw VoiceHistoryArchiveError.sizeLimitExceeded
+        }
+        guard try checksum(at: audio) == checksums.files["audio.caf"] else {
+          throw VoiceHistoryArchiveError.integrityCheckFailed
+        }
       }
     }
     let archived = VoiceSessionHistoryItem(
@@ -213,6 +237,63 @@ public actor VoiceHistoryArchiveImporter: VoiceHistoryArchiveImporting {
     else {
       throw VoiceHistoryArchiveError.sizeLimitExceeded
     }
+  }
+
+  private func validatePortableContract(
+    at root: URL,
+    manifest: VoiceHistoryArchiveManifest,
+    hasAudio: Bool
+  ) throws {
+    let portableLimits: PortableVoiceValidationLimits
+    do {
+      portableLimits = PortableVoiceValidationLimits(
+        maximumManifestBytes: try unsigned(limits.maximumManifestBytes),
+        maximumChecksumBytes: try unsigned(limits.maximumChecksumBytes),
+        maximumAudioBytes: try unsigned(limits.maximumAudioBytes),
+        maximumResultCount: try resultLimit(limits.maximumResultCount)
+      )
+    } catch {
+      throw VoiceHistoryArchiveError.sizeLimitExceeded
+    }
+    let validated: PortableVoiceHistoryArchive
+    do {
+      validated = try portableValidator.validateHistoryArchive(
+        at: root,
+        limits: portableLimits
+      )
+    } catch let error as PortableVoiceValidationError {
+      switch error {
+      case .limitExceeded:
+        throw VoiceHistoryArchiveError.sizeLimitExceeded
+      case .integrityMismatch:
+        throw VoiceHistoryArchiveError.integrityCheckFailed
+      default:
+        throw VoiceHistoryArchiveError.invalidArchive
+      }
+    } catch {
+      throw VoiceHistoryArchiveError.invalidArchive
+    }
+    guard
+      validated.sessionID == manifest.document.id,
+      validated.resultCount == UInt32(manifest.results.count),
+      validated.hasAudio == hasAudio
+    else {
+      throw VoiceHistoryArchiveError.invalidArchive
+    }
+  }
+
+  private func unsigned(_ value: Int64) throws -> UInt64 {
+    guard value >= 0 else {
+      throw VoiceHistoryArchiveError.sizeLimitExceeded
+    }
+    return UInt64(value)
+  }
+
+  private func resultLimit(_ value: Int) throws -> UInt32 {
+    guard value > 0, value <= UInt32.max else {
+      throw VoiceHistoryArchiveError.sizeLimitExceeded
+    }
+    return UInt32(value)
   }
 
   private func archiveInventory(at root: URL) throws -> ArchiveInventory {

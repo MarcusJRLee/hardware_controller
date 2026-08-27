@@ -26,6 +26,7 @@ identify deep implementation modules without changing that language.
 | Portable Voice core | Dependency-free Rust domain policy shared through versioned CUJ fixtures; it contains no platform lifecycle or UI behavior. |
 | Portable archive verifier | Safe Rust boundary that verifies the exact Voice History inventory, limits, identities, and digests before a platform decodes and restores typed evidence. |
 | Voice FFI | Versioned synchronous C ABI over portable Voice crates; callers own every buffer and no pointer survives a call. |
+| Apple Voice adapter | Typed, pointer-free Swift values and failures over the statically linked Voice FFI; it adds no portable policy. |
 | Target lease | Captured editable element, process, caret/selection, and delivery capability revalidated before mutation. |
 | Nearby context | Optional bounded text around the caret from an approved nonsecure multiline target, held only for one Local AI session. |
 | Personal dictionary | Machine-wide recognition vocabulary plus deterministic spoken-form replacements. |

@@ -7,13 +7,13 @@ scope and acceptance evidence are explicit.
 
 ## Start locally
 
-Requirements: Apple silicon, macOS 15 or later, and Xcode 26 or a compatible
-Swift 6 toolchain.
+Requirements: Apple silicon, macOS 15 or later, Xcode 26 or a compatible Swift
+6 toolchain, and rustup. The repository pins Rust 1.98.
 
 ```bash
 git clone https://github.com/MarcusJRLee/hardware_controller.git
 cd hardware_controller
-swift run HardwareController --demo
+scripts/run_demo.sh
 ```
 
 Demo mode is deterministic and requires no Device, Apple signing identity, or

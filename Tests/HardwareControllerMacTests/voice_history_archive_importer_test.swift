@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
 import HardwareControllerCore
+import HardwareControllerVoiceFFI
 import Testing
 
 @testable import HardwareControllerMac
@@ -21,6 +22,22 @@ struct VoiceHistoryArchiveImporterTest {
         == UUID(uuidString: "00000000-0000-4000-8000-000000000001")
     )
     #expect(try await history.session(id: outcome.sessionID)?.results.count == 4)
+  }
+
+  @Test
+  func portableVerifierFailureNeverMutatesHistory() async throws {
+    let fixture = try ArchiveImportFixture()
+    defer { fixture.remove() }
+    let source = try await fixture.exportSource().url
+    let importer = VoiceHistoryArchiveImporter(
+      history: fixture.destination,
+      portableValidator: RejectingPortableArchiveValidator()
+    )
+
+    await #expect(throws: VoiceHistoryArchiveError.invalidArchive) {
+      try await importer.importArchive(from: source)
+    }
+    #expect(try await fixture.destination.recentSessions(limit: 10).isEmpty)
   }
 
   @Test
@@ -159,7 +176,7 @@ struct VoiceHistoryArchiveImporterTest {
     )
     let importer = VoiceHistoryArchiveImporter(history: fixture.destination)
 
-    await #expect(throws: VoiceHistoryArchiveError.self) {
+    await #expect(throws: VoiceHistoryArchiveError.integrityCheckFailed) {
       try await importer.importArchive(from: source)
     }
     #expect(try await fixture.destination.recentSessions(limit: 10).isEmpty)
@@ -268,6 +285,17 @@ struct VoiceHistoryArchiveImporterTest {
       try await fixture.destination.session(id: fixture.sessionID)?.document
         == fixture.document
     )
+  }
+}
+
+private struct RejectingPortableArchiveValidator:
+  PortableVoiceHistoryArchiveValidating
+{
+  func validateHistoryArchive(
+    at _: URL,
+    limits _: PortableVoiceValidationLimits
+  ) throws -> PortableVoiceHistoryArchive {
+    throw PortableVoiceValidationError.internalFailure
   }
 }
 

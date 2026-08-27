@@ -74,3 +74,12 @@ decisions before integration.
 - `Tests/HardwareControllerCoreTests/voice_history_retention_test.swift`
 - `crates/voice_ffi/src/ffi_test.rs`
 - `Tests/voice_ffi/retention_smoke.c`
+
+## Current adoption
+
+On 2026-08-27, [decision 0039](0039_linked_apple_voice_adapter.md) adopted the
+synchronous ABI in the macOS executable. Model-package and History-archive
+metadata cross a typed Swift wrapper, and V1 History import invokes Rust on the
+private snapshot before transactional Swift restore. Retention remains on the
+dual Swift/Rust conformance baseline until a separate vertical migration owns
+its persistence integration.

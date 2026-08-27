@@ -4,7 +4,7 @@
 
 | Goal | Command or entry point | Device or signing required |
 | --- | --- | --- |
-| Explore the UI | `swift run HardwareController --demo` | No |
+| Explore the UI | `scripts/run_demo.sh` | No Device or signing; rustup required |
 | Verify a change | `scripts/check.sh` | No |
 | Verify portable Rust and C ABI | `scripts/check_rust.sh` | No |
 | Exercise real hardware | Signed build from `scripts/build_app.sh` | Yes |
@@ -30,6 +30,8 @@ unrelated parallel suites.
 | `crates/voice_archive/` | Bounded portable Voice History inventory, identity, and digest verification. |
 | `crates/voice_models/` | Bounded portable Model-package schema, inventory, license, and digest verification. |
 | `crates/voice_ffi/` | Versioned synchronous C ABI and source-controlled public header. |
+| `Sources/hardware_controller_voice_ffi/` | Typed, pointer-free Swift values over the linked synchronous Rust ABI. |
+| `Sources/voice_ffi_bridge/` | Header-only C import boundary for Swift. |
 | `schemas/` | Language-neutral versioned Model-package and archive contracts. |
 | `Tests/*Tests/` | Colocated target-level unit and boundary tests mirroring source ownership. |
 | `Tests/*Tests/fixtures/` | Sanitized hardware and Local AI evidence used by deterministic tests. |

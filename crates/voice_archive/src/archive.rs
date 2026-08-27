@@ -216,9 +216,6 @@ fn validate_contract(
     if checksums.algorithm != "SHA-256"
         || manifest.exported_at.is_empty()
         || manifest.results.is_empty()
-        || manifest.results.len()
-            > usize::try_from(maximum_result_count)
-                .map_err(|_| HistoryArchiveError::LimitExceeded)?
         || (manifest.audio_filename.as_deref() == Some(AUDIO_FILE)) != has_audio
         || manifest
             .audio_filename
@@ -233,6 +230,11 @@ fn validate_contract(
         || manifest.recovery_kind.is_some() != manifest.recovered_at.is_some()
     {
         return Err(HistoryArchiveError::InvalidManifest);
+    }
+    if manifest.results.len()
+        > usize::try_from(maximum_result_count).map_err(|_| HistoryArchiveError::LimitExceeded)?
+    {
+        return Err(HistoryArchiveError::LimitExceeded);
     }
     let expected_files: BTreeSet<_> = if has_audio {
         [MANIFEST_FILE.to_owned(), AUDIO_FILE.to_owned()]

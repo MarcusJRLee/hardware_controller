@@ -236,6 +236,8 @@ main() {
   xcrun clang-format --dry-run --Werror \
     Sources/HardwareControllerAudioBoundary/audio_engine_exception_boundary.m \
     Sources/HardwareControllerAudioBoundary/include/audio_engine_exception_boundary.h \
+    Sources/voice_ffi_bridge/include/voice_ffi_bridge.h \
+    Sources/voice_ffi_bridge/voice_ffi_bridge.c \
     crates/voice_ffi/include/voice_ffi.h \
     Tests/voice_ffi/retention_smoke.c
   scripts/check_rust.sh

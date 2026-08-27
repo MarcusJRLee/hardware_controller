@@ -286,8 +286,10 @@ only bounded, digest-complete portable Model packages and distinguishes
 catalog-authenticated downloads from explicit manual imports.
 M14 exports and restores one bounded, checksum-complete portable History
 archive without changing evidence or delivering text; Swift, Rust, and the C
-ABI share its V1 fixture. Remaining model-runtime work, hardening, and iOS
-remain pending. See
+ABI share its V1 fixture. M15 links those portable validators into the Apple
+executable behind typed Swift values; production V1 import now verifies its
+private snapshot in Rust before complete Swift restore validation. Streaming
+model-runtime work, hardening, and iOS remain pending. See
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 [`voice_platform_design.md`](voice_platform_design.md), and
 [`voice_cujs.md`](voice_cujs.md).

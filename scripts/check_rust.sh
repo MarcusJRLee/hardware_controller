@@ -8,7 +8,7 @@ cd "$repo_root"
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked
 cargo test --workspace --locked
-cargo build --package voice_ffi --release --locked
+scripts/build_rust_ffi.sh
 
 smoke_binary="target/voice_ffi_retention_smoke"
 if [[ "$(uname -s)" == "Darwin" ]]; then
