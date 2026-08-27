@@ -440,7 +440,13 @@ struct ControllerRuntimeTest {
     )
   }
 
-  @Test
+  @Test(
+    .enabled(
+      if: ProcessInfo.processInfo.environment[
+        "HC_RUN_HID_PERFORMANCE"
+      ] == "1"
+    )
+  )
   func tenThousandTransitionSoakMeetsDispatchBudget() {
     let executor = RecordingExecutor()
     let snapshots = SnapshotRecorder()

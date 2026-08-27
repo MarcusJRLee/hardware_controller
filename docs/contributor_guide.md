@@ -12,6 +12,8 @@
 Demo mode uses deterministic process data and does not request Accessibility,
 Microphone, Speech Recognition, or hardware access. Tests replace process
 boundaries and skip opt-in system checks unless their environment flag is set.
+`scripts/check.sh` runs the required HID latency soak in its own test process so
+unrelated parallel suites cannot create scheduler outliers.
 
 ## Source map
 

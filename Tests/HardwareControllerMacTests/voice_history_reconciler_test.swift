@@ -71,6 +71,7 @@ struct VoiceHistoryReconcilerTest {
     )
     let document = historyDocument(sessionID: sessionID)
     try await record(document, in: try #require(history))
+    _ = try await #require(history).recentSessions(limit: 1)
     let finalURL = root.appending(path: "audio/\(sessionID).caf")
     let quarantineFilename =
       ".expiring_\(sessionID.uuidString)_\(UUID().uuidString).caf"
