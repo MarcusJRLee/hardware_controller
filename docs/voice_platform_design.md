@@ -646,6 +646,15 @@ test first or batch the entire implementation behind mocked internals.
   insertion. Physical-iPhone
   percentiles and keyboard evidence remain open because its free profile is at
   the three-app limit.
+- **Current lifecycle evidence:** the containing-app actor maps every audio
+  interruption, route, background, Low Power Mode, and thermal event into an
+  explicit continue/stop decision. Visible Live Activity ownership is required
+  for background recording. Stop receives a bounded background task; expiration
+  invalidates late finalization and commits exact partial audio to Recovery
+  History. Startup reconciliation runs on first History access, adopts only
+  readable canonical session artifacts, preserves damaged/unknown files, and
+  never auto-resumes. Decision
+  [`0046`](decisions/0046_ios_capture_lifecycle_and_recovery.md) owns I7.
 - Every repository check runs the real pinned native transcription and output
   safety assertions. `HC_RUN_IOS_ASR_PERFORMANCE=1` additionally enforces the
   RTF ≤ 0.75 gate only on named hardware; shared virtual CI is not performance
@@ -675,6 +684,10 @@ test first or batch the entire implementation behind mocked internals.
 - [Apple custom keyboard open-access capabilities](https://developer.apple.com/documentation/uikit/configuring-open-access-for-a-custom-keyboard)
 - [Apple App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)
 - [Apple Audio Recording Intent](https://developer.apple.com/documentation/appintents/audiorecordingintent)
+- [Apple audio interruptions](https://developer.apple.com/documentation/avfaudio/handling-audio-interruptions)
+- [Apple audio route changes](https://developer.apple.com/documentation/avfaudio/responding-to-audio-route-changes)
+- [Apple power and thermal notifications](https://developer.apple.com/documentation/xcode/responding-to-power-notifications)
+- [Apple background execution modes](https://developer.apple.com/documentation/xcode/configuring-background-execution-modes)
 - [Apple Keychain Sharing](https://developer.apple.com/documentation/security/sharing-access-to-keychain-items-among-a-collection-of-apps)
 - [Wispr Flow iPhone keyboard setup](https://docs.wisprflow.ai/articles/7453988911-set-up-the-flow-keyboard-on-iphone)
 - [Wispr Flow iOS 26.4 behavior](https://docs.wisprflow.ai/articles/6269634092-adapting-to-ios-26-4)

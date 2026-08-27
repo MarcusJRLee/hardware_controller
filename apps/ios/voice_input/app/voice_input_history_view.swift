@@ -10,7 +10,7 @@ struct VoiceInputHistoryView: View {
       Text("History")
         .font(.title2.bold())
         .accessibilityIdentifier("voice_history")
-      Text("Completed recordings and every transcript stage stay on this iPhone.")
+      Text("Recordings, recovery audio, and every transcript stage stay on this iPhone.")
         .font(.subheadline)
         .foregroundStyle(.secondary)
 
@@ -24,9 +24,9 @@ struct VoiceInputHistoryView: View {
         ProgressView("Loading local History")
       } else if model.sessions.isEmpty, model.errorMessage == nil {
         ContentUnavailableView(
-          "No completed recordings",
+          "No recordings",
           systemImage: "waveform",
-          description: Text("Finished captures will appear here.")
+          description: Text("Finished captures and recovered audio will appear here.")
         )
         .accessibilityIdentifier("history_empty")
       }
@@ -61,14 +61,37 @@ private struct VoiceInputHistorySessionView: View {
           .font(.subheadline)
           .foregroundStyle(.secondary)
         Spacer()
-        Text(session.style.kind.displayName)
-          .font(.caption)
-          .foregroundStyle(.secondary)
+        if session.isRecovery {
+          Text("Recovered audio")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        } else {
+          Text(session.style.kind.displayName)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
       }
 
-      Text(session.formattedText)
-        .textSelection(.enabled)
-        .frame(maxWidth: .infinity, alignment: .leading)
+      if session.isRecovery {
+        Label("Recovered recording", systemImage: "waveform.badge.exclamationmark")
+          .font(.headline)
+        if let recoveryDescription = session.recoveryDescription {
+          Text(recoveryDescription)
+            .foregroundStyle(.secondary)
+        }
+        Text("No transcript was created for this recovery.")
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+        if session.audioArtifact != nil {
+          Text("Play this recording before its 24-hour recovery window ends.")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+      } else {
+        Text(session.formattedText)
+          .textSelection(.enabled)
+          .frame(maxWidth: .infinity, alignment: .leading)
+      }
 
       HStack {
         Button(action: togglePlayback) {
@@ -80,22 +103,28 @@ private struct VoiceInputHistorySessionView: View {
         .disabled(session.audioArtifact == nil)
 
         if session.audioArtifact == nil {
-          Text("Audio expired; transcript retained")
-            .font(.caption)
-            .foregroundStyle(.secondary)
+          Text(
+            session.isRecovery
+              ? "Recovered audio expired"
+              : "Audio expired; transcript retained"
+          )
+          .font(.caption)
+          .foregroundStyle(.secondary)
         }
       }
 
-      DisclosureGroup("Raw transcript") {
-        Text(session.rawText)
-          .font(.subheadline)
-          .textSelection(.enabled)
-          .frame(maxWidth: .infinity, alignment: .leading)
-      }
+      if !session.isRecovery {
+        DisclosureGroup("Raw transcript") {
+          Text(session.rawText)
+            .font(.subheadline)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
 
-      Text("\(session.modelPackageID) · \(session.modelVersion)")
-        .font(.caption.monospaced())
-        .foregroundStyle(.secondary)
+        Text("\(session.modelPackageID) · \(session.modelVersion)")
+          .font(.caption.monospaced())
+          .foregroundStyle(.secondary)
+      }
     }
     .padding(16)
     .background(.quaternary, in: RoundedRectangle(cornerRadius: 16, style: .continuous))

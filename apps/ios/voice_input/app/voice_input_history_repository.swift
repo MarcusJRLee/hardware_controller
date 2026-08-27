@@ -29,7 +29,7 @@ private final class VoiceInputSQLiteHandle: @unchecked Sendable {
 }
 
 actor VoiceInputHistoryRepository {
-  private static let schemaRevision = 1
+  private static let schemaRevision = VoiceInputHistorySession.currentSchemaRevision
   private static let transientDestructor = unsafeBitCast(
     -1,
     to: sqlite3_destructor_type.self
@@ -39,6 +39,7 @@ actor VoiceInputHistoryRepository {
   private let retentionSettings: VoiceHistoryRetentionSettings
   private let handle: VoiceInputSQLiteHandle
   private var isClosed = false
+  private var needsReconciliation = true
 
   private var database: OpaquePointer { handle.pointer }
 
@@ -87,11 +88,6 @@ actor VoiceInputHistoryRepository {
         ON voice_input_history(ended_at DESC);
         """
     )
-    try Self.removeIncompleteAudio(in: audioDirectoryURL)
-    try Self.removeUnreferencedAudio(
-      in: audioDirectoryURL,
-      database: opened
-    )
     try Self.protectDatabaseFiles(in: rootURL)
   }
 
@@ -102,6 +98,7 @@ actor VoiceInputHistoryRepository {
     transcript: VoiceInputProcessedTranscript,
     sourceAudioURL: URL
   ) throws -> VoiceInputHistorySession {
+    try reconcileIfNeeded(excluding: sourceAudioURL)
     try requireOpen()
     guard
       startedAt <= endedAt,
@@ -111,7 +108,7 @@ actor VoiceInputHistoryRepository {
     else {
       throw VoiceInputHistoryError.invalidSession
     }
-    guard try session(id: sessionID) == nil else {
+    guard try storedSession(id: sessionID) == nil else {
       throw VoiceInputHistoryError.duplicateSession
     }
     let artifact = try copyAudio(from: sourceAudioURL, sessionID: sessionID)
@@ -135,7 +132,61 @@ actor VoiceInputHistoryRepository {
     return stored
   }
 
+  func saveRecovery(
+    sessionID: UUID,
+    startedAt: Date,
+    endedAt: Date,
+    reason: VoiceInputCaptureInterruptionReason,
+    sourceAudioURL: URL
+  ) throws -> VoiceInputHistorySession {
+    try reconcileIfNeeded(excluding: sourceAudioURL)
+    try requireOpen()
+    guard startedAt <= endedAt else {
+      throw VoiceInputHistoryError.invalidSession
+    }
+    if let existing = try storedSession(id: sessionID) {
+      let expectedPartialURL = audioDirectoryURL.appendingPathComponent(
+        "\(sessionID.uuidString.lowercased()).partial"
+      )
+      guard
+        let existingArtifact = existing.audioArtifact,
+        sourceAudioURL.standardizedFileURL == expectedPartialURL.standardizedFileURL,
+        let sourceDigest = try? Self.sha256(of: sourceAudioURL),
+        sourceDigest == existingArtifact.sha256
+      else {
+        throw VoiceInputHistoryError.duplicateSession
+      }
+      if FileManager.default.fileExists(atPath: sourceAudioURL.path) {
+        try FileManager.default.removeItem(at: sourceAudioURL)
+      }
+      return existing
+    }
+    let artifact = try copyAudio(from: sourceAudioURL, sessionID: sessionID)
+    let recovered = VoiceInputHistorySession(
+      recoveryID: sessionID,
+      startedAt: startedAt,
+      endedAt: endedAt,
+      reason: reason,
+      audioArtifact: artifact
+    )
+    do {
+      try insert(recovered)
+      if sourceAudioURL.standardizedFileURL != artifact.url.standardizedFileURL {
+        try FileManager.default.removeItem(at: sourceAudioURL)
+      }
+    } catch {
+      try? FileManager.default.removeItem(at: artifact.url)
+      throw error
+    }
+    try applyRetention(now: endedAt)
+    guard let stored = try session(id: sessionID) else {
+      throw VoiceInputHistoryError.storageUnavailable
+    }
+    return stored
+  }
+
   func recent(limit: Int) throws -> [VoiceInputHistorySession] {
+    try reconcileIfNeeded()
     try requireOpen()
     guard (1...1_000).contains(limit) else {
       throw VoiceInputHistoryError.invalidLimit
@@ -158,6 +209,7 @@ actor VoiceInputHistoryRepository {
     query: String,
     limit: Int
   ) throws -> [VoiceInputHistorySession] {
+    try reconcileIfNeeded()
     try requireOpen()
     guard (1...1_000).contains(limit) else {
       throw VoiceInputHistoryError.invalidLimit
@@ -184,7 +236,12 @@ actor VoiceInputHistoryRepository {
   }
 
   func session(id: UUID) throws -> VoiceInputHistorySession? {
+    try reconcileIfNeeded()
     try requireOpen()
+    return try storedSession(id: id)
+  }
+
+  private func storedSession(id: UUID) throws -> VoiceInputHistorySession? {
     return try sessions(
       sql: "SELECT payload FROM voice_input_history WHERE id = ?1 LIMIT 1;",
       bind: { statement in
@@ -194,6 +251,7 @@ actor VoiceInputHistoryRepository {
   }
 
   func enforceRetention(now: Date) throws {
+    try reconcileIfNeeded()
     try requireOpen()
     try applyRetention(now: now)
   }
@@ -322,7 +380,8 @@ actor VoiceInputHistoryRepository {
         audioBytes: artifact.byteCount,
         isPinned: false,
         isActive: false,
-        isSoleRecoveryArtifact: false
+        isSoleRecoveryArtifact: session.recoveryReason != nil,
+        recoveryExpiresAt: session.recoveryExpiresAt
       )
     }
     let plan = try VoiceHistoryRetentionPlanner.plan(
@@ -436,73 +495,172 @@ actor VoiceInputHistoryRepository {
     try ownedURL.setResourceValues(values)
   }
 
-  private static func removeIncompleteAudio(in directory: URL) throws {
-    let children = try FileManager.default.contentsOfDirectory(
-      at: directory,
-      includingPropertiesForKeys: nil
-    )
-    for child in children where child.lastPathComponent.hasSuffix(".partial") {
-      try FileManager.default.removeItem(at: child)
+  private func reconcileIfNeeded(excluding excludedURL: URL? = nil) throws {
+    guard needsReconciliation else {
+      return
+    }
+    do {
+      try reconcileInterruptedAudio(excluding: excludedURL)
+      needsReconciliation = false
+    } catch {
+      needsReconciliation = true
+      throw error
     }
   }
 
-  private static func removeUnreferencedAudio(
-    in directory: URL,
-    database: OpaquePointer
-  ) throws {
-    var statement: OpaquePointer?
+  private func reconcileInterruptedAudio(excluding excludedURL: URL?) throws {
+    let children = try FileManager.default.contentsOfDirectory(
+      at: audioDirectoryURL,
+      includingPropertiesForKeys: [.creationDateKey, .contentModificationDateKey]
+    )
+    let finalized = children.compactMap { url -> (UUID, URL)? in
+      guard
+        url.standardizedFileURL != excludedURL?.standardizedFileURL,
+        url.pathExtension == "caf",
+        let id = Self.canonicalSessionID(
+          filename: url.deletingPathExtension().lastPathComponent
+        )
+      else {
+        return nil
+      }
+      return (id, url)
+    }.sorted { $0.1.lastPathComponent < $1.1.lastPathComponent }
+    for (requestedID, artifactURL) in finalized {
+      guard Self.isRecoverableAudioArtifact(artifactURL) else {
+        continue
+      }
+      if let existing = try storedSession(id: requestedID) {
+        if existing.audioArtifact == nil {
+          try FileManager.default.removeItem(at: artifactURL)
+        }
+      } else {
+        try adoptRecoveryAudio(at: artifactURL, requestedID: requestedID)
+      }
+    }
+
+    let partials = children.compactMap { url -> (UUID, URL)? in
+      guard
+        url.standardizedFileURL != excludedURL?.standardizedFileURL,
+        url.pathExtension == "partial",
+        url.deletingPathExtension().pathExtension.isEmpty,
+        let id = Self.canonicalSessionID(
+          filename: url.deletingPathExtension().lastPathComponent
+        )
+      else {
+        return nil
+      }
+      return (id, url)
+    }.sorted { $0.1.lastPathComponent < $1.1.lastPathComponent }
+    for (requestedID, partialURL) in partials {
+      guard Self.isRecoverableAudioArtifact(partialURL) else {
+        continue
+      }
+      let existing = try storedSession(id: requestedID)
+      if let existingArtifact = existing?.audioArtifact,
+        existingArtifact.sha256 == (try Self.sha256(of: partialURL))
+      {
+        try FileManager.default.removeItem(at: partialURL)
+        continue
+      }
+      let recoveryID = existing == nil ? requestedID : UUID()
+      try recoverPartialAudio(at: partialURL, recoveryID: recoveryID)
+    }
+  }
+
+  /// Invalid artifacts remain untouched so one damaged recording cannot hide valid History.
+  private static func isRecoverableAudioArtifact(_ url: URL) -> Bool {
     guard
-      sqlite3_prepare_v2(
-        database,
-        "SELECT payload FROM voice_input_history;",
-        -1,
-        &statement,
-        nil
-      ) == SQLITE_OK,
-      let statement
+      let values = try? url.resourceValues(
+        forKeys: [.isRegularFileKey, .fileSizeKey]
+      ),
+      values.isRegularFile == true,
+      let fileSize = values.fileSize,
+      fileSize > 0,
+      (try? artifactTimestamps(url)) != nil,
+      (try? sha256(of: url)) != nil
+    else {
+      return false
+    }
+    return true
+  }
+
+  private func recoverPartialAudio(
+    at sourceURL: URL,
+    recoveryID: UUID
+  ) throws {
+    let timestamps = try Self.artifactTimestamps(sourceURL)
+    let artifact = try copyAudio(from: sourceURL, sessionID: recoveryID)
+    let recovered = VoiceInputHistorySession(
+      recoveryID: recoveryID,
+      startedAt: timestamps.startedAt,
+      endedAt: timestamps.endedAt,
+      reason: .processTermination,
+      audioArtifact: artifact
+    )
+    do {
+      try insert(recovered)
+      try FileManager.default.removeItem(at: sourceURL)
+    } catch {
+      try? FileManager.default.removeItem(at: artifact.url)
+      throw error
+    }
+  }
+
+  private func adoptRecoveryAudio(
+    at artifactURL: URL,
+    requestedID: UUID
+  ) throws {
+    let timestamps = try Self.artifactTimestamps(artifactURL)
+    let attributes = try FileManager.default.attributesOfItem(
+      atPath: artifactURL.path
+    )
+    guard let byteCount = (attributes[.size] as? NSNumber)?.int64Value,
+      byteCount > 0
     else {
       throw VoiceInputHistoryError.storageUnavailable
     }
-    defer { sqlite3_finalize(statement) }
-    var referencedFilenames: Set<String> = []
-    while true {
-      switch sqlite3_step(statement) {
-      case SQLITE_ROW:
-        guard
-          let bytes = sqlite3_column_blob(statement, 0),
-          sqlite3_column_bytes(statement, 0) > 0,
-          let session = try? decode(
-            Data(
-              bytes: bytes,
-              count: Int(sqlite3_column_bytes(statement, 0))
-            )
-          ),
-          session.schemaRevision == schemaRevision,
-          (try? session.validated(audioDirectoryURL: directory)) != nil
-        else {
-          throw VoiceInputHistoryError.invalidSession
-        }
-        if session.audioArtifact != nil {
-          referencedFilenames.insert(
-            "\(session.id.uuidString.lowercased()).caf"
-          )
-        }
-      case SQLITE_DONE:
-        let children = try FileManager.default.contentsOfDirectory(
-          at: directory,
-          includingPropertiesForKeys: nil
+    try Self.protectOwnedItem(artifactURL)
+    try insert(
+      VoiceInputHistorySession(
+        recoveryID: requestedID,
+        startedAt: timestamps.startedAt,
+        endedAt: timestamps.endedAt,
+        reason: .processTermination,
+        audioArtifact: VoiceInputHistoryAudioArtifact(
+          url: artifactURL,
+          byteCount: byteCount,
+          sha256: try Self.sha256(of: artifactURL)
         )
-        for child in children
-        where child.pathExtension == "caf"
-          && !referencedFilenames.contains(child.lastPathComponent)
-        {
-          try FileManager.default.removeItem(at: child)
-        }
-        return
-      default:
-        throw VoiceInputHistoryError.storageUnavailable
-      }
+      )
+    )
+  }
+
+  private static func artifactTimestamps(
+    _ url: URL
+  ) throws -> (startedAt: Date, endedAt: Date) {
+    let values = try url.resourceValues(
+      forKeys: [.creationDateKey, .contentModificationDateKey]
+    )
+    guard let startedAt = values.creationDate ?? values.contentModificationDate,
+      let endedAt = values.contentModificationDate ?? values.creationDate
+    else {
+      throw VoiceInputHistoryError.storageUnavailable
     }
+    return (
+      startedAt: min(startedAt, endedAt),
+      endedAt: max(startedAt, endedAt)
+    )
+  }
+
+  private static func canonicalSessionID(filename: String) -> UUID? {
+    guard
+      filename == filename.lowercased(),
+      let id = UUID(uuidString: filename),
+      id.uuidString.lowercased() == filename
+    else {
+      return nil
+    }
+    return id
   }
 
   private static func protectDatabaseFiles(in root: URL) throws {

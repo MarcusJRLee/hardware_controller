@@ -153,6 +153,8 @@ flowchart LR
   SYSTEM[Containing app or system control] --> OWNER[iOS capture owner]
   OWNER --> AUDIO[(Private CAF)]
   OWNER --> ACTIVITY[Live Activity]
+  OWNER --> BACKGROUND[Bounded finalization task]
+  AUDIO --> RECOVERY[(Recovery History)]
   OWNER --> HANDOFF[(Bounded shared Keychain)]
   KEYBOARD[Custom keyboard] --> HANDOFF
   HANDOFF --> KEYBOARD
@@ -201,8 +203,14 @@ and commits a versioned SQLite payload before it publishes matching Formatted
 text to the Keychain handoff. History stores immutable Raw, Edited, Formatted,
 timed-segment, model, Style, digest, byte-count, and audio-expiry evidence; its
 UI searches, discloses Raw/model provenance, and plays retained CAFs. Startup
-removes incomplete and unreferenced app-owned audio. Data Protection and backup
-exclusion apply to the owned History directory, database family, and audio.
+reconciliation on first History access adopts only exact readable lowercase
+session partial/orphan audio into typed Recovery sessions. Invalid, unknown, or
+noncanonical files remain untouched and cannot block valid History. An exact
+post-commit partial is removed only when its digest matches committed audio;
+differing bytes recover under a new session identifier. Recovery
+audio expires after 24 hours without inventing transcript stages. Data
+Protection and backup exclusion apply to the owned History directory, database
+family, and audio.
 The app and keyboard retain separate surface Style defaults. A schema-revision-2
 stop command captures the keyboard's explicit Style for its exact session; the
 app maps that bounded identifier exhaustively into the canonical formatter.
@@ -217,6 +225,12 @@ recognized general-text UIKit traits permit Voice. An ephemeral session UUID,
 opaque document UUID, and text/selection revision bind delivery without
 retaining target text or app identity; mismatch recovers from History. See
 [decision 0045](decisions/0045_ios_host_field_and_delivery_target_safety.md).
+The capture actor maps interruption, route, media-service, background, power,
+and thermal signals into explicit lifecycle policy. Visible Live Activity
+ownership is mandatory for background recording; stopped capture gets one
+bounded background-finalization task. Expiration invalidates late output,
+preserves the exact partial, and never auto-resumes. See
+[decision 0046](decisions/0046_ios_capture_lifecycle_and_recovery.md).
 
 ### HID transport
 

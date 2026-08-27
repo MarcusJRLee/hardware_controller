@@ -1,6 +1,4 @@
 import AVFAudio
-import ActivityKit
-import AudioToolbox
 import Foundation
 import VoiceInputShared
 
@@ -31,32 +29,67 @@ protocol VoiceInputCapturing: Sendable {
   func snapshot() async throws -> VoiceInputSnapshot
   func start(sessionID: UUID) async throws
   func stop(styleKind: VoiceInputStyleKind) async throws
-  func interrupt() async
+  func interrupt(reason: VoiceInputCaptureInterruptionReason) async
+  func handleLifecycleEvent(
+    _ event: VoiceInputLifecycleEvent
+  ) async -> VoiceInputLifecycleDecision
   func processPendingCommand() async throws
 }
 
 actor VoiceInputCaptureService: VoiceInputCapturing {
   private let store: any VoiceInputStateStoring
-  private let captureURL: URL
+  private let captureDirectoryURL: URL
   private let asrWorkflow: VoiceInputASRWorkflow?
   private let sessionFinalizer: VoiceInputSessionFinalizer?
-  private var recorder: AVAudioRecorder?
+  private let recoveryStore: (any VoiceInputRecoveryStoring)?
+  private let permissionRequester: @Sendable () async -> Bool
+  private let audioSession: any VoiceInputAudioSessionControlling
+  private let recorderFactory: any VoiceInputAudioRecorderCreating
+  private let activityManager: any VoiceInputLiveActivityManaging
+  private let backgroundTaskManager: any VoiceInputBackgroundTaskManaging
+  private let lifecyclePolicy = VoiceInputLifecyclePolicy()
+  private let heartbeatInterval: Duration
+  private let now: @Sendable () -> Date
+  private var recorder: (any VoiceInputAudioRecording)?
   private var activityID: String?
   private var heartbeatTask: Task<Void, Never>?
   private var sessionID: UUID?
   private var sessionStartedAt: Date?
+  private var activeCaptureURL: URL?
+  private var isTearingDown = false
   private var sequence: UInt64
 
   init(
     store: any VoiceInputStateStoring,
-    captureURL: URL,
+    captureDirectoryURL: URL,
     asrWorkflow: VoiceInputASRWorkflow? = nil,
-    sessionFinalizer: VoiceInputSessionFinalizer? = nil
+    sessionFinalizer: VoiceInputSessionFinalizer? = nil,
+    recoveryStore: (any VoiceInputRecoveryStoring)? = nil,
+    permissionRequester: @escaping @Sendable () async -> Bool = {
+      await AVAudioApplication.requestRecordPermission()
+    },
+    audioSession: any VoiceInputAudioSessionControlling = VoiceInputSystemAudioSession(),
+    recorderFactory: any VoiceInputAudioRecorderCreating =
+      VoiceInputSystemAudioRecorderFactory(),
+    activityManager: any VoiceInputLiveActivityManaging =
+      VoiceInputSystemLiveActivityManager(),
+    backgroundTaskManager: any VoiceInputBackgroundTaskManaging =
+      VoiceInputSystemBackgroundTaskManager(),
+    heartbeatInterval: Duration = .milliseconds(500),
+    now: @escaping @Sendable () -> Date = { .now }
   ) {
     self.store = store
-    self.captureURL = captureURL
+    self.captureDirectoryURL = captureDirectoryURL
     self.asrWorkflow = asrWorkflow
     self.sessionFinalizer = sessionFinalizer
+    self.recoveryStore = recoveryStore
+    self.permissionRequester = permissionRequester
+    self.audioSession = audioSession
+    self.recorderFactory = recorderFactory
+    self.activityManager = activityManager
+    self.backgroundTaskManager = backgroundTaskManager
+    self.heartbeatInterval = heartbeatInterval
+    self.now = now
     sequence = (try? store.readSnapshot().sequence) ?? 0
   }
 
@@ -65,7 +98,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
   }
 
   func start(sessionID requestedSessionID: UUID = UUID()) async throws {
-    guard recorder == nil, sessionID == nil else {
+    guard recorder == nil, sessionID == nil, !isTearingDown else {
       throw VoiceInputCaptureError.alreadyRecording
     }
     sessionID = requestedSessionID
@@ -80,53 +113,68 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
       guard sessionID == requestedSessionID, recorder == nil else {
         throw VoiceInputCaptureError.recordingFailed
       }
-      guard await AVAudioApplication.requestRecordPermission() else {
+      guard await permissionRequester() else {
         throw VoiceInputCaptureError.microphoneDenied
       }
       guard sessionID == requestedSessionID, recorder == nil else {
         throw VoiceInputCaptureError.recordingFailed
       }
 
-      let audioSession = AVAudioSession.sharedInstance()
-      try audioSession.setCategory(.record, mode: .measurement)
-      try audioSession.setActive(true)
-
-      let settings: [String: Any] = [
-        AVFormatIDKey: Int(kAudioFormatLinearPCM),
-        AVSampleRateKey: 16_000,
-        AVNumberOfChannelsKey: 1,
-        AVLinearPCMBitDepthKey: 16,
-        AVLinearPCMIsFloatKey: false,
-        AVLinearPCMIsBigEndianKey: false,
-      ]
-      let newRecorder = try AVAudioRecorder(url: captureURL, settings: settings)
+      try Self.prepareCaptureDirectory(captureDirectoryURL)
+      let captureURL = captureDirectoryURL.appendingPathComponent(
+        "\(requestedSessionID.uuidString.lowercased()).partial"
+      )
+      guard !FileManager.default.fileExists(atPath: captureURL.path) else {
+        throw VoiceInputCaptureError.recordingFailed
+      }
+      activeCaptureURL = captureURL
+      try audioSession.activateForRecording()
+      let newRecorder = try recorderFactory.makeRecorder(at: captureURL)
       newRecorder.prepareToRecord()
       guard newRecorder.record() else {
         throw VoiceInputCaptureError.recordingFailed
       }
 
       recorder = newRecorder
-      sessionStartedAt = .now
+      sessionStartedAt = now()
+      try Self.protectCaptureFile(captureURL)
+      let requestedActivityID = await activityManager.start(
+        sessionID: requestedSessionID,
+        at: now()
+      )
+      guard sessionID == requestedSessionID, recorder != nil else {
+        await activityManager.end(
+          id: requestedActivityID,
+          phase: .interrupted,
+          at: now()
+        )
+        throw VoiceInputCaptureError.recordingFailed
+      }
+      activityID = requestedActivityID
       try writeSnapshot(
         .recording(
           sessionID: requestedSessionID,
           sequence: nextSequence(),
-          heartbeatAt: .now
+          heartbeatAt: now()
         )
       )
-      startLiveActivity(sessionID: requestedSessionID)
       startHeartbeat()
     } catch {
-      try? writeSnapshot(
-        VoiceInputSnapshot(
-          phase: .failed,
-          sessionID: requestedSessionID,
-          sequence: nextSequence(),
-          heartbeatAt: nil,
-          text: nil
+      if sessionID == requestedSessionID {
+        if recorder != nil {
+          _ = await preservePartial(reason: .finalizationFailure, endedAt: now())
+        }
+        try? writeSnapshot(
+          VoiceInputSnapshot(
+            phase: .failed,
+            sessionID: requestedSessionID,
+            sequence: nextSequence(),
+            heartbeatAt: nil,
+            text: nil
+          )
         )
-      )
-      await relinquishCapture(endingPhase: .failed)
+        await relinquishCapture(endingPhase: .failed)
+      }
       throw error
     }
   }
@@ -135,7 +183,8 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
     guard
       let recorder,
       let sessionID,
-      let sessionStartedAt
+      let sessionStartedAt,
+      let activeCaptureURL
     else {
       return
     }
@@ -143,7 +192,12 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
     heartbeatTask = nil
     recorder.stop()
     self.recorder = nil
-    let sessionEndedAt = Date.now
+    let sessionEndedAt = now()
+    let backgroundTask = await backgroundTaskManager.begin(
+      name: "Finish local voice recording"
+    ) { [weak self] in
+      await self?.interrupt(reason: .backgroundExecutionExpired)
+    }
 
     do {
       try writeSnapshot(
@@ -155,6 +209,11 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
           text: nil
         )
       )
+      await activityManager.update(
+        id: activityID,
+        phase: .transcribing,
+        at: now()
+      )
 
       guard let asrWorkflow else {
         throw VoiceInputCaptureError.localModelUnavailable
@@ -162,8 +221,9 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
       guard let sessionFinalizer else {
         throw VoiceInputCaptureError.localHistoryUnavailable
       }
-      let rawTranscript = try await asrWorkflow.transcribe(audioURL: captureURL)
+      let rawTranscript = try await asrWorkflow.transcribe(audioURL: activeCaptureURL)
       guard self.sessionID == sessionID else {
+        await backgroundTaskManager.end(backgroundTask)
         return
       }
       let processed = try await sessionFinalizer.finalize(
@@ -171,10 +231,11 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
         startedAt: sessionStartedAt,
         endedAt: sessionEndedAt,
         rawTranscript: rawTranscript,
-        sourceAudioURL: captureURL,
+        sourceAudioURL: activeCaptureURL,
         style: styleKind.domainStyle
       )
       guard self.sessionID == sessionID else {
+        await backgroundTaskManager.end(backgroundTask)
         return
       }
       try writeSnapshot(
@@ -184,8 +245,20 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
           text: processed.formattedText
         )
       )
+      if FileManager.default.fileExists(atPath: activeCaptureURL.path) {
+        try FileManager.default.removeItem(at: activeCaptureURL)
+      }
       await relinquishCapture(endingPhase: .ready)
+      await backgroundTaskManager.end(backgroundTask)
     } catch {
+      guard self.sessionID == sessionID else {
+        await backgroundTaskManager.end(backgroundTask)
+        return
+      }
+      _ = await preservePartial(
+        reason: .finalizationFailure,
+        endedAt: sessionEndedAt
+      )
       try? writeSnapshot(
         VoiceInputSnapshot(
           phase: .failed,
@@ -196,13 +269,39 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
         )
       )
       await relinquishCapture(endingPhase: .failed)
+      await backgroundTaskManager.end(backgroundTask)
       throw error
     }
   }
 
-  func interrupt() async {
+  func interrupt(reason: VoiceInputCaptureInterruptionReason) async {
+    _ = await applyInterruption(reason: reason)
+  }
+
+  private func applyInterruption(
+    reason: VoiceInputCaptureInterruptionReason
+  ) async -> Bool {
     guard let sessionID else {
-      return
+      return false
+    }
+    heartbeatTask?.cancel()
+    heartbeatTask = nil
+    recorder?.stop()
+    recorder = nil
+    let disposition = await preservePartial(reason: reason, endedAt: now())
+    guard self.sessionID == sessionID else {
+      return false
+    }
+    if case .alreadyFinalized(let formattedText) = disposition {
+      try? writeSnapshot(
+        .ready(
+          sessionID: sessionID,
+          sequence: nextSequence(),
+          text: formattedText
+        )
+      )
+      await relinquishCapture(endingPhase: .ready)
+      return false
     }
     try? writeSnapshot(
       VoiceInputSnapshot(
@@ -214,13 +313,41 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
       )
     )
     await relinquishCapture(endingPhase: .interrupted)
+    return true
+  }
+
+  func handleLifecycleEvent(
+    _ event: VoiceInputLifecycleEvent
+  ) async -> VoiceInputLifecycleDecision {
+    let decision = lifecyclePolicy.decision(
+      for: event,
+      captureOwned: sessionID != nil,
+      liveActivityOwned: activityID != nil
+    )
+    switch decision {
+    case .ignore:
+      break
+    case .continueCapture:
+      if recorder != nil {
+        await activityManager.update(
+          id: activityID,
+          phase: .recording,
+          at: now()
+        )
+      }
+    case .interrupt(let reason):
+      guard await applyInterruption(reason: reason) else {
+        return .ignore
+      }
+    }
+    return decision
   }
 
   func processPendingCommand() async throws {
     guard let command = try store.consumeCommand() else {
       return
     }
-    guard VoiceInputCommandPolicy().accepts(command, now: .now) else {
+    guard VoiceInputCommandPolicy().accepts(command, now: now()) else {
       return
     }
     switch command.kind {
@@ -239,9 +366,10 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
 
   private func startHeartbeat() {
     heartbeatTask?.cancel()
+    let interval = heartbeatInterval
     heartbeatTask = Task { [weak self] in
       while !Task.isCancelled {
-        try? await Task.sleep(for: .milliseconds(500))
+        try? await Task.sleep(for: interval)
         guard !Task.isCancelled, let self else {
           return
         }
@@ -258,83 +386,79 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
       .recording(
         sessionID: sessionID,
         sequence: nextSequence(),
-        heartbeatAt: .now
+        heartbeatAt: now()
       )
     )
-    await updateLiveActivity(phase: .recording)
+    await activityManager.update(
+      id: activityID,
+      phase: .recording,
+      at: now()
+    )
     try? await processPendingCommand()
   }
 
-  private func startLiveActivity(sessionID: UUID) {
-    guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-      return
-    }
-    let attributes = VoiceInputActivityAttributes(sessionID: sessionID)
-    let content = ActivityContent(
-      state: VoiceInputActivityAttributes.ContentState(phase: .recording),
-      staleDate: Date.now.addingTimeInterval(3)
-    )
-    activityID = try? Activity.request(
-      attributes: attributes,
-      content: content,
-      pushType: nil
-    ).id
-  }
-
-  private func endLiveActivity(phase: VoiceInputSnapshot.Phase) async {
-    let endingActivityID = activityID
-    activityID = nil
-    await Self.endLiveActivity(id: endingActivityID, phase: phase)
-  }
-
-  private func updateLiveActivity(phase: VoiceInputSnapshot.Phase) async {
-    let updatingActivityID = activityID
-    await Self.updateLiveActivity(id: updatingActivityID, phase: phase)
-  }
-
   private func relinquishCapture(endingPhase: VoiceInputSnapshot.Phase) async {
+    isTearingDown = true
     heartbeatTask?.cancel()
     heartbeatTask = nil
-    recorder?.stop()
+    let endingRecorder = recorder
     recorder = nil
-    await endLiveActivity(phase: endingPhase)
+    let endingActivityID = activityID
+    activityID = nil
     sessionID = nil
     sessionStartedAt = nil
-    try? AVAudioSession.sharedInstance().setActive(
-      false,
-      options: .notifyOthersOnDeactivation
+    activeCaptureURL = nil
+    endingRecorder?.stop()
+    await activityManager.end(
+      id: endingActivityID,
+      phase: endingPhase,
+      at: now()
+    )
+    try? audioSession.deactivateAfterRecording()
+    isTearingDown = false
+  }
+
+  private func preservePartial(
+    reason: VoiceInputCaptureInterruptionReason,
+    endedAt: Date
+  ) async -> VoiceInputRecoveryDisposition? {
+    guard
+      let recoveryStore,
+      let sessionID,
+      let sessionStartedAt,
+      let activeCaptureURL,
+      FileManager.default.fileExists(atPath: activeCaptureURL.path)
+    else {
+      return nil
+    }
+    return try? await recoveryStore.preserveRecovery(
+      sessionID: sessionID,
+      startedAt: sessionStartedAt,
+      endedAt: endedAt,
+      reason: reason,
+      sourceAudioURL: activeCaptureURL
     )
   }
 
-  private nonisolated static func endLiveActivity(
-    id: String?,
-    phase: VoiceInputSnapshot.Phase
-  ) async {
-    let content = ActivityContent(
-      state: VoiceInputActivityAttributes.ContentState(phase: phase),
-      staleDate: nil
+  private static func prepareCaptureDirectory(_ url: URL) throws {
+    try FileManager.default.createDirectory(
+      at: url,
+      withIntermediateDirectories: true,
+      attributes: [
+        .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication
+      ]
     )
-    let matchingActivity = Activity<VoiceInputActivityAttributes>.activities.first {
-      $0.id == id
-    }
-    await matchingActivity?.end(content, dismissalPolicy: .immediate)
   }
 
-  private nonisolated static func updateLiveActivity(
-    id: String?,
-    phase: VoiceInputSnapshot.Phase
-  ) async {
-    guard let id else {
-      return
-    }
-    let content = ActivityContent(
-      state: VoiceInputActivityAttributes.ContentState(phase: phase),
-      staleDate: Date.now.addingTimeInterval(3)
+  private static func protectCaptureFile(_ url: URL) throws {
+    try FileManager.default.setAttributes(
+      [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+      ofItemAtPath: url.path
     )
-    let matchingActivity = Activity<VoiceInputActivityAttributes>.activities.first {
-      $0.id == id
-    }
-    await matchingActivity?.update(content)
+    var ownedURL = url
+    var values = URLResourceValues()
+    values.isExcludedFromBackup = true
+    try ownedURL.setResourceValues(values)
   }
 
   private func nextSequence() -> UInt64 {

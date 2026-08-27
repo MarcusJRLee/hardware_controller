@@ -34,6 +34,7 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 | iOS I2 local finalization and History | The containing app runs real file ASR, shared deterministic spoken edits and semantic formatting, then durably stores searchable/playable Raw, Edited, Formatted, model, timing, digest, and bounded-audio evidence before publishing text. | [`decisions/0043_ios_local_formatting_and_history.md`](decisions/0043_ios_local_formatting_and_history.md) |
 | iOS I2/I6 Style-qualified delivery | App and keyboard defaults remain separate; an exact schema-V2 stop carries one Style into commit-before-publish formatting, and insertion deduplicates by session identity. | [`decisions/0044_ios_style_qualified_keyboard_delivery.md`](decisions/0044_ios_style_qualified_keyboard_delivery.md) |
 | iOS I5/I9 target-safe delivery | Voice is disabled for constrained, sensitive, or unverified traits while QWERTY remains available; one ephemeral session/document/revision tuple gates delivery and target changes recover through History. | [`decisions/0045_ios_host_field_and_delivery_target_safety.md`](decisions/0045_ios_host_field_and_delivery_target_safety.md) |
+| iOS I7 lifecycle recovery | Live Activity ownership gates background recording; typed interruption, route, power, thermal, and background-finalization decisions preserve exact partial audio in 24-hour Recovery History without automatic resume. | [`decisions/0046_ios_capture_lifecycle_and_recovery.md`](decisions/0046_ios_capture_lifecycle_and_recovery.md) |
 | Model recommendation | Qwen 3.5 4B is digest-pinned from the fixed evaluation corpus. | [`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md) |
 | Profiles | Transactional named Profiles with independent per-Device setups and active-Action cleanup. | [`decisions/0014_multi_profile_device_configuration.md`](decisions/0014_multi_profile_device_configuration.md) |
 | Application | Controller, History, Profiles, and General in one native foreground window with Dock and menu-bar presence. | [`ux_spec.md`](ux_spec.md) |
@@ -44,8 +45,8 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 
 The local Voice expansion is accepted; macOS M1–M15, iOS Gate K0, I1 local
 onboarding and Model admission, and I2 through Style-qualified local formatting,
-History, warm keyboard delivery, and target-safe field handling are implemented
-across the current stacked branches. macOS and iOS are the active
+History, warm keyboard delivery, target-safe field handling, and I7 lifecycle
+recovery are implemented across the current stacked branches. macOS and iOS are the active
 roadmap; Android, Windows, and Linux remain architectural line-of-sight
 platforms; web and mobile web are deferred.
 The acceptance and execution authorities are:
@@ -78,6 +79,7 @@ promotion.
 | iOS local History | Final output is unavailable until Raw/Edited/Formatted plus audio evidence commit; 90-day/1-GiB/2,000-artifact defaults retain transcripts after audio expiry. | Real SQLite/filesystem tests cover reload, escaped search, playback state, SHA-256 evidence, cap expiry, transcript preservation, partial cleanup, and orphan cleanup. |
 | iOS keyboard delivery | One exact session and Style stop command produces at most one insertion; stale or malformed state cannot revive delivery. | Stable-Style, exhaustive-mapping, schema-migration, durable-Keychain-claim, real-Keychain warm-journey, re-published-ready, and app-stop tests. |
 | iOS field safety | Unsupported traits never read capture state or receive Voice; a late result cannot cross document or session identity. | Normalized-trait, UIKit-mapping, unknown-custom-field, unsupported-policy, and exact-target tests. |
+| iOS lifecycle recovery | Capture ownership and system indication agree; interruptions never resume implicitly; a failed finalization preserves exact local audio without blocking History. | Pure lifecycle/notification tests, actor-owned interruption and background-expiration tests, and real SQLite/filesystem exact-artifact reconciliation, migration, isolation, and 24-hour expiry tests. Physical system-event evidence remains open. |
 | Documentation | Canonical docs describe current behavior and all links resolve. | All local links resolve. |
 
 Reference Local AI measurements and reproduction commands are in

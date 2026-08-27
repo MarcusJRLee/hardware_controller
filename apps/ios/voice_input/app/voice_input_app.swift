@@ -10,15 +10,12 @@ struct VoiceInputApp: App {
   @StateObject private var modelLibrary: VoiceInputModelLibraryModel
   @StateObject private var history: VoiceInputHistoryModel
   @StateObject private var historyAudioPlayer: VoiceInputHistoryAudioPlayerModel
+  @Environment(\.scenePhase) private var scenePhase
 
   @MainActor
   init() {
     let store = VoiceInputKeychainStore()
     guard
-      let documentsURL = FileManager.default.urls(
-        for: .documentDirectory,
-        in: .userDomainMask
-      ).first,
       let applicationSupport = FileManager.default.urls(
         for: .applicationSupportDirectory,
         in: .userDomainMask
@@ -79,11 +76,12 @@ struct VoiceInputApp: App {
     }
     let service = VoiceInputCaptureService(
       store: store,
-      captureURL: documentsURL.appendingPathComponent("voice_input_capture.caf"),
+      captureDirectoryURL: historyRoot.appendingPathComponent("audio", isDirectory: true),
       asrWorkflow: asrWorkflow,
       sessionFinalizer: historyRepository.map {
         VoiceInputSessionFinalizer(history: $0)
-      }
+      },
+      recoveryStore: historyRepository
     )
     _model = StateObject(
       wrappedValue: VoiceInputAppModel(store: store, service: service)
@@ -119,6 +117,54 @@ struct VoiceInputApp: App {
         )
       ) { notification in
         model.handleInterruption(notification)
+      }
+      .onReceive(
+        NotificationCenter.default.publisher(
+          for: AVAudioSession.routeChangeNotification
+        )
+      ) { notification in
+        model.handleRouteChange(notification)
+      }
+      .onReceive(
+        NotificationCenter.default.publisher(
+          for: AVAudioSession.mediaServicesWereLostNotification
+        )
+      ) { _ in
+        model.handleLifecycleEvent(.mediaServicesUnavailable)
+      }
+      .onReceive(
+        NotificationCenter.default.publisher(
+          for: AVAudioSession.mediaServicesWereResetNotification
+        )
+      ) { _ in
+        model.handleLifecycleEvent(.mediaServicesUnavailable)
+      }
+      .onReceive(
+        NotificationCenter.default.publisher(
+          for: ProcessInfo.thermalStateDidChangeNotification
+        )
+      ) { _ in
+        model.handleLifecycleEvent(
+          VoiceInputLifecycleNotificationMapper().thermalState(
+            ProcessInfo.processInfo.thermalState
+          )
+        )
+      }
+      .onReceive(
+        NotificationCenter.default.publisher(
+          for: .NSProcessInfoPowerStateDidChange
+        )
+      ) { _ in
+        model.handleLifecycleEvent(
+          .lowPowerModeChanged(
+            isEnabled: ProcessInfo.processInfo.isLowPowerModeEnabled
+          )
+        )
+      }
+      .onChange(of: scenePhase) { _, phase in
+        if phase == .background {
+          model.handleLifecycleEvent(.enteredBackground)
+        }
       }
       .onAppear { model.activate() }
       .onDisappear {
@@ -208,6 +254,13 @@ private struct VoiceInputView: View {
         .accessibilityIdentifier("capture_style")
       }
       statusCard
+
+      if let lifecycleMessage = model.lifecycleMessage {
+        Label(lifecycleMessage, systemImage: "info.circle")
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+          .accessibilityIdentifier("capture_lifecycle")
+      }
 
       Button {
         if model.isRecording {
