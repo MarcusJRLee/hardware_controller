@@ -102,10 +102,18 @@ verified quit and exact-bundle relaunch.
 The signed M12 packaged History UI exposes an enabled **Import Audio Recording**
 action with identifier `voice_history_import_audio`, presents the native audio
 open panel, and returns to History without mutation when cancelled. The
-installed arm64 binary is byte-identical to the verified candidate, has CDHash
-`58c6a1aadc20ea8f12983db7ad6efbe676a3cc85`, and carries only the audio-input
-entitlement. The replaced M11 app remains recoverable from the private
-validation backup until this candidate is superseded.
+M12 validation binary was byte-identical to its verified candidate, had CDHash
+`58c6a1aadc20ea8f12983db7ad6efbe676a3cc85`, and carried only the audio-input
+entitlement.
+
+The signed M13 canonical app preserves version 1.4.1 build 17 and the M12 macOS
+behavior while the portable verifier remains deliberately unlinked. Its arm64
+binary is byte-identical to the verified candidate with SHA-256
+`ab1384892b300a7c3be86b0cf4b0653dce131e5979ce1fdb5814172afbaf3e62` and CDHash
+`c627772b69856cd66c42e42fd229761a5e734ddd`. Strict signature verification,
+Team `J4NB9RR32B`, hardened runtime, and the audio-input-only entitlement pass;
+the exact Applications bundle launches with connected-Device, active-Profile,
+and both Dictation readiness states intact.
 
 ## Remaining evidence
 
