@@ -237,6 +237,8 @@ main() {
     Sources/HardwareControllerAudioBoundary/audio_engine_exception_boundary.m \
     Sources/HardwareControllerAudioBoundary/include/audio_engine_exception_boundary.h
   swift test
+  HC_RUN_HID_PERFORMANCE=1 swift test \
+    --filter tenThousandTransitionSoakMeetsDispatchBudget
   zsh -n scripts/*.sh
   plutil -lint packaging/*.plist >/dev/null
 

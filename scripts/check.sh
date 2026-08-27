@@ -12,6 +12,8 @@ xcrun clang-format --dry-run --Werror \
   Sources/HardwareControllerAudioBoundary/include/audio_engine_exception_boundary.h
 zsh -n scripts/*.sh
 swift test
+HC_RUN_HID_PERFORMANCE=1 swift test \
+  --filter tenThousandTransitionSoakMeetsDispatchBudget
 swift build -c release --product HardwareController
 scripts/build_release_test.sh
 scripts/notarize_release_test.sh

@@ -2,6 +2,7 @@ import AVFoundation
 import HardwareControllerAudioBoundary
 import Testing
 
+@Suite(.serialized)
 struct AudioEngineExceptionBoundaryTest {
   /// Converts a duplicate-tap exception into a recoverable error.
   @Test
