@@ -46,6 +46,7 @@ struct PortableVoiceValidatorTests {
     #expect(result.runtime == .sherpaONNX)
     #expect(result.stage == .asr)
     #expect(result.capabilities == [.streamingASR, .fileASR])
+    #expect(result.languages == ["en-US"])
     #expect(result.fileCount == 2)
     #expect(result.manifestSHA256.count == 32)
   }

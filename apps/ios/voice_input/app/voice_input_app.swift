@@ -6,10 +6,11 @@ import VoiceInputShared
 @main
 struct VoiceInputApp: App {
   @StateObject private var model = VoiceInputAppModel()
+  @StateObject private var modelLibrary = VoiceInputModelLibraryModel()
 
   var body: some Scene {
     WindowGroup {
-      VoiceInputView(model: model)
+      VoiceInputView(model: model, modelLibrary: modelLibrary)
         .onReceive(
           NotificationCenter.default.publisher(
             for: AVAudioSession.interruptionNotification
@@ -25,6 +26,7 @@ struct VoiceInputApp: App {
 
 private struct VoiceInputView: View {
   @ObservedObject var model: VoiceInputAppModel
+  @ObservedObject var modelLibrary: VoiceInputModelLibraryModel
   @Environment(\.openURL) private var openURL
 
   var body: some View {
@@ -49,6 +51,8 @@ private struct VoiceInputView: View {
             openSettings: openSettings
           )
 
+          VoiceInputModelLibraryView(model: modelLibrary)
+
           captureSection
 
           if let errorMessage = model.errorMessage ?? model.snapshotErrorMessage {
@@ -60,6 +64,9 @@ private struct VoiceInputView: View {
         .padding(24)
       }
       .navigationTitle("Voice Input")
+      .task {
+        await modelLibrary.refresh()
+      }
     }
   }
 

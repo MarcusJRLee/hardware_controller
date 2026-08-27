@@ -20,10 +20,14 @@ targets:
       - app
     dependencies:
       - target: VoiceInputShared
+      - target: HardwareControllerVoiceFFI
+        embed: false
       - target: VoiceInputKeyboard
         embed: true
       - target: VoiceInputWidgets
         embed: true
+      - framework: ../../../.build/ios_voice_ffi/VoiceFFI.xcframework
+        embed: false
     entitlements:
       path: config/app.entitlements
       properties:
@@ -52,6 +56,22 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.shared
+
+  HardwareControllerVoiceFFI:
+    type: framework.static
+    platform: iOS
+    sources:
+      - path: ../../../Sources/hardware_controller_voice_ffi
+        group: portable
+        createIntermediateGroups: false
+        excludes:
+          - voice_ffi_build_stamp.generated.swift
+    dependencies:
+      - framework: ../../../.build/ios_voice_ffi/VoiceFFI.xcframework
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.voiceffi
 
   VoiceInputKeyboard:
     type: app-extension
@@ -112,9 +132,16 @@ targets:
     platform: iOS
     sources:
       - tests
+      - path: ../../../Tests/cuj/voice_model_package_v1/valid
+        group: fixtures
+        createIntermediateGroups: false
+        type: folder
+        buildPhase: resources
     dependencies:
       - target: VoiceInputShared
       - target: VoiceInput
+      - target: HardwareControllerVoiceFFI
+        embed: false
     entitlements:
       path: config/tests.entitlements
       properties:

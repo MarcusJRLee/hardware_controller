@@ -10,6 +10,8 @@ command -v xcodegen >/dev/null || {
   exit 1
 }
 
+scripts/build_ios_rust_ffi.sh
+
 xcodegen generate \
   --spec apps/ios/voice_input/project.yml \
   --project apps/ios/voice_input

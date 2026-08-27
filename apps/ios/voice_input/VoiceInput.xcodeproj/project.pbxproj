@@ -7,32 +7,47 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		01D82CFB7ADFF9CD2031B935 /* VoiceFFI.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 76B49DD809855BED87F883A1 /* VoiceFFI.xcframework */; };
 		2440A70E14B03E46D446B2E4 /* voice_input_app.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66894E9CB12ADD64305532DB /* voice_input_app.swift */; };
+		248E111228FD356C7B0761A9 /* voice_input_model_package_validator_test.swift in Sources */ = {isa = PBXBuildFile; fileRef = C553B7934DAA688A399765CF /* voice_input_model_package_validator_test.swift */; };
 		35440F5AD76F3BD99A03E69F /* voice_input_capture_service_test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12CE8032228EE5BB97E4FCE0 /* voice_input_capture_service_test.swift */; };
 		4A1D19C1F59B97D2B32A516F /* voice_input_app_model.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA699775DF46AC81E02D6271 /* voice_input_app_model.swift */; };
 		4C9DC40969E1C9ACDB780066 /* voice_input_activity.swift in Sources */ = {isa = PBXBuildFile; fileRef = C842A307B0A0140A0178DEA0 /* voice_input_activity.swift */; };
+		50DE4567233BF190641F64DB /* HardwareControllerVoiceFFI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1D6CF255C19A75FF98CAA350 /* HardwareControllerVoiceFFI.framework */; };
 		54931E3159D6424A6A947FEE /* voice_input_onboarding_policy_test.swift in Sources */ = {isa = PBXBuildFile; fileRef = E55F975B55AECC156411BBF6 /* voice_input_onboarding_policy_test.swift */; };
+		56BD640ECB67FA724E133982 /* voice_input_model_package_fixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A193C9D9D6CEADAB85C8ED1 /* voice_input_model_package_fixture.swift */; };
 		5B311DD99FAD2BB5FA2ECF7A /* VoiceInputKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 870E8658F0A5428F729940C7 /* VoiceInputKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5C0AD0D1EBDEF1C0A7627516 /* voice_input_keyboard_policy_test.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC3E8041320574E94F37ABA5 /* voice_input_keyboard_policy_test.swift */; };
 		5D695AB424A5ED265EA34A62 /* VoiceInputShared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0123BE2D32E45C9A1A736155 /* VoiceInputShared.framework */; };
 		5D70C45A7359F4D4C7F642D8 /* VoiceInputWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A9711C0C615DA66AEBDFC0E8 /* VoiceInputWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		601A8A59075842D2B2D336B0 /* voice_input_model_library_model_test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83300748E2DEF79D228F4A66 /* voice_input_model_library_model_test.swift */; };
 		6426FA38E102684A8909FB1B /* voice_input_ui_test.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1D9F56D811C3B343F7854 /* voice_input_ui_test.swift */; };
 		68B9D04F5D4D77708DA1ACD4 /* voice_input_onboarding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 442CB63700ABD3B2397BE1F5 /* voice_input_onboarding.swift */; };
 		727ECEAB4825A9602485A6E9 /* voice_input_keychain_store.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D74E1DEDF0ABA766350BF40 /* voice_input_keychain_store.swift */; };
 		75E70A2A8B3AF50404F4A49F /* voice_input_onboarding_view.swift in Sources */ = {isa = PBXBuildFile; fileRef = A657531BE5596A20AB1D1FAE /* voice_input_onboarding_view.swift */; };
 		7CB6222AFFFE822FCEEE9055 /* voice_input_shared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9024518541EBF4EC74DEF0B0 /* voice_input_shared.swift */; };
 		7FACC86CD0EA5EFB6B53F922 /* keyboard_view_controller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02DE7C7AF8A1766381BEF3F4 /* keyboard_view_controller.swift */; };
+		80912E4129B0B3D4AA16150B /* voice_input_model_library_model.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2761F315707E81BC58E239D8 /* voice_input_model_library_model.swift */; };
 		88E4A13989E6A1DD1929A51F /* voice_input_store.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DB1D8B9506FDB924CFE42AF /* voice_input_store.swift */; };
 		8B4875D8100EDA752E0B2099 /* VoiceInputShared.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 0123BE2D32E45C9A1A736155 /* VoiceInputShared.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		962FE71C705DFB150F79845A /* VoiceInputShared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0123BE2D32E45C9A1A736155 /* VoiceInputShared.framework */; };
 		ABE23293CA06AEE1FB74ECCE /* VoiceInputShared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0123BE2D32E45C9A1A736155 /* VoiceInputShared.framework */; };
+		ACF8F70673D62E07224D147A /* voice_input_model_package_stager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A3760E9B21A975A8A98C93D /* voice_input_model_package_stager.swift */; };
 		B38520F5D89D0EC038D8A8DD /* voice_input_capture_service.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B91A570D429EEB46217A80C /* voice_input_capture_service.swift */; };
+		B5DAF11C777DBBB15C26A056 /* voice_input_model_package_installer_test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0289EFF8A21EF431945174AF /* voice_input_model_package_installer_test.swift */; };
+		B6FAC327B196D0065BAC7D24 /* portable_voice_validator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06A0D2B7F18E14C7DC3280DF /* portable_voice_validator.swift */; };
 		BD3872A886B0362F2568FC88 /* VoiceInputShared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0123BE2D32E45C9A1A736155 /* VoiceInputShared.framework */; };
 		C9CD662D7B1BA9E8264B26F2 /* VoiceInputShared.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 0123BE2D32E45C9A1A736155 /* VoiceInputShared.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		CFE52B091FD3A71C14E34A97 /* voice_input_environment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AC71BC68D1A1B8B71EDD8A8 /* voice_input_environment.swift */; };
+		DA54C818BB8EA79C3C3D95E0 /* voice_input_model_package_stager_test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 006C11C5D35C733B92990F8D /* voice_input_model_package_stager_test.swift */; };
+		DB0EEC91A3C3C870C7A12C0A /* VoiceFFI.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 76B49DD809855BED87F883A1 /* VoiceFFI.xcframework */; };
 		E2F2A4BC4EF4B857702A04F9 /* voice_input_keychain_store_test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11013B8B033E9437866234F1 /* voice_input_keychain_store_test.swift */; };
+		F0B221E9C8D6539465ACB680 /* voice_input_model_library_view.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C4D086A77C159F47E36FA8B /* voice_input_model_library_view.swift */; };
 		F6791D02D2B8E619A2B94C7C /* voice_input_widgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B9EDA822613D13F8604F58F /* voice_input_widgets.swift */; };
+		FA0DB71BF6F5068E9994C35E /* valid in Resources */ = {isa = PBXBuildFile; fileRef = 70AD4B72B184FCE0C2B0075E /* valid */; };
 		FD2AC3182FE99231B97918A1 /* voice_input_app_model_test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24351BDC6ACA4CA02189AE53 /* voice_input_app_model_test.swift */; };
+		FD8B54810DE4272D541B39A0 /* HardwareControllerVoiceFFI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1D6CF255C19A75FF98CAA350 /* HardwareControllerVoiceFFI.framework */; };
+		FEC66FC78A64BD691A1F8309 /* voice_input_model_package_installer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55CC42AC07A3DC0E467CB0B5 /* voice_input_model_package_installer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -43,12 +58,26 @@
 			remoteGlobalIDString = C7357476174EC37DEFF7D558;
 			remoteInfo = VoiceInputWidgets;
 		};
+		26E8FC9B3D2CB07BF14B7B9E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B79158C72F4ABF96A4ADB0B0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EA13D8260D3CDFFA8D3331DE;
+			remoteInfo = HardwareControllerVoiceFFI;
+		};
 		2E9FDD2D3B92B3AFC0E11F02 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = B79158C72F4ABF96A4ADB0B0 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = C589E50707AA3D8F3E0F9D93;
 			remoteInfo = VoiceInputShared;
+		};
+		35AFEACA683E808FFB672EF4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B79158C72F4ABF96A4ADB0B0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EA13D8260D3CDFFA8D3331DE;
+			remoteInfo = HardwareControllerVoiceFFI;
 		};
 		63C2ED7101582E52CE610B5A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -132,25 +161,38 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		006C11C5D35C733B92990F8D /* voice_input_model_package_stager_test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_model_package_stager_test.swift; sourceTree = "<group>"; };
 		0123BE2D32E45C9A1A736155 /* VoiceInputShared.framework */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.framework; path = VoiceInputShared.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		0289EFF8A21EF431945174AF /* voice_input_model_package_installer_test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_model_package_installer_test.swift; sourceTree = "<group>"; };
 		02DE7C7AF8A1766381BEF3F4 /* keyboard_view_controller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = keyboard_view_controller.swift; sourceTree = "<group>"; };
+		06A0D2B7F18E14C7DC3280DF /* portable_voice_validator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = portable_voice_validator.swift; sourceTree = "<group>"; };
 		11013B8B033E9437866234F1 /* voice_input_keychain_store_test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_keychain_store_test.swift; sourceTree = "<group>"; };
 		12CE8032228EE5BB97E4FCE0 /* voice_input_capture_service_test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_capture_service_test.swift; sourceTree = "<group>"; };
+		1D6CF255C19A75FF98CAA350 /* HardwareControllerVoiceFFI.framework */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.framework; path = HardwareControllerVoiceFFI.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		24351BDC6ACA4CA02189AE53 /* voice_input_app_model_test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_app_model_test.swift; sourceTree = "<group>"; };
+		2761F315707E81BC58E239D8 /* voice_input_model_library_model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_model_library_model.swift; sourceTree = "<group>"; };
 		2DB1D8B9506FDB924CFE42AF /* voice_input_store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_store.swift; sourceTree = "<group>"; };
 		3364171653512AF3B1CB5BBF /* VoiceInputTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = VoiceInputTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3AC71BC68D1A1B8B71EDD8A8 /* voice_input_environment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_environment.swift; sourceTree = "<group>"; };
 		3B91A570D429EEB46217A80C /* voice_input_capture_service.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_capture_service.swift; sourceTree = "<group>"; };
 		442CB63700ABD3B2397BE1F5 /* voice_input_onboarding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_onboarding.swift; sourceTree = "<group>"; };
+		4C4D086A77C159F47E36FA8B /* voice_input_model_library_view.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_model_library_view.swift; sourceTree = "<group>"; };
+		55CC42AC07A3DC0E467CB0B5 /* voice_input_model_package_installer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_model_package_installer.swift; sourceTree = "<group>"; };
 		5D74E1DEDF0ABA766350BF40 /* voice_input_keychain_store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_keychain_store.swift; sourceTree = "<group>"; };
 		66894E9CB12ADD64305532DB /* voice_input_app.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_app.swift; sourceTree = "<group>"; };
+		6A193C9D9D6CEADAB85C8ED1 /* voice_input_model_package_fixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_model_package_fixture.swift; sourceTree = "<group>"; };
+		70AD4B72B184FCE0C2B0075E /* valid */ = {isa = PBXFileReference; lastKnownFileType = folder; name = valid; path = ../../../Tests/cuj/voice_model_package_v1/valid; sourceTree = SOURCE_ROOT; };
+		76B49DD809855BED87F883A1 /* VoiceFFI.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = VoiceFFI.xcframework; path = ../../../.build/ios_voice_ffi/VoiceFFI.xcframework; sourceTree = "<group>"; };
+		83300748E2DEF79D228F4A66 /* voice_input_model_library_model_test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_model_library_model_test.swift; sourceTree = "<group>"; };
 		870E8658F0A5428F729940C7 /* VoiceInputKeyboard.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = VoiceInputKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		9024518541EBF4EC74DEF0B0 /* voice_input_shared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_shared.swift; sourceTree = "<group>"; };
+		9A3760E9B21A975A8A98C93D /* voice_input_model_package_stager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_model_package_stager.swift; sourceTree = "<group>"; };
 		9B9EDA822613D13F8604F58F /* voice_input_widgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_widgets.swift; sourceTree = "<group>"; };
 		A32BB963BE2685D5364B725F /* VoiceInput.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = VoiceInput.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A657531BE5596A20AB1D1FAE /* voice_input_onboarding_view.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_onboarding_view.swift; sourceTree = "<group>"; };
 		A9711C0C615DA66AEBDFC0E8 /* VoiceInputWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = VoiceInputWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B0CE5735FCAEC0C76CA140B3 /* VoiceInputUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = VoiceInputUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C553B7934DAA688A399765CF /* voice_input_model_package_validator_test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_model_package_validator_test.swift; sourceTree = "<group>"; };
 		C842A307B0A0140A0178DEA0 /* voice_input_activity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_activity.swift; sourceTree = "<group>"; };
 		CC3E8041320574E94F37ABA5 /* voice_input_keyboard_policy_test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_keyboard_policy_test.swift; sourceTree = "<group>"; };
 		DAC1D9F56D811C3B343F7854 /* voice_input_ui_test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_ui_test.swift; sourceTree = "<group>"; };
@@ -164,6 +206,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BD3872A886B0362F2568FC88 /* VoiceInputShared.framework in Frameworks */,
+				FD8B54810DE4272D541B39A0 /* HardwareControllerVoiceFFI.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -180,6 +223,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				962FE71C705DFB150F79845A /* VoiceInputShared.framework in Frameworks */,
+				50DE4567233BF190641F64DB /* HardwareControllerVoiceFFI.framework in Frameworks */,
+				01D82CFB7ADFF9CD2031B935 /* VoiceFFI.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -188,6 +233,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				5D695AB424A5ED265EA34A62 /* VoiceInputShared.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FF7F3DE580AE4AD935D921BC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DB0EEC91A3C3C870C7A12C0A /* VoiceFFI.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -205,6 +258,7 @@
 		0CA790D9EF8AE7E9E8A5D717 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				1D6CF255C19A75FF98CAA350 /* HardwareControllerVoiceFFI.framework */,
 				A32BB963BE2685D5364B725F /* VoiceInput.app */,
 				870E8658F0A5428F729940C7 /* VoiceInputKeyboard.appex */,
 				0123BE2D32E45C9A1A736155 /* VoiceInputShared.framework */,
@@ -213,6 +267,22 @@
 				A9711C0C615DA66AEBDFC0E8 /* VoiceInputWidgets.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		14722B40F2EC04393799602F /* portable */ = {
+			isa = PBXGroup;
+			children = (
+				C95E68B405D6D290E1E31962 /* hardware_controller_voice_ffi */,
+			);
+			name = portable;
+			sourceTree = "<group>";
+		};
+		2D06AB3ED3D5E179F9EC7F4C /* fixtures */ = {
+			isa = PBXGroup;
+			children = (
+				70AD4B72B184FCE0C2B0075E /* valid */,
+			);
+			name = fixtures;
 			sourceTree = "<group>";
 		};
 		6082C63DDE294E38C4461A87 /* shared */ = {
@@ -240,11 +310,14 @@
 			isa = PBXGroup;
 			children = (
 				964543A807DF541DC3171B63 /* app */,
+				2D06AB3ED3D5E179F9EC7F4C /* fixtures */,
 				74E58174B1B6693A3967EF5A /* keyboard */,
+				14722B40F2EC04393799602F /* portable */,
 				6082C63DDE294E38C4461A87 /* shared */,
 				FB9A0028DAC7DC73F973BA36 /* tests */,
 				0C19CF5CCBB378DC828018A0 /* ui_tests */,
 				EF9A313E2985B4110B20C36C /* widgets */,
+				B1A67AB4B96B3D48B466FB90 /* Frameworks */,
 				0CA790D9EF8AE7E9E8A5D717 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -255,9 +328,30 @@
 				EA699775DF46AC81E02D6271 /* voice_input_app_model.swift */,
 				66894E9CB12ADD64305532DB /* voice_input_app.swift */,
 				3B91A570D429EEB46217A80C /* voice_input_capture_service.swift */,
+				2761F315707E81BC58E239D8 /* voice_input_model_library_model.swift */,
+				4C4D086A77C159F47E36FA8B /* voice_input_model_library_view.swift */,
+				55CC42AC07A3DC0E467CB0B5 /* voice_input_model_package_installer.swift */,
+				9A3760E9B21A975A8A98C93D /* voice_input_model_package_stager.swift */,
 				A657531BE5596A20AB1D1FAE /* voice_input_onboarding_view.swift */,
 			);
 			path = app;
+			sourceTree = "<group>";
+		};
+		B1A67AB4B96B3D48B466FB90 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				76B49DD809855BED87F883A1 /* VoiceFFI.xcframework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		C95E68B405D6D290E1E31962 /* hardware_controller_voice_ffi */ = {
+			isa = PBXGroup;
+			children = (
+				06A0D2B7F18E14C7DC3280DF /* portable_voice_validator.swift */,
+			);
+			name = hardware_controller_voice_ffi;
+			path = ../../../Sources/hardware_controller_voice_ffi;
 			sourceTree = "<group>";
 		};
 		EF9A313E2985B4110B20C36C /* widgets */ = {
@@ -275,6 +369,11 @@
 				12CE8032228EE5BB97E4FCE0 /* voice_input_capture_service_test.swift */,
 				CC3E8041320574E94F37ABA5 /* voice_input_keyboard_policy_test.swift */,
 				11013B8B033E9437866234F1 /* voice_input_keychain_store_test.swift */,
+				83300748E2DEF79D228F4A66 /* voice_input_model_library_model_test.swift */,
+				6A193C9D9D6CEADAB85C8ED1 /* voice_input_model_package_fixture.swift */,
+				0289EFF8A21EF431945174AF /* voice_input_model_package_installer_test.swift */,
+				006C11C5D35C733B92990F8D /* voice_input_model_package_stager_test.swift */,
+				C553B7934DAA688A399765CF /* voice_input_model_package_validator_test.swift */,
 				E55F975B55AECC156411BBF6 /* voice_input_onboarding_policy_test.swift */,
 			);
 			path = tests;
@@ -296,6 +395,7 @@
 			);
 			dependencies = (
 				1EEEBFA274F84522325BEF6B /* PBXTargetDependency */,
+				2B0A0C052E4324015CF1C958 /* PBXTargetDependency */,
 				C631DC67D7774463642097CF /* PBXTargetDependency */,
 				CB85289A82023FAA7A4F3B08 /* PBXTargetDependency */,
 			);
@@ -311,6 +411,7 @@
 			buildConfigurationList = ECEB7C642EA28897786873AA /* Build configuration list for PBXNativeTarget "VoiceInputTests" */;
 			buildPhases = (
 				44D80BCCF23B79C79AB9CB12 /* Sources */,
+				EC4E9CB8FD277AF257FA6726 /* Resources */,
 				0510C54B8D8FA72C6135FB55 /* Frameworks */,
 				05D772C3A861ED09F45166DA /* Embed Frameworks */,
 			);
@@ -319,6 +420,7 @@
 			dependencies = (
 				DB17F11C56121FE1E1518427 /* PBXTargetDependency */,
 				B13824861AAE51AD2F738B42 /* PBXTargetDependency */,
+				BCCE16BA1D957A92D488EAB1 /* PBXTargetDependency */,
 			);
 			name = VoiceInputTests;
 			packageProductDependencies = (
@@ -381,6 +483,24 @@
 			productReference = B0CE5735FCAEC0C76CA140B3 /* VoiceInputUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		EA13D8260D3CDFFA8D3331DE /* HardwareControllerVoiceFFI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4CD390411FDEB1D36D431591 /* Build configuration list for PBXNativeTarget "HardwareControllerVoiceFFI" */;
+			buildPhases = (
+				39C1E73EA8CBFC0FBDBDD520 /* Sources */,
+				FF7F3DE580AE4AD935D921BC /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = HardwareControllerVoiceFFI;
+			packageProductDependencies = (
+			);
+			productName = HardwareControllerVoiceFFI;
+			productReference = 1D6CF255C19A75FF98CAA350 /* HardwareControllerVoiceFFI.framework */;
+			productType = "com.apple.product-type.framework.static";
+		};
 		F4EC3DB9B4E3A533DB5C14CC /* VoiceInputKeyboard */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 9402AE06A5B1A9F8D6C6B177 /* Build configuration list for PBXNativeTarget "VoiceInputKeyboard" */;
@@ -430,6 +550,7 @@
 			targets = (
 				48ACF5FA6ECBC71A34114E9A /* VoiceInput */,
 				C589E50707AA3D8F3E0F9D93 /* VoiceInputShared */,
+				EA13D8260D3CDFFA8D3331DE /* HardwareControllerVoiceFFI */,
 				F4EC3DB9B4E3A533DB5C14CC /* VoiceInputKeyboard */,
 				C7357476174EC37DEFF7D558 /* VoiceInputWidgets */,
 				801B983378BF2B89B7538947 /* VoiceInputTests */,
@@ -438,7 +559,26 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		EC4E9CB8FD277AF257FA6726 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FA0DB71BF6F5068E9994C35E /* valid in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
+		39C1E73EA8CBFC0FBDBDD520 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B6FAC327B196D0065BAC7D24 /* portable_voice_validator.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		44D80BCCF23B79C79AB9CB12 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -447,6 +587,11 @@
 				35440F5AD76F3BD99A03E69F /* voice_input_capture_service_test.swift in Sources */,
 				5C0AD0D1EBDEF1C0A7627516 /* voice_input_keyboard_policy_test.swift in Sources */,
 				E2F2A4BC4EF4B857702A04F9 /* voice_input_keychain_store_test.swift in Sources */,
+				601A8A59075842D2B2D336B0 /* voice_input_model_library_model_test.swift in Sources */,
+				56BD640ECB67FA724E133982 /* voice_input_model_package_fixture.swift in Sources */,
+				B5DAF11C777DBBB15C26A056 /* voice_input_model_package_installer_test.swift in Sources */,
+				DA54C818BB8EA79C3C3D95E0 /* voice_input_model_package_stager_test.swift in Sources */,
+				248E111228FD356C7B0761A9 /* voice_input_model_package_validator_test.swift in Sources */,
 				54931E3159D6424A6A947FEE /* voice_input_onboarding_policy_test.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -479,6 +624,10 @@
 				2440A70E14B03E46D446B2E4 /* voice_input_app.swift in Sources */,
 				4A1D19C1F59B97D2B32A516F /* voice_input_app_model.swift in Sources */,
 				B38520F5D89D0EC038D8A8DD /* voice_input_capture_service.swift in Sources */,
+				80912E4129B0B3D4AA16150B /* voice_input_model_library_model.swift in Sources */,
+				F0B221E9C8D6539465ACB680 /* voice_input_model_library_view.swift in Sources */,
+				FEC66FC78A64BD691A1F8309 /* voice_input_model_package_installer.swift in Sources */,
+				ACF8F70673D62E07224D147A /* voice_input_model_package_stager.swift in Sources */,
 				75E70A2A8B3AF50404F4A49F /* voice_input_onboarding_view.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -512,6 +661,11 @@
 			target = C589E50707AA3D8F3E0F9D93 /* VoiceInputShared */;
 			targetProxy = 818029CE2B91B503B490CFFF /* PBXContainerItemProxy */;
 		};
+		2B0A0C052E4324015CF1C958 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = EA13D8260D3CDFFA8D3331DE /* HardwareControllerVoiceFFI */;
+			targetProxy = 26E8FC9B3D2CB07BF14B7B9E /* PBXContainerItemProxy */;
+		};
 		523328CCAB3AF4086687A8B8 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = C589E50707AA3D8F3E0F9D93 /* VoiceInputShared */;
@@ -526,6 +680,11 @@
 			isa = PBXTargetDependency;
 			target = 48ACF5FA6ECBC71A34114E9A /* VoiceInput */;
 			targetProxy = A1A77D9BD3D5552E9A70D522 /* PBXContainerItemProxy */;
+		};
+		BCCE16BA1D957A92D488EAB1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = EA13D8260D3CDFFA8D3331DE /* HardwareControllerVoiceFFI */;
+			targetProxy = 35AFEACA683E808FFB672EF4 /* PBXContainerItemProxy */;
 		};
 		C631DC67D7774463642097CF /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -551,6 +710,10 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = config/app.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"../../../.build/ios_voice_ffi\"",
+				);
 				INFOPLIST_FILE = config/app_info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -691,6 +854,10 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = config/app.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"../../../.build/ios_voice_ffi\"",
+				);
 				INFOPLIST_FILE = config/app_info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -736,6 +903,33 @@
 				TEST_TARGET_NAME = VoiceInput;
 			};
 			name = Release;
+		};
+		B962AAA94F32A52BFCDAEB43 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"../../../.build/ios_voice_ffi\"",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.longdevity.hardwarecontroller.voiceinput.voiceffi;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
 		};
 		BA9B92D967BD190D2161A02F /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -886,6 +1080,33 @@
 			};
 			name = Debug;
 		};
+		FB7341C22143EF57561929FA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"../../../.build/ios_voice_ffi\"",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.longdevity.hardwarecontroller.voiceinput.voiceffi;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -903,6 +1124,15 @@
 			buildConfigurations = (
 				F136FCE8F1F212BE2B4377D3 /* Debug */,
 				5E3AE57F2D63844E42B111C2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		4CD390411FDEB1D36D431591 /* Build configuration list for PBXNativeTarget "HardwareControllerVoiceFFI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B962AAA94F32A52BFCDAEB43 /* Debug */,
+				FB7341C22143EF57561929FA /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

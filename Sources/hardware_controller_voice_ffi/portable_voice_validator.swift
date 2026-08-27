@@ -105,6 +105,7 @@ public struct PortableModelPackage: Equatable, Sendable {
   public let packageID: String
   public let version: String
   public let displayName: String
+  public let languages: [String]
   public let runtime: PortableModelRuntime
   public let stage: PortableModelStage
   public let capabilities: PortableModelCapabilities
@@ -292,11 +293,11 @@ public struct RustPortableVoiceValidator:
   private func callModelValidator(
     pathBytes: [UInt8],
     request: inout VoiceModelPackageRequestV1,
-    output: inout VoiceModelPackageInfoV1
+    output: inout VoiceModelPackageInfoV2
   ) -> UInt32 {
     pathBytes.withUnsafeBufferPointer { path in
       request.root_path_utf8 = path.baseAddress
-      return voice_model_package_validate_v1(&request, &output)
+      return voice_model_package_validate_v2(&request, &output)
     }
   }
 
@@ -305,66 +306,72 @@ public struct RustPortableVoiceValidator:
     request: inout VoiceModelPackageRequestV1
   ) throws -> PortableModelPackage {
     // These capacities equal the Rust admission maxima, avoiding a second
-    // complete package hash solely to negotiate six small text buffers.
+    // complete package hash solely to negotiate seven small text buffers.
     var packageID = Data(count: 128)
     var version = Data(count: 64)
     var displayName = Data(count: 128)
+    var languages = Data(count: 10_000)
     var spdxExpression = Data(count: 256)
     var noticeFile = Data(count: 1_024)
     var sourceURL = Data(count: 2_048)
     let metadata = try packageID.withUnsafeMutableBytes { packageIDBytes in
       try version.withUnsafeMutableBytes { versionBytes in
         try displayName.withUnsafeMutableBytes { displayNameBytes in
-          try spdxExpression.withUnsafeMutableBytes { spdxBytes in
-            try noticeFile.withUnsafeMutableBytes { noticeBytes in
-              try sourceURL.withUnsafeMutableBytes { sourceBytes in
-                var output = VoiceModelPackageInfoV1()
-                output.package_id = Self.utf8Buffer(packageIDBytes)
-                output.version = Self.utf8Buffer(versionBytes)
-                output.display_name = Self.utf8Buffer(displayNameBytes)
-                output.spdx_expression = Self.utf8Buffer(spdxBytes)
-                output.notice_file = Self.utf8Buffer(noticeBytes)
-                output.source_url = Self.utf8Buffer(sourceBytes)
-                let status = callModelValidator(
-                  pathBytes: pathBytes,
-                  request: &request,
-                  output: &output
-                )
-                guard status == VoiceFFIBridgeStatusOK.rawValue else {
-                  if status == VoiceFFIBridgeStatusBufferTooSmall.rawValue {
+          try languages.withUnsafeMutableBytes { languageBytes in
+            try spdxExpression.withUnsafeMutableBytes { spdxBytes in
+              try noticeFile.withUnsafeMutableBytes { noticeBytes in
+                try sourceURL.withUnsafeMutableBytes { sourceBytes in
+                  var output = VoiceModelPackageInfoV2()
+                  output.base.package_id = Self.utf8Buffer(packageIDBytes)
+                  output.base.version = Self.utf8Buffer(versionBytes)
+                  output.base.display_name = Self.utf8Buffer(displayNameBytes)
+                  output.languages_csv = Self.utf8Buffer(languageBytes)
+                  output.base.spdx_expression = Self.utf8Buffer(spdxBytes)
+                  output.base.notice_file = Self.utf8Buffer(noticeBytes)
+                  output.base.source_url = Self.utf8Buffer(sourceBytes)
+                  let status = callModelValidator(
+                    pathBytes: pathBytes,
+                    request: &request,
+                    output: &output
+                  )
+                  guard status == VoiceFFIBridgeStatusOK.rawValue else {
+                    if status == VoiceFFIBridgeStatusBufferTooSmall.rawValue {
+                      throw PortableVoiceValidationError.internalFailure
+                    }
+                    throw Self.error(for: status)
+                  }
+                  guard
+                    let runtime = PortableModelRuntime(rawValue: output.base.runtime),
+                    let stage = PortableModelStage(rawValue: output.base.stage),
+                    output.base.capability_mask & ~UInt32(0x0F) == 0,
+                    output.base.package_id.length <= packageIDBytes.count,
+                    output.base.version.length <= versionBytes.count,
+                    output.base.display_name.length <= displayNameBytes.count,
+                    output.languages_csv.length <= languageBytes.count,
+                    output.base.spdx_expression.length <= spdxBytes.count,
+                    output.base.notice_file.length <= noticeBytes.count,
+                    output.base.source_url.length <= sourceBytes.count
+                  else {
                     throw PortableVoiceValidationError.internalFailure
                   }
-                  throw Self.error(for: status)
+                  return ModelOutputMetadata(
+                    runtime: runtime,
+                    stage: stage,
+                    packageIDLength: output.base.package_id.length,
+                    versionLength: output.base.version.length,
+                    displayNameLength: output.base.display_name.length,
+                    languagesLength: output.languages_csv.length,
+                    spdxExpressionLength: output.base.spdx_expression.length,
+                    noticeFileLength: output.base.notice_file.length,
+                    sourceURLLength: output.base.source_url.length,
+                    capabilityMask: output.base.capability_mask,
+                    fileCount: output.base.file_count,
+                    verifiedBytes: output.base.verified_bytes,
+                    minimumMemoryBytes: output.base.minimum_memory_bytes,
+                    recommendedMemoryBytes: output.base.recommended_memory_bytes,
+                    manifestSHA256: Self.data(from: output.base.manifest_sha256)
+                  )
                 }
-                guard
-                  let runtime = PortableModelRuntime(rawValue: output.runtime),
-                  let stage = PortableModelStage(rawValue: output.stage),
-                  output.capability_mask & ~UInt32(0x0F) == 0,
-                  output.package_id.length <= packageIDBytes.count,
-                  output.version.length <= versionBytes.count,
-                  output.display_name.length <= displayNameBytes.count,
-                  output.spdx_expression.length <= spdxBytes.count,
-                  output.notice_file.length <= noticeBytes.count,
-                  output.source_url.length <= sourceBytes.count
-                else {
-                  throw PortableVoiceValidationError.internalFailure
-                }
-                return ModelOutputMetadata(
-                  runtime: runtime,
-                  stage: stage,
-                  packageIDLength: output.package_id.length,
-                  versionLength: output.version.length,
-                  displayNameLength: output.display_name.length,
-                  spdxExpressionLength: output.spdx_expression.length,
-                  noticeFileLength: output.notice_file.length,
-                  sourceURLLength: output.source_url.length,
-                  capabilityMask: output.capability_mask,
-                  fileCount: output.file_count,
-                  verifiedBytes: output.verified_bytes,
-                  minimumMemoryBytes: output.minimum_memory_bytes,
-                  recommendedMemoryBytes: output.recommended_memory_bytes,
-                  manifestSHA256: Self.data(from: output.manifest_sha256)
-                )
               }
             }
           }
@@ -384,6 +391,10 @@ public struct RustPortableVoiceValidator:
         decoding: displayName.prefix(metadata.displayNameLength),
         as: UTF8.self
       ),
+      languages: String(
+        decoding: languages.prefix(metadata.languagesLength),
+        as: UTF8.self
+      ).split(separator: ",").map(String.init),
       runtime: metadata.runtime,
       stage: metadata.stage,
       capabilities: PortableModelCapabilities(
@@ -426,6 +437,7 @@ private struct ModelOutputMetadata {
   let packageIDLength: Int
   let versionLength: Int
   let displayNameLength: Int
+  let languagesLength: Int
   let spdxExpressionLength: Int
   let noticeFileLength: Int
   let sourceURLLength: Int

@@ -5,10 +5,11 @@ use crate::{
     VOICE_STATUS_INVALID_ARGUMENT, VOICE_STATUS_INVALID_RECLAIM_REQUEST,
     VOICE_STATUS_INVALID_UTF8_PATH, VOICE_STATUS_MODEL_PACKAGE_DIGEST_MISMATCH,
     VOICE_STATUS_NULL_POINTER, VOICE_STATUS_OK, VoiceHistoryArchiveInfoV1,
-    VoiceHistoryArchiveRequestV1, VoiceModelPackageInfoV1, VoiceModelPackageRequestV1,
-    VoiceRetentionCandidateV1, VoiceRetentionDecisionV1, VoiceRetentionPlanV1,
-    VoiceRetentionRequestV1, VoiceRetentionSettingsV1, VoiceSessionIdV1, VoiceUtf8BufferV1,
-    voice_history_archive_validate_v1, voice_model_package_validate_v1, voice_retention_plan_v1,
+    VoiceHistoryArchiveRequestV1, VoiceModelPackageInfoV1, VoiceModelPackageInfoV2,
+    VoiceModelPackageRequestV1, VoiceRetentionCandidateV1, VoiceRetentionDecisionV1,
+    VoiceRetentionPlanV1, VoiceRetentionRequestV1, VoiceRetentionSettingsV1, VoiceSessionIdV1,
+    VoiceUtf8BufferV1, voice_history_archive_validate_v1, voice_model_package_validate_v1,
+    voice_model_package_validate_v2, voice_retention_plan_v1,
 };
 
 #[test]
@@ -55,6 +56,7 @@ fn model_package_validation_returns_verified_portable_metadata() {
     let mut package_id = [0_u8; 128];
     let mut version = [0_u8; 64];
     let mut display_name = [0_u8; 128];
+    let mut languages = [0_u8; 10_000];
     let mut spdx = [0_u8; 256];
     let mut notice = [0_u8; 1_024];
     let mut source_url = [0_u8; 2_048];
@@ -62,32 +64,37 @@ fn model_package_validation_returns_verified_portable_metadata() {
         &mut package_id,
         &mut version,
         &mut display_name,
+        &mut languages,
         &mut spdx,
         &mut notice,
         &mut source_url,
     );
 
     // Safety: Every pointer references live, aligned, nonoverlapping storage.
-    let status = unsafe { voice_model_package_validate_v1(&raw const request, &raw mut output) };
+    let status = unsafe { voice_model_package_validate_v2(&raw const request, &raw mut output) };
 
     assert_eq!(status, VOICE_STATUS_OK);
     assert_eq!(
-        utf8(&package_id, output.package_id.length),
+        utf8(&package_id, output.base.package_id.length),
         "com.longdevity.fixture.streaming_asr"
     );
-    assert_eq!(utf8(&version, output.version.length), "1.0.0");
+    assert_eq!(utf8(&version, output.base.version.length), "1.0.0");
     assert_eq!(
-        utf8(&display_name, output.display_name.length),
+        utf8(&display_name, output.base.display_name.length),
         "Fixture Streaming ASR"
     );
-    assert_eq!(utf8(&spdx, output.spdx_expression.length), "Apache-2.0");
-    assert_eq!(utf8(&notice, output.notice_file.length), "NOTICE.txt");
-    assert_eq!(output.runtime, 1);
-    assert_eq!(output.stage, 1);
-    assert_eq!(output.capability_mask, 3);
-    assert_eq!(output.file_count, 2);
-    assert_eq!(output.verified_bytes, 73);
-    assert_ne!(output.manifest_sha256, [0; 32]);
+    assert_eq!(utf8(&languages, output.languages_csv.length), "en-US");
+    assert_eq!(
+        utf8(&spdx, output.base.spdx_expression.length),
+        "Apache-2.0"
+    );
+    assert_eq!(utf8(&notice, output.base.notice_file.length), "NOTICE.txt");
+    assert_eq!(output.base.runtime, 1);
+    assert_eq!(output.base.stage, 1);
+    assert_eq!(output.base.capability_mask, 3);
+    assert_eq!(output.base.file_count, 2);
+    assert_eq!(output.base.verified_bytes, 73);
+    assert_ne!(output.base.manifest_sha256, [0; 32]);
 }
 
 #[test]
@@ -96,15 +103,51 @@ fn model_output_buffers_negotiate_without_partial_text() {
     let root = root.to_string_lossy();
     let request = model_request(root.as_bytes());
     let mut package_id = [b'x'; 1];
-    let mut output = model_output(&mut package_id, &mut [], &mut [], &mut [], &mut [], &mut []);
+    let mut output = model_output(
+        &mut package_id,
+        &mut [],
+        &mut [],
+        &mut [],
+        &mut [],
+        &mut [],
+        &mut [],
+    );
 
     // Safety: Every non-null pointer references live writable storage.
+    let status = unsafe { voice_model_package_validate_v2(&raw const request, &raw mut output) };
+
+    assert_eq!(status, VOICE_STATUS_BUFFER_TOO_SMALL);
+    assert_eq!(output.base.package_id.length, 36);
+    assert_eq!(output.base.version.length, 5);
+    assert_eq!(package_id, [b'x']);
+}
+
+#[test]
+fn model_package_v1_layout_and_function_remain_compatible() {
+    let root = fixture_path();
+    let root = root.to_string_lossy();
+    let request = model_request(root.as_bytes());
+    let mut package_id = [0_u8; 128];
+    let mut output = model_output_v1(&mut package_id, &mut [], &mut [], &mut [], &mut [], &mut []);
+
+    // Safety: Every pointer references live, aligned, nonoverlapping storage.
     let status = unsafe { voice_model_package_validate_v1(&raw const request, &raw mut output) };
 
     assert_eq!(status, VOICE_STATUS_BUFFER_TOO_SMALL);
     assert_eq!(output.package_id.length, 36);
-    assert_eq!(output.version.length, 5);
-    assert_eq!(package_id, [b'x']);
+    assert_eq!(size_of::<VoiceModelPackageInfoV1>(), 224);
+}
+
+#[test]
+fn model_package_v2_null_output_fails_closed() {
+    let root = fixture_path();
+    let root = root.to_string_lossy();
+    let request = model_request(root.as_bytes());
+
+    // Safety: The function explicitly accepts null to report a typed error.
+    let status = unsafe { voice_model_package_validate_v2(&raw const request, ptr::null_mut()) };
+
+    assert_eq!(status, VOICE_STATUS_NULL_POINTER);
 }
 
 #[test]
@@ -247,6 +290,7 @@ fn version_one_layout_is_fixed() {
     assert_eq!(size_of::<VoiceUtf8BufferV1>(), 24);
     assert_eq!(size_of::<VoiceModelPackageRequestV1>(), 72);
     assert_eq!(size_of::<VoiceModelPackageInfoV1>(), 224);
+    assert_eq!(size_of::<VoiceModelPackageInfoV2>(), 248);
     assert_eq!(size_of::<VoiceHistoryArchiveRequestV1>(), 48);
     assert_eq!(size_of::<VoiceHistoryArchiveInfoV1>(), 64);
 }
@@ -312,9 +356,31 @@ fn model_output<'a>(
     package_id: &'a mut [u8],
     version: &'a mut [u8],
     display_name: &'a mut [u8],
+    languages: &'a mut [u8],
     spdx_expression: &'a mut [u8],
     notice_file: &'a mut [u8],
     source_url: &'a mut [u8],
+) -> VoiceModelPackageInfoV2 {
+    VoiceModelPackageInfoV2 {
+        base: model_output_v1(
+            package_id,
+            version,
+            display_name,
+            spdx_expression,
+            notice_file,
+            source_url,
+        ),
+        languages_csv: utf8_buffer(languages),
+    }
+}
+
+fn model_output_v1(
+    package_id: &mut [u8],
+    version: &mut [u8],
+    display_name: &mut [u8],
+    spdx_expression: &mut [u8],
+    notice_file: &mut [u8],
+    source_url: &mut [u8],
 ) -> VoiceModelPackageInfoV1 {
     VoiceModelPackageInfoV1 {
         package_id: utf8_buffer(package_id),
@@ -336,7 +402,7 @@ fn model_output<'a>(
 }
 
 fn empty_model_output() -> VoiceModelPackageInfoV1 {
-    model_output(&mut [], &mut [], &mut [], &mut [], &mut [], &mut [])
+    model_output_v1(&mut [], &mut [], &mut [], &mut [], &mut [], &mut [])
 }
 
 fn utf8_buffer(bytes: &mut [u8]) -> VoiceUtf8BufferV1 {

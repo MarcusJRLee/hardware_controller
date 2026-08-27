@@ -31,6 +31,14 @@ xcodebuild build -quiet \
 
 app_bundle="$derived_data/Build/Products/Debug-iphoneos/VoiceInput.app"
 codesign --verify --deep --strict --verbose=2 "$app_bundle"
+linked_symbols="$(nm -gU "$app_bundle/VoiceInput" 2>/dev/null || true)"
+if [[ -f "$app_bundle/VoiceInput.debug.dylib" ]]; then
+  linked_symbols+="$(nm -gU "$app_bundle/VoiceInput.debug.dylib" 2>/dev/null || true)"
+fi
+[[ "$linked_symbols" == *"_voice_model_package_validate_v2"* ]] || {
+  print -u2 "The signed iOS app does not contain the Rust V2 Model-package validator."
+  exit 1
+}
 for signed_bundle in "$app_bundle" "$app_bundle"/PlugIns/*.appex; do
   signed_team="$(codesign -dv --verbose=4 "$signed_bundle" 2>&1 \
     | awk -F= '/^TeamIdentifier=/{print $2}')"
