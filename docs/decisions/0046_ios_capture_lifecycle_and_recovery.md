@@ -74,6 +74,10 @@ transcript or automatic reuse. Decision
 low-disk pressure for I10. Broader quarantine and retranscription controls
 remain later work.
 
+Decision [0050](0050_ios_system_surface_capture.md) later adds a public Live
+Activity stop action and relaunch reconciliation that ends orphaned visible
+ownership while leaving exact partial audio for History adoption.
+
 ## Sources
 
 - [Apple handling audio interruptions](https://developer.apple.com/documentation/avfaudio/handling-audio-interruptions)

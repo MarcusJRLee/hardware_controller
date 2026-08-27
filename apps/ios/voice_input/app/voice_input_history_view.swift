@@ -252,6 +252,11 @@ private struct VoiceInputHistorySessionView: View {
             Label("Copy text", systemImage: "doc.on.doc")
           }
           .accessibilityIdentifier("history_copy")
+
+          ShareLink(item: session.formattedText) {
+            Label("Share transcript", systemImage: "square.and.arrow.up")
+          }
+          .accessibilityIdentifier("history_share")
         }
 
         if session.audioArtifact == nil {

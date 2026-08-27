@@ -1,4 +1,5 @@
 import AVFAudio
+import AppIntents
 import HardwareControllerVoiceCore
 import SwiftUI
 import UIKit
@@ -96,7 +97,8 @@ struct VoiceInputApp: App {
       sessionFinalizer: historyRepository.map {
         VoiceInputSessionFinalizer(history: $0)
       },
-      recoveryStore: historyRepository
+      recoveryStore: historyRepository,
+      controlReloader: VoiceInputSystemControlReloader.reload
     )
     _model = StateObject(
       wrappedValue: VoiceInputAppModel(store: store, service: service)
@@ -226,6 +228,8 @@ private struct VoiceInputView: View {
 
           captureSection
 
+          systemCaptureSection
+
           VoiceInputHistoryView(
             model: history,
             audioPlayer: historyAudioPlayer
@@ -302,6 +306,22 @@ private struct VoiceInputView: View {
     }
   }
 
+  private var systemCaptureSection: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      Label("Capture without the keyboard", systemImage: "rectangle.and.hand.point.up.left")
+        .font(.headline)
+      Text(
+        "Add Voice Capture to Control Center, the Lock Screen, or the Action button. You can also ask Siri to start or stop Voice Input. A visible Live Activity owns background recording, and completed text stays in History."
+      )
+      .font(.subheadline)
+      .foregroundStyle(.secondary)
+      ShortcutsLink()
+        .accessibilityIdentifier("open_voice_shortcuts")
+    }
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier("system_capture_guidance")
+  }
+
   private func openSettings() {
     guard let url = URL(string: UIApplication.openSettingsURLString) else {
       return
@@ -347,9 +367,9 @@ private struct VoiceInputView: View {
   private var statusDetail: String {
     switch model.snapshot.phase {
     case .idle: "Ready for local capture."
-    case .recording: "Recording locally. Switch to the keyboard and tap its mic to stop."
-    case .transcribing: "Finalizing locally."
-    case .ready: "Result ready for one-time keyboard insertion."
+    case .recording: "Recording locally. Stop here, from the Live Activity, or from the keyboard."
+    case .transcribing: "Finalizing locally into History."
+    case .ready: "Saved in History for explicit copy, share, or later keyboard retrieval."
     case .interrupted: "Capture stopped after an audio interruption. Start again manually."
     case .failed: "Capture stopped with an explicit failure."
     }

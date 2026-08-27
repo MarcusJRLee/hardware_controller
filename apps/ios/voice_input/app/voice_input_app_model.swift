@@ -33,7 +33,8 @@ final class VoiceInputAppModel: ObservableObject {
     ).first {
       service = VoiceInputCaptureService(
         store: store,
-        captureDirectoryURL: documentsURL
+        captureDirectoryURL: documentsURL,
+        controlReloader: VoiceInputSystemControlReloader.reload
       )
     } else {
       service = nil
@@ -113,6 +114,11 @@ final class VoiceInputAppModel: ObservableObject {
     refreshTask = Task { [weak self] in
       guard let self else {
         return
+      }
+      do {
+        try await service?.reconcileOnActivation()
+      } catch {
+        errorMessage = "The previous local capture state could not be recovered."
       }
       while !Task.isCancelled {
         await processPendingCommand()

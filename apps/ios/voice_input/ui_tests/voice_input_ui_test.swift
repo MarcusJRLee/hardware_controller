@@ -16,6 +16,9 @@ final class VoiceInputUITest: XCTestCase {
     XCTAssertTrue(app.buttons["import_model_package"].exists)
     XCTAssertTrue(app.descendants(matching: .any)["capture_status"].exists)
     XCTAssertTrue(app.descendants(matching: .any)["capture_style"].exists)
+    XCTAssertTrue(
+      app.descendants(matching: .any)["system_capture_guidance"].exists
+    )
     let history = app.descendants(matching: .any)["voice_history"]
     let search = app.textFields["history_search"]
     for _ in 0..<6 where !search.exists {
@@ -40,6 +43,26 @@ final class VoiceInputUITest: XCTestCase {
     waitForExpectations(timeout: 5)
     XCTAssertTrue(app.staticTexts["capture_error"].exists)
     XCTAssertFalse(app.buttons["stop_capture"].exists)
+  }
+
+  @MainActor
+  func testSystemCaptureGuidanceAndShortcutsAreReachable() {
+    let app = XCUIApplication()
+    app.launch()
+
+    let guidance = app.descendants(matching: .any)["system_capture_guidance"]
+    for _ in 0..<8 where !guidance.isHittable {
+      app.swipeUp()
+    }
+
+    XCTAssertTrue(guidance.isHittable)
+    let shortcuts = app.buttons["open_voice_shortcuts"]
+    XCTAssertTrue(shortcuts.isHittable)
+    XCTAssertEqual(shortcuts.label, "Voice Input shortcuts")
+    let attachment = XCTAttachment(screenshot: app.screenshot())
+    attachment.name = "system_capture_guidance"
+    attachment.lifetime = .keepAlways
+    add(attachment)
   }
 
   @MainActor

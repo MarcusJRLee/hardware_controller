@@ -72,6 +72,12 @@ audio expires. Low-disk maintenance restores a 1 GiB free-space reserve without
 discarding a committed capture. Installed Model packages use a separate budget
 and are removed only by an explicit user action.
 
+For keyboard-free iPhone capture, add **Voice Capture** to Control Center, the
+Lock Screen, or the Action button, or use the bundled Siri/Shortcuts start and
+stop actions. The containing app records locally and shows a Live Activity with
+a stop action. Completed text is saved before it becomes available; copy or
+share it from **Voice Input → History**, or retrieve it from the keyboard later.
+
 ## Signed hardware build
 
 For a signed local build, create ignored private settings once:

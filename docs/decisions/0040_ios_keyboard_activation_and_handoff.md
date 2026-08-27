@@ -45,6 +45,10 @@ returns to the target application manually. If no confirmed app-owned session
 exists, the keyboard voice control gives this instruction and never displays a
 false recording state.
 
+Decision [0050](0050_ios_system_surface_capture.md) later promotes the start
+control to a stateful start/stop control, adds Siri/App Shortcuts and a Live
+Activity stop action, and defines keyboard-free History delivery for I11.
+
 The no-cost provisioning profile rejected App Group entitlements, while the
 same-team Keychain group signed and ran across the app and keyboard. A later App
 Group is not required by the product contract. Moving large non-audio handoff

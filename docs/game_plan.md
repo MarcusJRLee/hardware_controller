@@ -38,6 +38,7 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 | iOS I8 stale-service recovery | Recording and Transcribing publish bounded heartbeats; stale or replayed state stops keyboard polling, exposes one honest restart path, and cannot revive completed delivery. | [`decisions/0047_ios_stale_service_recovery.md`](decisions/0047_ios_stale_service_recovery.md) |
 | iOS I9 insertion recovery | One automatic attempt may expose one explicit same-process retry and local-only expiring copy only while the exact claimed result and target remain unchanged; every ambiguity falls back to History. | [`decisions/0048_ios_bounded_insertion_recovery.md`](decisions/0048_ios_bounded_insertion_recovery.md) |
 | iOS I10 offline storage | Versioned local presets enforce age/byte/count and 1-GiB-reserve cleanup, persisted pinning protects selected audio, maintenance never invalidates a durable capture, and Model limits never evict implicitly. | [`decisions/0049_ios_offline_storage_enforcement.md`](decisions/0049_ios_offline_storage_enforcement.md) |
+| iOS I11 system capture | A stateful system control, Siri/App Shortcuts, and Live Activity stop finish exact app-owned sessions into History; relaunch ends orphan ownership without deleting partial audio. | [`decisions/0050_ios_system_surface_capture.md`](decisions/0050_ios_system_surface_capture.md) |
 | Model recommendation | Qwen 3.5 4B is digest-pinned from the fixed evaluation corpus. | [`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md) |
 | Profiles | Transactional named Profiles with independent per-Device setups and active-Action cleanup. | [`decisions/0014_multi_profile_device_configuration.md`](decisions/0014_multi_profile_device_configuration.md) |
 | Application | Controller, History, Profiles, and General in one native foreground window with Dock and menu-bar presence. | [`ux_spec.md`](ux_spec.md) |
@@ -50,11 +51,10 @@ The local Voice expansion is accepted; macOS M1–M15, iOS Gate K0, I1 local
 onboarding and Model admission, and I2 through Style-qualified local formatting,
 History, warm keyboard delivery, target-safe field handling, I7 lifecycle
 recovery, I8 stale-service recovery, and I9 bounded insertion recovery are
-implemented across the current stacked branches. I10 offline storage is
-implemented in source on its focused branch. macOS and iOS are the active
-roadmap; Android, Windows, and
-Linux remain architectural line-of-sight platforms; web and mobile web are
-deferred.
+implemented across the current stacked branches. I10 offline storage and I11
+system-surface capture are implemented in source on focused branches. macOS and
+iOS are the active roadmap; Android, Windows, and Linux remain architectural
+line-of-sight platforms; web and mobile web are deferred.
 The acceptance and execution authorities are:
 
 | Authority | Purpose |
@@ -85,6 +85,7 @@ promotion.
 | iOS local History | Final output is unavailable until Raw/Edited/Formatted plus audio evidence commit; configurable 90-day/1-GiB/2,000-artifact defaults retain transcripts after audio expiry. | Real SQLite/filesystem tests cover reload, search, digest evidence, migration, pinning, recovery protection, age/count/byte/low-disk expiry, post-commit maintenance failure, Data Protection where exposed, backup exclusion, partial cleanup, and orphan cleanup. |
 | iOS keyboard delivery | One exact session and Style stop command produces one automatic attempt; only one explicit same-process retry is available after an unconfirmed result, and stale or malformed state cannot revive delivery. | Stable-Style, exhaustive-mapping, schema-migration, durable-Keychain-claim, exact recovery-policy, real-Keychain warm-journey, re-published-ready, and app-stop tests. |
 | iOS stale service | A killed, suspended, or upgraded capture service becomes non-active within three seconds and cannot leave an unbounded wait or revive delivery. | Active-phase heartbeat expiry, future/missing/unknown-schema state, strictly newer result sequence, same-session receipt dominance, and blocked-finalization actor tests. Physical kill/suspension/upgrade evidence remains open. |
+| iOS system capture | Control Center, Lock Screen, Action button, Siri, Shortcuts, and Live Activity actions preserve one containing-app owner and finish to History without target inference. | Pure command/state tests, actor ownership reconciliation, generated App Intents metadata inspection, simulator UI, and signed generic-device build. Physical system-surface evidence remains open. |
 | iOS field safety | Unsupported traits never read capture state or receive Voice; a late result cannot cross document or session identity. | Normalized-trait, UIKit-mapping, unknown-custom-field, unsupported-policy, and exact-target tests. |
 | iOS insertion recovery | An ambiguous host result never triggers an automatic replay; explicit retry/copy require the exact Ready result, receipt, field, and process-local target. | One-retry exhaustion, mismatch, untrusted-schema/phase, UTF-8 copy limit, and ten-minute expiry run in the full simulator suite. Physical host rejection/callback evidence remains open. |
 | iOS lifecycle recovery | Capture ownership and system indication agree; interruptions never resume implicitly; a failed finalization preserves exact local audio without blocking History. | Pure lifecycle/notification tests, actor-owned interruption and background-expiration tests, and real SQLite/filesystem exact-artifact reconciliation, migration, isolation, and 24-hour expiry tests. Physical system-event evidence remains open. |

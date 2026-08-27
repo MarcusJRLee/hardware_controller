@@ -15,6 +15,7 @@ targets=(
   apps/ios/voice_input/config
   apps/ios/voice_input/keyboard
   apps/ios/voice_input/shared
+  apps/ios/voice_input/system_capture
   apps/ios/voice_input/widgets
   apps/ios/voice_input/project.yml
 )

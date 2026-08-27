@@ -6,6 +6,89 @@ import XCTest
 @testable import VoiceInput
 
 final class VoiceInputCaptureServiceTest: XCTestCase {
+  func testActivationReconcilesOrphanedOwnershipWithoutDeletingPartialAudio() async throws {
+    let sessionID = UUID()
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+      UUID().uuidString,
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    addTeardownBlock { try FileManager.default.removeItem(at: root) }
+    let partial = root.appendingPathComponent(
+      "\(sessionID.uuidString.lowercased()).partial"
+    )
+    try Data("recover-me".utf8).write(to: partial)
+    let store = LockedProbeStore(
+      command: nil,
+      snapshot: .recording(
+        sessionID: sessionID,
+        sequence: 7,
+        heartbeatAt: Date(timeIntervalSince1970: 10)
+      )
+    )
+    let activityManager = RecordingLiveActivityManager(startedID: nil)
+    let service = VoiceInputCaptureService(
+      store: store,
+      captureDirectoryURL: root,
+      activityManager: activityManager
+    )
+
+    try await service.reconcileOnActivation()
+
+    let snapshot = try store.readSnapshot()
+    XCTAssertEqual(snapshot.phase, .interrupted)
+    XCTAssertEqual(snapshot.sessionID, sessionID)
+    XCTAssertEqual(snapshot.sequence, 8)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: partial.path))
+    let orphanReconciliationCount = await activityManager.orphanReconciliationCount
+    XCTAssertEqual(orphanReconciliationCount, 1)
+  }
+
+  func testCapturePhaseChangesReloadTheSystemControlWithoutHeartbeatChurn() async throws {
+    let reloadCount = Mutex(0)
+    let fixture = try CaptureFixture(
+      liveActivityID: "activity",
+      controlReloader: { reloadCount.withLock { $0 += 1 } },
+      heartbeatInterval: .seconds(60)
+    )
+    addTeardownBlock { try fixture.remove() }
+
+    try await fixture.service.start(sessionID: UUID())
+    do {
+      try await fixture.service.stop(styleKind: .natural)
+      XCTFail("The fixture finalizer must fail after entering Transcribing.")
+    } catch {
+      XCTAssertEqual(error as? CaptureServiceTestError, .unused)
+    }
+
+    XCTAssertEqual(reloadCount.withLock { $0 }, 2)
+  }
+
+  func testExactSystemStopCommandFinalizesTheOwnedSession() async throws {
+    let fixture = try CaptureFixture(liveActivityID: "activity")
+    addTeardownBlock { try fixture.remove() }
+    let sessionID = UUID()
+    try await fixture.service.start(sessionID: sessionID)
+    try fixture.store.writeCommand(
+      .stop(sessionID: sessionID, styleKind: .natural, issuedAt: .now)
+    )
+
+    do {
+      try await fixture.service.processPendingCommand()
+      XCTFail("The fixture transcriber must fail after the stop is accepted.")
+    } catch {
+      XCTAssertEqual(error as? CaptureServiceTestError, .unused)
+    }
+
+    XCTAssertNil(try fixture.store.readCommand())
+    XCTAssertEqual(fixture.recorderFactory.stopCount, 1)
+    XCTAssertEqual(try fixture.store.readSnapshot().phase, .failed)
+    XCTAssertEqual(
+      fixture.recoveryStore.calls.map(\.sessionID),
+      [sessionID]
+    )
+  }
+
   func testStaleStartCommandIsConsumedWithoutStartingCapture() async throws {
     let store = LockedProbeStore(
       command: .start(
@@ -350,6 +433,7 @@ private struct CaptureFixture {
     transcriber: any VoiceInputTranscribing = PrewarmingTranscriber(),
     backgroundTaskManager: any VoiceInputBackgroundTaskManaging =
       RecordingBackgroundTaskManager(),
+    controlReloader: @escaping @Sendable () -> Void = {},
     heartbeatInterval: Duration = .seconds(60)
   ) throws {
     root = FileManager.default.temporaryDirectory.appendingPathComponent(
@@ -377,6 +461,7 @@ private struct CaptureFixture {
       recorderFactory: recorderFactory,
       activityManager: activityManager,
       backgroundTaskManager: backgroundTaskManager,
+      controlReloader: controlReloader,
       heartbeatInterval: heartbeatInterval
     )
   }
@@ -535,6 +620,7 @@ private final class RecordingAudioRecorder: VoiceInputAudioRecording, Sendable {
 private actor RecordingLiveActivityManager: VoiceInputLiveActivityManaging {
   private let startedID: String?
   private(set) var ended: [String] = []
+  private(set) var orphanReconciliationCount = 0
 
   init(startedID: String?) {
     self.startedID = startedID
@@ -550,6 +636,10 @@ private actor RecordingLiveActivityManager: VoiceInputLiveActivityManaging {
     if let id {
       ended.append(id)
     }
+  }
+
+  func endOrphanedActivities(at _: Date) {
+    orphanReconciliationCount += 1
   }
 }
 
@@ -750,8 +840,11 @@ private final class LockedProbeStore: VoiceInputStateStoring, Sendable {
 
   private let state: Mutex<State>
 
-  init(command: VoiceInputCommand?) {
-    state = Mutex(State(command: command))
+  init(
+    command: VoiceInputCommand?,
+    snapshot: VoiceInputSnapshot = .idle(sequence: 0)
+  ) {
+    state = Mutex(State(snapshot: snapshot, command: command))
   }
 
   func readSnapshot() throws -> VoiceInputSnapshot {

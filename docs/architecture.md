@@ -254,6 +254,15 @@ stale, clears its ephemeral delivery target, and never launches the app. See
 also runs a static local-only source and capability check. See
 [decision 0049](decisions/0049_ios_offline_storage_enforcement.md).
 
+The WidgetKit control reads only the bounded current snapshot and uses a
+`SetValueIntent`; Audio Recording start/stop intents write the same single-slot
+command. Start foregrounds the containing app. Recording publishes a Live
+Activity with an exact stop action, and the actor consumes stop while recording
+under lock or in background. App activation with no in-memory owner ends
+orphaned activities, publishes Interrupted for an old active snapshot, and
+leaves partial audio for History reconciliation. See
+[decision 0050](decisions/0050_ios_system_surface_capture.md).
+
 ### HID transport
 
 The hardware-input boundary owns `IOHIDManager`, exact matching, device removal,

@@ -1,8 +1,8 @@
 # Voice critical user journeys
 
 **Status:** Accepted behavior contract; macOS M1–M15 and iOS Gate K0 through
-I10 are implemented in source across the current stacked branches. The
-authority is
+I11 are implemented in source across the current stacked branches. The authority
+is
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md).
 
 ## Purpose
@@ -551,6 +551,20 @@ An approved App Intent, Action button, Control Center control, Siri phrase, or
 in-app button starts a visibly owned Voice session. Lock/background behavior
 uses the required Live Activity and finishes into History. Delivery is explicit
 copy/share or a later keyboard retrieval; it never guesses a target field.
+
+**Current evidence:** one stateful WidgetKit control uses a current Recording
+heartbeat for Control Center, Lock Screen, and Action button state. Audio
+Recording start, exact stop, and toggle intents share only the bounded Keychain
+command slot; Siri and Shortcuts expose named start/stop actions. The Live
+Activity provides a stop button. System stops use Natural, while app and
+keyboard stops preserve their own explicit Style. Relaunch without actor-owned
+capture ends orphaned Live Activities, publishes Interrupted, and leaves the
+exact partial for History adoption. Completed History exposes copy and share,
+and no system path stores or infers a target. Pure command tests, actor tests,
+generated App Intents metadata, and simulator UI cover the source contract.
+Physical Lock Screen, Action button, Siri, and locked-stop evidence remains
+signed-iPhone work. Decision
+[`0050`](decisions/0050_ios_system_surface_capture.md) owns I11.
 
 ## Quality and performance fixtures
 

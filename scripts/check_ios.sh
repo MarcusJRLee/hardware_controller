@@ -46,3 +46,6 @@ xcodebuild test -quiet \
   -destination "$destination" \
   -derivedDataPath "$derived_data" \
   -parallel-testing-enabled NO
+
+scripts/check_ios_system_capture_metadata.sh \
+  "$derived_data/Build/Products/Debug-iphonesimulator/VoiceInput.app"

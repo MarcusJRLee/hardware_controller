@@ -18,6 +18,7 @@ targets:
     platform: iOS
     sources:
       - app
+      - system_capture
       - path: resources/third_party_notices.txt
         buildPhase: resources
     dependencies:
@@ -44,6 +45,7 @@ targets:
       path: config/app_info.plist
       properties:
         CFBundleDisplayName: Voice Input
+        CFBundleName: Voice Input
         NSMicrophoneUsageDescription: Voice Input records audio locally for transcription.
         NSSupportsLiveActivities: true
         UIBackgroundModes:
@@ -161,6 +163,7 @@ targets:
     platform: iOS
     sources:
       - widgets
+      - system_capture
     dependencies:
       - target: VoiceInputShared
     entitlements:
