@@ -67,9 +67,81 @@ final class VoiceInputAppModelTest: XCTestCase {
     XCTAssertNotNil(model.snapshotErrorMessage)
   }
 
+  @MainActor
+  func testSelectedStylePersistsAndReachesInAppStop() async {
+    let service = RecordingCaptureService()
+    var persistedStyle: VoiceInputStyleKind?
+    let model = VoiceInputAppModel(
+      microphoneAuthorizationProvider: { .authorized },
+      microphonePermissionRequester: { true },
+      keyboardObservedAtReader: { nil },
+      service: service,
+      initialStyleKind: .natural,
+      styleWriter: { persistedStyle = $0 }
+    )
+
+    model.selectStyle(.technical)
+    await model.applyStop()
+    let stoppedStyles = await service.stoppedStyles
+
+    XCTAssertEqual(model.selectedStyleKind, .technical)
+    XCTAssertEqual(persistedStyle, .technical)
+    XCTAssertEqual(stoppedStyles, [.technical])
+  }
+
+  @MainActor
+  func testStopFreezesStyleBeforeTheAsynchronousServiceCall() async {
+    let service = RecordingCaptureService()
+    let model = VoiceInputAppModel(
+      microphoneAuthorizationProvider: { .authorized },
+      microphonePermissionRequester: { true },
+      keyboardObservedAtReader: { nil },
+      service: service
+    )
+
+    model.selectStyle(.technical)
+    model.stop()
+    model.selectStyle(.formal)
+    await service.waitForStop()
+    let stoppedStyles = await service.stoppedStyles
+
+    XCTAssertEqual(stoppedStyles, [.technical])
+  }
+
   private enum TestError: Error {
     case unavailable
   }
+}
+
+private actor RecordingCaptureService: VoiceInputCapturing {
+  private(set) var stoppedStyles: [VoiceInputStyleKind] = []
+  private var stopWaiters: [CheckedContinuation<Void, Never>] = []
+
+  func snapshot() throws -> VoiceInputSnapshot { .idle(sequence: 0) }
+
+  func start(sessionID _: UUID) async throws {}
+
+  func stop(styleKind: VoiceInputStyleKind) async throws {
+    stoppedStyles.append(styleKind)
+    let waiters = stopWaiters
+    stopWaiters.removeAll()
+    for waiter in waiters {
+      waiter.resume()
+    }
+  }
+
+  func waitForStop() async {
+    guard stoppedStyles.isEmpty else {
+      return
+    }
+    await withCheckedContinuation { continuation in
+      stopWaiters.append(continuation)
+    }
+  }
+
+  func interrupt() async {}
+
+  func processPendingCommand() async throws {}
 }
 
 private struct FailingSnapshotStore: VoiceInputStateStoring {

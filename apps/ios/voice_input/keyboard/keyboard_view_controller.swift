@@ -5,14 +5,20 @@ import VoiceInputShared
 final class KeyboardViewController: UIInputViewController {
   private let policy = VoiceInputKeyboardPolicy()
   private let store = VoiceInputKeychainStore()
+  private let stylePreference = VoiceInputStylePreferenceStore(
+    key: VoiceInputEnvironment.keyboardStyleKindKey
+  )
   private let statusLabel = UILabel()
+  private let styleButton = UIButton(type: .system)
   private let microphoneButton = UIButton(type: .system)
   private var pollTimer: Timer?
   private var awaitingSessionID: UUID?
+  private var selectedStyleKind = VoiceInputStyleKind.natural
   private var isUppercase = false
 
   override func viewDidLoad() {
     super.viewDidLoad()
+    selectedStyleKind = stylePreference.read()
     buildKeyboard()
   }
 
@@ -52,7 +58,7 @@ final class KeyboardViewController: UIInputViewController {
     statusLabel.accessibilityIdentifier = "voice_status"
 
     let rows = UIStackView(arrangedSubviews: [
-      statusLabel,
+      statusAndStyleRow,
       letterRow("qwertyuiop"),
       letterRow("asdfghjkl"),
       thirdRow,
@@ -68,6 +74,19 @@ final class KeyboardViewController: UIInputViewController {
       rows.topAnchor.constraint(equalTo: view.topAnchor, constant: 6),
       rows.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -6),
     ])
+  }
+
+  private var statusAndStyleRow: UIStackView {
+    styleButton.accessibilityLabel = "Dictation style"
+    styleButton.accessibilityIdentifier = "voice_style"
+    styleButton.showsMenuAsPrimaryAction = true
+    styleButton.setContentHuggingPriority(.required, for: .horizontal)
+    configureStyleMenu()
+
+    let row = UIStackView(arrangedSubviews: [statusLabel, styleButton])
+    row.axis = .horizontal
+    row.spacing = 8
+    return row
   }
 
   private func letterRow(_ letters: String) -> UIStackView {
@@ -202,10 +221,17 @@ final class KeyboardViewController: UIInputViewController {
   }
 
   private func applyDecision(for snapshot: VoiceInputSnapshot) {
+    let insertionReceipt: VoiceInputInsertionReceipt?
+    do {
+      insertionReceipt = try store.readInsertionReceipt()
+    } catch {
+      showStatus("The local insertion receipt is unavailable.")
+      return
+    }
     let decision = policy.microphoneDecision(
       snapshot: snapshot,
       hasFullAccess: hasFullAccess,
-      lastInsertionReceipt: lastInsertionReceipt,
+      lastInsertionReceipt: insertionReceipt,
       now: .now
     )
     switch decision {
@@ -215,7 +241,13 @@ final class KeyboardViewController: UIInputViewController {
       showStatus("Start capture in Voice Input or its Control Center control, then return here.")
     case .requestStop(let sessionID):
       do {
-        try store.writeCommand(.stop(sessionID: sessionID, issuedAt: .now))
+        try store.writeCommand(
+          .stop(
+            sessionID: sessionID,
+            styleKind: selectedStyleKind,
+            issuedAt: .now
+          )
+        )
         awaitingSessionID = sessionID
         showStatus("Stopping local capture…")
       } catch VoiceInputStoreError.commandPending {
@@ -230,11 +262,22 @@ final class KeyboardViewController: UIInputViewController {
     case .serviceStale:
       showStatus("The app-owned capture is not responding. Start again in Voice Input.")
     case .insert(let sessionID, let sequence, let text):
-      textDocumentProxy.insertText(text)
-      lastInsertionReceipt = VoiceInputInsertionReceipt(
+      let receipt = VoiceInputInsertionReceipt(
         sessionID: sessionID,
         sequence: sequence
       )
+      do {
+        guard try store.claimInsertion(receipt) else {
+          awaitingSessionID = nil
+          showStatus("This result was already inserted.")
+          return
+        }
+      } catch {
+        showStatus("The local insertion receipt could not be saved.")
+        return
+      }
+      // The durable claim precedes the host-app side effect to guarantee at-most-once delivery.
+      textDocumentProxy.insertText(text)
       if awaitingSessionID == sessionID {
         awaitingSessionID = nil
       }
@@ -268,42 +311,28 @@ final class KeyboardViewController: UIInputViewController {
     statusLabel.text = text
   }
 
-  private var lastInsertionReceipt: VoiceInputInsertionReceipt? {
-    get {
-      guard
-        let sessionIDValue = UserDefaults.standard.string(
-          forKey: VoiceInputEnvironment.lastInsertedSessionIDKey
-        ),
-        let sessionID = UUID(uuidString: sessionIDValue),
-        let sequence =
-          (UserDefaults.standard.object(
-            forKey: VoiceInputEnvironment.lastInsertedSequenceKey
-          ) as? NSNumber)?.uint64Value
-      else {
-        return nil
+  private func configureStyleMenu() {
+    styleButton.setTitle(selectedStyleKind.displayName, for: .normal)
+    styleButton.menu = UIMenu(
+      title: "Style",
+      children: VoiceInputStyleKind.allCases.map { styleKind in
+        UIAction(
+          title: styleKind.displayName,
+          state: styleKind == selectedStyleKind ? .on : .off
+        ) { [weak self] _ in
+          self?.selectStyle(styleKind)
+        }
       }
-      return VoiceInputInsertionReceipt(sessionID: sessionID, sequence: sequence)
-    }
-    set {
-      if let newValue {
-        UserDefaults.standard.set(
-          newValue.sessionID.uuidString,
-          forKey: VoiceInputEnvironment.lastInsertedSessionIDKey
-        )
-        UserDefaults.standard.set(
-          NSNumber(value: newValue.sequence),
-          forKey: VoiceInputEnvironment.lastInsertedSequenceKey
-        )
-      } else {
-        UserDefaults.standard.removeObject(
-          forKey: VoiceInputEnvironment.lastInsertedSessionIDKey
-        )
-        UserDefaults.standard.removeObject(
-          forKey: VoiceInputEnvironment.lastInsertedSequenceKey
-        )
-      }
-    }
+    )
   }
+
+  private func selectStyle(_ styleKind: VoiceInputStyleKind) {
+    selectedStyleKind = styleKind
+    stylePreference.write(styleKind)
+    configureStyleMenu()
+    showStatus("\(styleKind.displayName) Style selected for the next result.")
+  }
+
 }
 
 extension UIView {

@@ -202,11 +202,17 @@ text to the Keychain handoff. History stores immutable Raw, Edited, Formatted,
 timed-segment, model, Style, digest, byte-count, and audio-expiry evidence; its
 UI searches, discloses Raw/model provenance, and plays retained CAFs. Startup
 removes incomplete and unreferenced app-owned audio. Data Protection and backup
-exclusion apply to the owned History directory, database family, and audio. See
+exclusion apply to the owned History directory, database family, and audio.
+The app and keyboard retain separate surface Style defaults. A schema-revision-2
+stop command captures the keyboard's explicit Style for its exact session; the
+app maps that bounded identifier exhaustively into the canonical formatter.
+A bounded same-device Keychain claim is written before host-field insertion and
+deduplicates by session identity, including re-published ready snapshots. See
 [decision 0040](decisions/0040_ios_keyboard_activation_and_handoff.md),
 [decision 0041](decisions/0041_ios_model_package_admission.md),
-[decision 0042](decisions/0042_ios_whisper_file_asr.md), and
-[decision 0043](decisions/0043_ios_local_formatting_and_history.md).
+[decision 0042](decisions/0042_ios_whisper_file_asr.md),
+[decision 0043](decisions/0043_ios_local_formatting_and_history.md), and
+[decision 0044](decisions/0044_ios_style_qualified_keyboard_delivery.md).
 
 ### HID transport
 

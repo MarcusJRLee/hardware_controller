@@ -140,8 +140,7 @@ public struct VoiceInputKeyboardPolicy: Equatable, Sendable {
         return .serviceStale
       }
       if let lastInsertionReceipt,
-        lastInsertionReceipt.sessionID == sessionID,
-        lastInsertionReceipt.sequence >= snapshot.sequence
+        lastInsertionReceipt.sessionID == sessionID
       {
         return .alreadyInserted
       }

@@ -1,21 +1,23 @@
 import Foundation
+import Security
 import XCTest
 
 @testable import VoiceInputShared
 
 final class VoiceInputKeychainStoreTest: XCTestCase {
   private var store: VoiceInputKeychainStore!
+  private var service: String!
 
   override func setUpWithError() throws {
-    store = VoiceInputKeychainStore(
-      service: "com.longdevity.hardwarecontroller.voiceinput.tests.\(UUID().uuidString)"
-    )
+    service = "com.longdevity.hardwarecontroller.voiceinput.tests.\(UUID().uuidString)"
+    store = VoiceInputKeychainStore(service: service)
     try store.removeAll()
   }
 
   override func tearDownWithError() throws {
     try store.removeAll()
     store = nil
+    service = nil
   }
 
   func testSnapshotRoundTripsWithoutCloudSynchronization() throws {
@@ -35,6 +37,7 @@ final class VoiceInputKeychainStoreTest: XCTestCase {
   func testCommandCreationIsAnAtomicSingleSlot() throws {
     let first = VoiceInputCommand.stop(
       sessionID: UUID(),
+      styleKind: .technical,
       issuedAt: Date(timeIntervalSince1970: 84)
     )
     try store.writeCommand(first)
@@ -50,6 +53,31 @@ final class VoiceInputKeychainStoreTest: XCTestCase {
       XCTAssertEqual(error as? VoiceInputStoreError, .commandPending)
     }
     XCTAssertEqual(try store.consumeCommand(), first)
+    XCTAssertNil(try store.consumeCommand())
+  }
+
+  func testMalformedCommandIsDeletedAfterOneConsumptionAttempt() throws {
+    let malformed = Data(
+      """
+      {"issuedAt":42000,"kind":"stop","schemaRevision":2,"sessionID":"\(UUID().uuidString)","styleKind":"unknown"}
+      """.utf8
+    )
+    let status = SecItemAdd(
+      [
+        kSecClass: kSecClassGenericPassword,
+        kSecAttrService: service as Any,
+        kSecAttrAccount: "command",
+        kSecAttrSynchronizable: false,
+        kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        kSecValueData: malformed,
+      ] as CFDictionary,
+      nil
+    )
+    XCTAssertEqual(status, errSecSuccess)
+
+    XCTAssertThrowsError(try store.consumeCommand()) { error in
+      XCTAssertEqual(error as? VoiceInputStoreError, .invalidCommand)
+    }
     XCTAssertNil(try store.consumeCommand())
   }
 
@@ -76,6 +104,77 @@ final class VoiceInputKeychainStoreTest: XCTestCase {
     try store.markKeyboardObserved(at: observedAt)
 
     XCTAssertEqual(try store.readKeyboardObservedAt(), observedAt)
+  }
+
+  func testInsertionReceiptClaimIsDurableAndAtMostOncePerSession() throws {
+    let first = VoiceInputInsertionReceipt(sessionID: UUID(), sequence: 2)
+    let rePublished = VoiceInputInsertionReceipt(
+      sessionID: first.sessionID,
+      sequence: 3
+    )
+    let next = VoiceInputInsertionReceipt(sessionID: UUID(), sequence: 4)
+
+    XCTAssertTrue(try store.claimInsertion(first))
+    XCTAssertEqual(try store.readInsertionReceipt(), first)
+    XCTAssertFalse(try store.claimInsertion(rePublished))
+    XCTAssertEqual(try store.readInsertionReceipt(), first)
+    XCTAssertTrue(try store.claimInsertion(next))
+    XCTAssertEqual(try store.readInsertionReceipt(), next)
+  }
+
+  func testWarmKeyboardHandoffStopsWithStyleAndInsertsOnce() throws {
+    let sessionID = UUID()
+    let now = Date(timeIntervalSince1970: 42)
+    let policy = VoiceInputKeyboardPolicy()
+    try store.writeSnapshot(
+      .recording(sessionID: sessionID, sequence: 1, heartbeatAt: now)
+    )
+
+    XCTAssertEqual(
+      policy.microphoneDecision(
+        snapshot: try store.readSnapshot(),
+        hasFullAccess: true,
+        lastInsertionReceipt: nil,
+        now: now
+      ),
+      .requestStop(sessionID: sessionID)
+    )
+    try store.writeCommand(
+      .stop(sessionID: sessionID, styleKind: .formal, issuedAt: now)
+    )
+    XCTAssertEqual(try store.consumeCommand()?.styleKind, .formal)
+
+    let ready = VoiceInputSnapshot.ready(
+      sessionID: sessionID,
+      sequence: 2,
+      text: "One formal result."
+    )
+    try store.writeSnapshot(ready)
+    XCTAssertEqual(
+      policy.microphoneDecision(
+        snapshot: try store.readSnapshot(),
+        hasFullAccess: true,
+        lastInsertionReceipt: nil,
+        now: now
+      ),
+      .insert(
+        sessionID: sessionID,
+        sequence: 2,
+        text: "One formal result."
+      )
+    )
+    XCTAssertEqual(
+      policy.microphoneDecision(
+        snapshot: ready,
+        hasFullAccess: true,
+        lastInsertionReceipt: VoiceInputInsertionReceipt(
+          sessionID: sessionID,
+          sequence: 2
+        ),
+        now: now
+      ),
+      .alreadyInserted
+    )
   }
 
   func testSnapshotHandoffLatencyHasHeadroomForInteractiveUse() throws {

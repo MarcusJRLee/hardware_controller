@@ -190,7 +190,23 @@ private struct VoiceInputView: View {
 
   private var captureSection: some View {
     VStack(alignment: .leading, spacing: 12) {
-      Text("Capture").font(.title2.bold())
+      HStack {
+        Text("Capture").font(.title2.bold())
+        Spacer()
+        Picker(
+          "Style",
+          selection: Binding(
+            get: { model.selectedStyleKind },
+            set: { model.selectStyle($0) }
+          )
+        ) {
+          ForEach(VoiceInputStyleKind.allCases, id: \.self) { styleKind in
+            Text(styleKind.displayName).tag(styleKind)
+          }
+        }
+        .pickerStyle(.menu)
+        .accessibilityIdentifier("capture_style")
+      }
       statusCard
 
       Button {

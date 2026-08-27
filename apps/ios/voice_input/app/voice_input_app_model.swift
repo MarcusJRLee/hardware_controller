@@ -11,18 +11,20 @@ final class VoiceInputAppModel: ObservableObject {
   @Published private(set) var onboardingErrorMessage: String?
   @Published private(set) var microphoneAuthorization: VoiceInputMicrophoneAuthorization
   @Published private(set) var keyboardHandoffObserved = false
+  @Published private(set) var selectedStyleKind: VoiceInputStyleKind
 
   private let onboardingPolicy = VoiceInputOnboardingPolicy()
   private let microphoneAuthorizationProvider:
     @MainActor @Sendable () -> VoiceInputMicrophoneAuthorization
   private let microphonePermissionRequester: @MainActor @Sendable () async -> Bool
   private let keyboardObservedAtReader: @Sendable () throws -> Date?
-  private let service: VoiceInputCaptureService?
+  private let styleWriter: @MainActor (VoiceInputStyleKind) -> Void
+  private let service: (any VoiceInputCapturing)?
   private var refreshTask: Task<Void, Never>?
 
   convenience init() {
     let store = VoiceInputKeychainStore()
-    let service: VoiceInputCaptureService?
+    let service: (any VoiceInputCapturing)?
     if let documentsURL = FileManager.default.urls(
       for: .documentDirectory,
       in: .userDomainMask
@@ -40,7 +42,9 @@ final class VoiceInputAppModel: ObservableObject {
         await AVAudioApplication.requestRecordPermission()
       },
       keyboardObservedAtReader: { try store.readKeyboardObservedAt() },
-      service: service
+      service: service,
+      initialStyleKind: Self.storedAppStyleKind,
+      styleWriter: Self.persistAppStyle
     )
     if service == nil {
       errorMessage = "The local app container is unavailable."
@@ -49,7 +53,7 @@ final class VoiceInputAppModel: ObservableObject {
 
   convenience init(
     store: VoiceInputKeychainStore,
-    service: VoiceInputCaptureService?
+    service: (any VoiceInputCapturing)?
   ) {
     self.init(
       microphoneAuthorizationProvider: { Self.systemMicrophoneAuthorization },
@@ -57,7 +61,9 @@ final class VoiceInputAppModel: ObservableObject {
         await AVAudioApplication.requestRecordPermission()
       },
       keyboardObservedAtReader: { try store.readKeyboardObservedAt() },
-      service: service
+      service: service,
+      initialStyleKind: Self.storedAppStyleKind,
+      styleWriter: Self.persistAppStyle
     )
     if service == nil {
       errorMessage = "The local app container is unavailable."
@@ -70,13 +76,17 @@ final class VoiceInputAppModel: ObservableObject {
       VoiceInputMicrophoneAuthorization,
     microphonePermissionRequester: @escaping @MainActor @Sendable () async -> Bool,
     keyboardObservedAtReader: @escaping @Sendable () throws -> Date?,
-    service: VoiceInputCaptureService? = nil
+    service: (any VoiceInputCapturing)? = nil,
+    initialStyleKind: VoiceInputStyleKind = .natural,
+    styleWriter: @escaping @MainActor (VoiceInputStyleKind) -> Void = { _ in }
   ) {
     self.microphoneAuthorizationProvider = microphoneAuthorizationProvider
     self.microphonePermissionRequester = microphonePermissionRequester
     self.keyboardObservedAtReader = keyboardObservedAtReader
+    self.styleWriter = styleWriter
     self.service = service
     microphoneAuthorization = microphoneAuthorizationProvider()
+    selectedStyleKind = initialStyleKind
   }
 
   var isRecording: Bool {
@@ -117,7 +127,7 @@ final class VoiceInputAppModel: ObservableObject {
 
   func start() {
     perform { service in
-      try await service.start()
+      try await service.start(sessionID: UUID())
     }
   }
 
@@ -133,9 +143,32 @@ final class VoiceInputAppModel: ObservableObject {
   }
 
   func stop() {
-    perform { service in
-      try await service.stop()
+    let styleKind = selectedStyleKind
+    Task {
+      await applyStop(styleKind: styleKind)
     }
+  }
+
+  func applyStop() async {
+    await applyStop(styleKind: selectedStyleKind)
+  }
+
+  private func applyStop(styleKind: VoiceInputStyleKind) async {
+    guard let service else {
+      return
+    }
+    errorMessage = nil
+    do {
+      try await service.stop(styleKind: styleKind)
+      await refresh()
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  func selectStyle(_ styleKind: VoiceInputStyleKind) {
+    selectedStyleKind = styleKind
+    styleWriter(styleKind)
   }
 
   func handleInterruption(_ notification: Notification) {
@@ -204,8 +237,22 @@ final class VoiceInputAppModel: ObservableObject {
     }
   }
 
+  private static var storedAppStyleKind: VoiceInputStyleKind {
+    appStylePreference.read()
+  }
+
+  private static func persistAppStyle(_ styleKind: VoiceInputStyleKind) {
+    appStylePreference.write(styleKind)
+  }
+
+  private static var appStylePreference: VoiceInputStylePreferenceStore {
+    VoiceInputStylePreferenceStore(
+      key: VoiceInputEnvironment.appStyleKindKey
+    )
+  }
+
   private func perform(
-    _ operation: @escaping @Sendable (VoiceInputCaptureService) async throws -> Void
+    _ operation: @escaping @Sendable (any VoiceInputCapturing) async throws -> Void
   ) {
     guard let service else {
       return

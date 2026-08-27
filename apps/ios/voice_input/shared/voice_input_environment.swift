@@ -1,4 +1,4 @@
 public enum VoiceInputEnvironment {
-  public static let lastInsertedSessionIDKey = "voice_input_last_inserted_session_id"
-  public static let lastInsertedSequenceKey = "voice_input_last_inserted_sequence"
+  public static let keyboardStyleKindKey = "voice_input_keyboard_style_kind"
+  public static let appStyleKindKey = "voice_input_app_style_kind"
 }

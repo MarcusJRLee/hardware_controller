@@ -27,7 +27,15 @@ enum VoiceInputCaptureError: Error, LocalizedError, Sendable {
   }
 }
 
-actor VoiceInputCaptureService {
+protocol VoiceInputCapturing: Sendable {
+  func snapshot() async throws -> VoiceInputSnapshot
+  func start(sessionID: UUID) async throws
+  func stop(styleKind: VoiceInputStyleKind) async throws
+  func interrupt() async
+  func processPendingCommand() async throws
+}
+
+actor VoiceInputCaptureService: VoiceInputCapturing {
   private let store: any VoiceInputStateStoring
   private let captureURL: URL
   private let asrWorkflow: VoiceInputASRWorkflow?
@@ -123,7 +131,7 @@ actor VoiceInputCaptureService {
     }
   }
 
-  func stop() async throws {
+  func stop(styleKind: VoiceInputStyleKind = .natural) async throws {
     guard
       let recorder,
       let sessionID,
@@ -163,7 +171,8 @@ actor VoiceInputCaptureService {
         startedAt: sessionStartedAt,
         endedAt: sessionEndedAt,
         rawTranscript: rawTranscript,
-        sourceAudioURL: captureURL
+        sourceAudioURL: captureURL,
+        style: styleKind.domainStyle
       )
       guard self.sessionID == sessionID else {
         return
@@ -220,8 +229,10 @@ actor VoiceInputCaptureService {
         try await start(sessionID: command.sessionID)
       }
     case .stop:
-      if command.sessionID == sessionID {
-        try await stop()
+      if command.sessionID == sessionID,
+        let styleKind = command.styleKind
+      {
+        try await stop(styleKind: styleKind)
       }
     }
   }

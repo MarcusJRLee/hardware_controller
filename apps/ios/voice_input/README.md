@@ -60,5 +60,9 @@ deleting transcripts.
 The keyboard cannot access the microphone or launch the containing app. A cold
 capture starts from the containing app or its Control Center control. While the
 app owns capture, the keyboard can request stop, wait for a matching result, and
-insert it once. Explicit Style selection and the complete signed-device
-keyboard journey remain in the next iOS vertical slices.
+insert it once. App and keyboard menus persist separate defaults for Natural,
+Casual, Formal, Technical, and Verbatim. The keyboard freezes its selection on
+the exact stop command, and a matching session can insert only once. The durable
+insertion claim precedes the host-field change; after a crash, History is the
+recovery source for a claimed result that did not reach the field. Physical
+iPhone keyboard evidence remains required.

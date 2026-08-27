@@ -57,12 +57,23 @@ public struct VoiceInputKeychainStore: VoiceInputStateStoring, Sendable {
   }
 
   public func consumeCommand() throws -> VoiceInputCommand? {
-    guard let command = try readCommand() else {
+    guard
+      let data = try readData(
+        account: Account.command.rawValue,
+        validateRecord: false
+      )
+    else {
       return nil
     }
     let status = SecItemDelete(baseQuery(account: Account.command.rawValue))
-    if status != errSecItemNotFound {
-      try check(status)
+    if status == errSecItemNotFound {
+      return nil
+    }
+    try check(status)
+    try validate(data)
+    guard let command = try? VoiceInputJSON.decoder.decode(VoiceInputCommand.self, from: data)
+    else {
+      throw VoiceInputStoreError.invalidCommand
     }
     return command
   }
@@ -94,11 +105,63 @@ public struct VoiceInputKeychainStore: VoiceInputStateStoring, Sendable {
     try replace(data: data, account: Account.keyboardPresence.rawValue)
   }
 
+  public func readInsertionReceipt() throws -> VoiceInputInsertionReceipt? {
+    guard let data = try readData(account: Account.insertionReceipt.rawValue) else {
+      return nil
+    }
+    guard
+      let receipt = try? VoiceInputJSON.decoder.decode(
+        VoiceInputInsertionReceipt.self,
+        from: data
+      )
+    else {
+      throw VoiceInputStoreError.invalidInsertionReceipt
+    }
+    return receipt
+  }
+
+  public func claimInsertion(_ receipt: VoiceInputInsertionReceipt) throws -> Bool {
+    let data = try VoiceInputJSON.encoder.encode(receipt)
+    try validate(data)
+    let account = Account.insertionReceipt.rawValue
+    let status = SecItemAdd(addQuery(data: data, account: account), nil)
+    if status == errSecSuccess {
+      return true
+    }
+    guard status == errSecDuplicateItem else {
+      try check(status)
+      return false
+    }
+    guard let existing = try readInsertionReceipt() else {
+      throw VoiceInputStoreError.keychain(status: errSecInternalError)
+    }
+    guard existing.sessionID != receipt.sessionID else {
+      return false
+    }
+
+    let deleteStatus = SecItemDelete(baseQuery(account: account))
+    if deleteStatus != errSecItemNotFound {
+      try check(deleteStatus)
+    }
+    let retryStatus = SecItemAdd(addQuery(data: data, account: account), nil)
+    if retryStatus == errSecSuccess {
+      return true
+    }
+    if retryStatus == errSecDuplicateItem,
+      try readInsertionReceipt()?.sessionID == receipt.sessionID
+    {
+      return false
+    }
+    try check(retryStatus)
+    return false
+  }
+
   public func removeAll() throws {
     for account in [
       Account.snapshot.rawValue,
       Account.command.rawValue,
       Account.keyboardPresence.rawValue,
+      Account.insertionReceipt.rawValue,
     ] {
       let status = SecItemDelete(baseQuery(account: account))
       if status != errSecItemNotFound {
@@ -107,7 +170,10 @@ public struct VoiceInputKeychainStore: VoiceInputStateStoring, Sendable {
     }
   }
 
-  private func readData(account: String) throws -> Data? {
+  private func readData(
+    account: String,
+    validateRecord: Bool = true
+  ) throws -> Data? {
     var query = baseQueryDictionary(account: account)
     query[kSecMatchLimit] = kSecMatchLimitOne
     query[kSecReturnData] = true
@@ -120,7 +186,9 @@ public struct VoiceInputKeychainStore: VoiceInputStateStoring, Sendable {
     guard let data = item as? Data else {
       throw VoiceInputStoreError.keychain(status: errSecInternalError)
     }
-    try validate(data)
+    if validateRecord {
+      try validate(data)
+    }
     return data
   }
 
@@ -176,6 +244,7 @@ public struct VoiceInputKeychainStore: VoiceInputStateStoring, Sendable {
     case snapshot
     case command
     case keyboardPresence = "keyboard_presence"
+    case insertionReceipt = "insertion_receipt"
   }
 
   private struct KeyboardPresence: Codable, Sendable {

@@ -8,10 +8,7 @@ import XCTest
 final class VoiceInputSessionFinalizerTest: XCTestCase {
   func testReturnsFormattedTextOnlyAfterHistoryAcceptsEveryStage() async throws {
     let history = RecordingHistoryStore()
-    let finalizer = VoiceInputSessionFinalizer(
-      history: history,
-      style: .technical
-    )
+    let finalizer = VoiceInputSessionFinalizer(history: history)
     let sessionID = UUID()
     let audioURL = URL(fileURLWithPath: "/private/session.caf")
     let raw = VoiceInputRawTranscript(
@@ -27,7 +24,8 @@ final class VoiceInputSessionFinalizerTest: XCTestCase {
       startedAt: Date(timeIntervalSince1970: 10),
       endedAt: Date(timeIntervalSince1970: 20),
       rawTranscript: raw,
-      sourceAudioURL: audioURL
+      sourceAudioURL: audioURL,
+      style: .technical
     )
 
     XCTAssertEqual(
