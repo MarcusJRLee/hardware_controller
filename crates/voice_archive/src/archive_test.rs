@@ -52,6 +52,20 @@ fn undeclared_file_and_tight_cap_fail_closed() {
     fs::remove_dir_all(temporary).expect("Exact temporary archive must be removable.");
 }
 
+#[test]
+fn result_count_cap_is_a_typed_limit_failure() {
+    assert_eq!(
+        validate_history_archive(
+            &fixture_path(),
+            HistoryArchiveLimits {
+                maximum_result_count: 1,
+                ..HistoryArchiveLimits::default()
+            }
+        ),
+        Err(HistoryArchiveError::LimitExceeded)
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn symbolic_link_fails_closed() {

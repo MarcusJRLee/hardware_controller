@@ -111,6 +111,16 @@ closed. Rust layout tests plus a real C17 consumer protect the source-controlled
 header. Swift and Kotlin wrappers remain typed platform adapters and may not add
 portable policy. See [decision 0035](decisions/0035_portable_voice_c_abi.md).
 
+`HardwareControllerVoiceFFI` is the Apple adapter. Its immutable `Sendable`
+values translate paths, caller-owned buffers, fixed metadata, and typed status
+codes without exposing an unsafe pointer to application code. A narrow C target
+imports the source-controlled header and statically links the optimized Rust
+archive. Canonical scripts build that archive first and update an ignored
+digest-stamp Swift source only when its bytes change, forcing SwiftPM to relink
+instead of reusing a stale executable. The packaged app has no Rust dynamic
+library or non-system runtime dependency. See
+[decision 0039](decisions/0039_linked_apple_voice_adapter.md).
+
 `voice_models` owns bounded Model-package admission before any runtime sees
 weights. It strictly decodes V1 manifests, rejects symbolic links and
 undeclared or nonportable paths, streams SHA-256 over exact declared bytes, and
@@ -469,6 +479,12 @@ declared digest, migrates the final revision 4 `session.json` shape when needed,
 and validates the complete baseline/result graph before transactionally copying
 audio and inserting metadata. Identical UUID/evidence is idempotent; different
 evidence with the same UUID fails without mutation or delivery.
+
+For V1, the archive importer invokes the linked Rust verifier against the
+private snapshot before Swift decodes the complete evidence graph and enters
+the restore transaction. It compares Rust session, result-count, and audio
+metadata with the Swift model. The final revision 4 migration remains a
+macOS-only Swift compatibility path and never enters the V1 verifier.
 
 The History presentation composes a separate import actor with the same Apple
 on-device ASR and local formatting boundaries used for retained-audio reuse.

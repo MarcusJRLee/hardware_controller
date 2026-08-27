@@ -552,6 +552,10 @@ test first or batch the entire implementation behind mocked internals.
 - M14 now passes one shared History archive fixture through Swift, Rust, and the
   caller-owned C ABI. macOS V1 export/restore is transactional, idempotent for
   identical evidence, conflict-safe for reused UUIDs, and migrates revision 4.
+- M15 statically links the Rust ABI into the Apple executable behind typed,
+  pointer-free Swift values. Production V1 import verifies the private snapshot
+  in Rust before complete Swift graph validation and transactional restore;
+  digest-stamped builds cannot silently reuse stale Rust code.
 - Design separate streaming ownership before exporting ASR or formatting; do
   not assume the synchronous retention ABI fits an async model boundary.
 

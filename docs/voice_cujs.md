@@ -330,11 +330,11 @@ limit creates no row or owned artifact. The final revision 4 macOS archive
 migrates during import; all new exports use portable V1.
 
 **Current evidence:** Swift exports and imports the shared V1 fixture and a real
-CAF/SQLite round trip. Rust verifies the same fixture and exposes fixed-layout
-metadata through the C ABI. Focused suites cover legacy migration, idempotence,
-conflict, tampering, inventory, limits, custody, and a linked optimized C17
-consumer. The complete host corpus passes 507 tests in 75 suites; portable Rust
-passes 26 tests. Decision
+CAF/SQLite round trip. The production importer invokes the statically linked
+Rust verifier on its private snapshot, compares fixed identity metadata, then
+restores through Swift. Focused suites cover legacy migration, idempotence,
+conflict, tampering, inventory, limits, custody, typed Swift/C translation, and
+an optimized C17 consumer. Decision
 [`0038`](decisions/0038_portable_voice_history_archives.md) owns the boundary.
 
 ## iOS journeys

@@ -11,13 +11,13 @@ inference.
 
 ## Quick start
 
-Requirements: Apple silicon, macOS 15 or later, and Xcode 26 or a compatible
-Swift 6 toolchain. Contributors also need rustup; the repository pins Rust 1.98.
+Requirements: Apple silicon, macOS 15 or later, Xcode 26 or a compatible Swift
+6 toolchain, and rustup. The repository pins Rust 1.98.
 
 ```bash
 git clone https://github.com/MarcusJRLee/hardware_controller.git
 cd hardware_controller
-swift run HardwareController --demo
+scripts/run_demo.sh
 ```
 
 Demo mode is deterministic and requires no foot controller, Apple signing
@@ -27,7 +27,7 @@ identity, or privacy permission.
 
 | Goal | Start here | Additional requirement |
 | --- | --- | --- |
-| Explore the app | `swift run HardwareController --demo` | None |
+| Explore the app | `scripts/run_demo.sh` | rustup |
 | Contribute | `scripts/check.sh` | Xcode 26 or compatible Swift 6 toolchain |
 | Verify only the portable core | `scripts/check_rust.sh` | rustup and a C17 compiler |
 | Use real hardware | [Signed hardware build](#signed-hardware-build) | Apple Development identity and supported Device |
@@ -125,7 +125,8 @@ audio expires after 24 hours while its History row remains searchable.
 History can also import a supported local recording, transcribe and format it
 on-device, and retain one app-owned copy without changing the original. V1
 `.voice_history` archives move immutable transcript/audio evidence between
-installations through bounded Swift/Rust/schema/C verification without delivery.
+installations through the Rust verifier linked into the Apple app, then bounded
+Swift restore logic. Import never delivers text.
 
 ## Dictation Actions
 

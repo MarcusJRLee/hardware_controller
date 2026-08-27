@@ -75,4 +75,7 @@ Swift integration tests cover V1 round-trip with audio, the shared fixture,
 revision 4 migration, idempotence, UUID conflict, tampering, undeclared files,
 and configurable caps. Rust tests cover the shared fixture, tampering,
 inventory, and limits. ABI layout/error tests and an optimized C17 consumer
-exercise the linked static library.
+exercise the static library. The Apple adapter tests both portable fixtures
+through the linked Rust symbols, typed buffer negotiation, status translation,
+and production V1 import; the release executable is checked for the archive
+symbol.
