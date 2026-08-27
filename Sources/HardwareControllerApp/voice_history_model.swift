@@ -6,6 +6,7 @@ import Observation
 enum VoiceHistoryWork: Equatable {
   case idle
   case loading
+  case importing
   case correcting
   case retranscribing
   case reformatting
@@ -42,6 +43,7 @@ final class VoiceHistoryModel {
   @ObservationIgnored private let retentionManager: (any VoiceSessionHistoryRetentionManaging)?
   @ObservationIgnored private let recoveryManager: (any VoiceSessionHistoryRecoveryManaging)?
   @ObservationIgnored private let service: any VoiceHistoryServicing
+  @ObservationIgnored private let importer: (any VoiceAudioImporting)?
   @ObservationIgnored private let exporter: any VoiceHistoryExporting
   @ObservationIgnored private let player: any VoiceHistoryAudioPlaying
   @ObservationIgnored private let playbackState: VoiceHistoryPlaybackState
@@ -50,6 +52,7 @@ final class VoiceHistoryModel {
   init(
     history: any VoiceSessionHistoryAccessing,
     service: any VoiceHistoryServicing,
+    importer: (any VoiceAudioImporting)? = nil,
     retentionManager: (any VoiceSessionHistoryRetentionManaging)? = nil,
     recoveryManager: (any VoiceSessionHistoryRecoveryManaging)? = nil,
     exporter: any VoiceHistoryExporting = VoiceHistoryExporter(),
@@ -59,6 +62,7 @@ final class VoiceHistoryModel {
     self.retentionManager = retentionManager
     self.recoveryManager = recoveryManager
     self.service = service
+    self.importer = importer
     self.exporter = exporter
     let playbackState = VoiceHistoryPlaybackState()
     self.playbackState = playbackState
@@ -161,6 +165,27 @@ final class VoiceHistoryModel {
         text: correctionDraft
       )
       notice = "Correction saved as a new result."
+    }
+  }
+
+  func importAudio(from sourceURL: URL) async {
+    guard let importer else {
+      return
+    }
+    await perform(.importing) {
+      let result = try await importer.importAudio(
+        from: sourceURL,
+        style: selectedStyle
+      )
+      selectedSessionID = result.sessionID
+      switch result.processingOutcome {
+      case .formatted:
+        notice = "Recording imported, transcribed, and formatted locally."
+      case .transcriptOnly:
+        notice = "Recording imported and transcribed. Local formatting was unavailable."
+      case .audioOnly:
+        notice = "Recording imported. Local transcription was unavailable; retry from History."
+      }
     }
   }
 
@@ -323,7 +348,9 @@ final class VoiceHistoryModel {
       )
       selectedSessionID = retainedSessionID
       reconcileSelection()
-      selectedResultID = selectedSession?.results.last?.id
+      selectedResultID =
+        selectedSession?.results.preferredReusableResult?.id
+        ?? selectedSession?.results.last?.id
       correctionDraft =
         selectedSession?.results
         .preferredReusableResult?.text ?? ""
@@ -483,6 +510,11 @@ struct VoiceHistoryPresentation {
         reformatter: reformatter,
         redeliverer: FocusedVoiceHistoryRedeliverer()
       ),
+      importer: VoiceAudioImportService(
+        history: history,
+        transcriber: AppleVoiceHistoryAudioTranscriber(),
+        reformatter: reformatter
+      ),
       retentionManager: history,
       recoveryManager: history
     )
@@ -628,6 +660,16 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryManaging {
   nonisolated func append(_ audio: CapturedAudioBuffer) {}
   func complete(_ document: VoiceSessionDocument) async throws {}
   func cancel(sessionID: UUID) async {}
+
+  func importAudioSession(
+    _ document: VoiceSessionDocument,
+    from sourceURL: URL,
+    limits: VoiceAudioImportLimits
+  ) async throws {
+    throw VoiceSessionHistoryError.storageUnavailable(
+      "Audio import is unavailable in demo mode."
+    )
+  }
 
   func setRetentionSettings(
     _ settings: VoiceHistoryRetentionSettings

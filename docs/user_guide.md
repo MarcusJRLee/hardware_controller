@@ -258,30 +258,35 @@ creates a new result, including when the attempt fails.
 
 ## Use Voice History
 
-1. Open **History** from the sidebar or menu-bar item. Search matches Raw,
-   Edited, Formatted, Delivered, and corrected results.
-2. Select a session, then choose any result to inspect its source, Style,
+1. Open **History** from the sidebar or menu-bar item. Choose **Import Audio
+   Recording** to select a supported local file. Hardware Controller runs
+   on-device transcription and the selected local Style, copies the audio into
+   app-owned storage, and leaves the original untouched. It never inserts an
+   imported result automatically. The default import caps are 2 GiB source,
+   2 GiB decoded audio, and 12 hours; normal History retention also applies.
+2. Search matches Raw, Edited, Formatted, Delivered, and corrected results.
+3. Select a session, then choose any result to inspect its source, Style,
    provider/model/prompt, structured-document, timing, and delivery evidence.
-3. Choose a timed span to play its bounded portion of retained audio. A session
+4. Choose a timed span to play its bounded portion of retained audio. A session
    remains searchable when audio is unavailable.
    After an interruption, History marks app-owned audio **Recovered** and
    offers whole-recording playback even when no timed transcript exists.
-4. Edit **Correction**, then choose **Save Correction**. This appends a new
+5. Edit **Correction**, then choose **Save Correction**. This appends a new
    corrected result; it never changes prior evidence.
-5. Choose **Retranscribe** to rerun local Apple speech against retained audio,
+6. Choose **Retranscribe** to rerun local Apple speech against retained audio,
    or choose a Style and **Reformat** to run the current local refinement path.
    A Recovery session begins with empty text by design; retranscription appends
    the first reusable Raw result. Unpinned recovered audio expires after 24
    hours, while its session and any resulting text remain searchable.
-6. Choose **Copy** for explicit clipboard recovery. For insertion, choose
+7. Choose **Copy** for explicit clipboard recovery. For insertion, choose
    **Insert in 3 Seconds**, focus a nonsecure empty caret in the destination,
    and wait. The app captures that fresh target after the delay and records the
    success or typed failure as a new Delivered result.
-7. Choose **Export** to write a `.voice_history` package containing versioned
+8. Choose **Export** to write a `.voice_history` package containing versioned
    `session.json`, streaming SHA-256 `checksums.json`, and, when retained, one
-   `audio.caf`. Manifest revision 3 includes audio-expiration and Recovery
-   provenance. Export does not mutate the stored session.
-8. Pin important audio against future automatic quota eviction. **Delete**
+   `audio.caf`. Manifest revision 4 includes input, audio-expiration, and
+   Recovery provenance. Export does not mutate the stored session.
+9. Pin important audio against future automatic quota eviction. **Delete**
    transactionally removes the selected session and its owned local audio;
    storage-level deletion is not a promise of secure SSD erasure.
 

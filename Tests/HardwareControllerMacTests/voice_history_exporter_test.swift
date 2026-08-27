@@ -59,7 +59,7 @@ struct VoiceHistoryExporterTest {
       VoiceHistoryExportChecksums.self,
       from: checksumData
     )
-    #expect(manifest.schemaRevision == 3)
+    #expect(manifest.schemaRevision == 4)
     #expect(manifest.document == document)
     #expect(manifest.results.count == 4)
     #expect(manifest.audioFilename == "audio.caf")
@@ -117,9 +117,42 @@ struct VoiceHistoryExporterTest {
       VoiceHistoryExportSession.self,
       from: Data(contentsOf: root.appending(path: "session.json"))
     )
-    #expect(manifest.schemaRevision == 3)
+    #expect(manifest.schemaRevision == 4)
     #expect(manifest.recoveryKind == .interruptedCapture)
     #expect(manifest.recoveredAt == recoveredAt)
+  }
+
+  @Test
+  func exportPreservesImportedAudioProvenance() async throws {
+    let root = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_import_export_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let item = VoiceSessionHistoryItem(
+      document: VoiceSessionDocument(
+        id: UUID(),
+        startedAt: Date(timeIntervalSince1970: 1_000),
+        endedAt: Date(timeIntervalSince1970: 1_001),
+        rawText: "Imported text.",
+        editedText: "Imported text.",
+        formattedText: "Imported text.",
+        deliveredText: "",
+        targetApplicationName: nil,
+        deliveryOutcome: .notAttempted,
+        inputKind: .importedAudio
+      ),
+      audioArtifactURL: nil
+    )
+
+    try await VoiceHistoryExporter().export(item, to: root)
+
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    let manifest = try decoder.decode(
+      VoiceHistoryExportSession.self,
+      from: Data(contentsOf: root.appending(path: "session.json"))
+    )
+    #expect(manifest.schemaRevision == 4)
+    #expect(manifest.document.inputKind == .importedAudio)
   }
 
   @Test

@@ -28,6 +28,7 @@ public enum VoiceHistoryResultOrigin:
   case retranscription
   case reformatting
   case redelivery
+  case audioImport
 }
 
 /// Maps one immutable text range to the retained session audio timeline.

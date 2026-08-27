@@ -68,6 +68,13 @@ deletion is visually distinct from reuse actions. When audio expires, the
 playback card names the applicable age, size, count, or low-disk rule while
 leaving transcript evidence available.
 
+The list header exposes one labeled import action beside quiet refresh. Import
+uses the native audio open panel and shows one shared progress state while local
+ASR, formatting, app-owned CAF finalization, and History commit run. The new
+row is selected and labeled **Imported recording**; transcript-only and
+audio-only outcomes use explicit non-error notices and keep recovery actions
+available.
+
 Profiles uses a stable Profile list and selected-Profile editor. Active state
 is separate from selection. General uses native form sections for Appearance,
 the Local Dictation microphone, Local AI Dictation, Voice History storage, and

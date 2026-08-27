@@ -3,7 +3,7 @@ import Foundation
 import HardwareControllerCore
 
 struct VoiceHistoryExportSession: Codable, Equatable, Sendable {
-  static let currentSchemaRevision = 3
+  static let currentSchemaRevision = 4
 
   let schemaRevision: Int
   let exportedAt: Date

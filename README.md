@@ -122,6 +122,8 @@ Voice History repairs app-owned partial, orphan, and interrupted-expiration
 audio at startup before applying storage limits. Recovered audio is marked,
 playable, and locally retranscribable without invented text; unpinned recovery
 audio expires after 24 hours while its History row remains searchable.
+History can also import a supported local recording, transcribe and format it
+on-device, and retain one app-owned copy without changing the original.
 
 ## Dictation Actions
 

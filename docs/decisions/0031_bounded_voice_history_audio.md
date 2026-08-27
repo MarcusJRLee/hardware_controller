@@ -34,7 +34,9 @@ only recovery artifact for a failed or incomplete delivery.
 - Keep duration, timed spans, immutable text results, search, and export
   metadata after audio expires. Export schema revision 2 added optional
   expiration time and reason; decision [0032](0032_voice_history_crash_recovery.md)
-  extends the manifest to revision 3 with Recovery provenance.
+  extended the manifest to revision 3 with Recovery provenance. Decision
+  [0036](0036_imported_voice_audio.md) later advances it to revision 4 with
+  Voice-session input provenance.
 - Use one shared History service for capture, browsing, preferences, and
   maintenance. Run policy and SQLite/file work on actors after finalization and
   at first startup access, outside hardware callbacks, target validation, and

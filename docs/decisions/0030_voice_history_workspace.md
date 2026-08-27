@@ -40,6 +40,10 @@ streaming SHA-256 `checksums.json`, and at most one copied CAF. Pin state
 anticipates M7 eviction. Deletion removes the session metadata and owned audio
 transactionally, quarantining the file until the database commit succeeds.
 
+Decision [0036](0036_imported_voice_audio.md) adds typed imported-audio input
+provenance and advances the export manifest to revision 4. Older documents and
+database rows decode as microphone capture.
+
 ## Consequences
 
 - Decision [0013](0013_application_navigation.md) remains the historical source

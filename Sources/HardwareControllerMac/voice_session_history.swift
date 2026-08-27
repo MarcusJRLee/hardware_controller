@@ -164,6 +164,15 @@ public protocol VoiceSessionHistoryRecording: Sendable {
   func cancel(sessionID: UUID) async
 }
 
+public protocol VoiceSessionHistoryImporting: Sendable {
+  /// Copies one external recording before atomically storing its document.
+  func importAudioSession(
+    _ document: VoiceSessionDocument,
+    from sourceURL: URL,
+    limits: VoiceAudioImportLimits
+  ) async throws
+}
+
 public protocol VoiceSessionHistoryRetentionManaging: Sendable {
   /// Applies validated caps immediately and to future completed sessions.
   func setRetentionSettings(
@@ -185,6 +194,7 @@ public protocol VoiceSessionHistoryRecoveryManaging: Sendable {
 
 public protocol VoiceSessionHistoryManaging:
   VoiceSessionHistoryRecording,
+  VoiceSessionHistoryImporting,
   VoiceSessionHistoryAccessing,
   VoiceSessionHistoryRetentionManaging,
   VoiceSessionHistoryRecoveryManaging
@@ -218,6 +228,14 @@ public struct UnavailableVoiceSessionHistory:
   }
 
   public func cancel(sessionID: UUID) async {}
+
+  public func importAudioSession(
+    _ document: VoiceSessionDocument,
+    from sourceURL: URL,
+    limits: VoiceAudioImportLimits
+  ) async throws {
+    throw failure
+  }
 
   public func recentSessions(limit: Int) async throws
     -> [VoiceSessionHistoryItem]
@@ -311,6 +329,7 @@ public final class SQLiteVoiceSessionHistory:
   private let reconciler: VoiceHistoryReconciler
   private let audioDirectory: URL
   private let recorderFactory: RecorderFactory
+  private let audioImporter = VoiceAudioArtifactImporter()
 
   public convenience init(rootDirectory: URL) throws {
     try self.init(
@@ -440,6 +459,12 @@ public final class SQLiteVoiceSessionHistory:
   }
 
   public func complete(_ document: VoiceSessionDocument) async throws {
+    guard document.inputKind == .microphoneCapture else {
+      await cancel(sessionID: document.id)
+      throw VoiceSessionHistoryError.invalidResult(
+        "Microphone completion requires capture input provenance."
+      )
+    }
     let recorder: (any VoiceAudioArtifactRecording)? = state.withLock { current in
       guard current?.sessionID == document.id else {
         return nil
@@ -470,6 +495,32 @@ public final class SQLiteVoiceSessionHistory:
       return current?.recorder
     }
     await recorder?.discard()
+  }
+
+  public func importAudioSession(
+    _ document: VoiceSessionDocument,
+    from sourceURL: URL,
+    limits: VoiceAudioImportLimits
+  ) async throws {
+    guard document.inputKind == .importedAudio else {
+      throw VoiceSessionHistoryError.invalidResult(
+        "An imported recording requires imported-audio provenance."
+      )
+    }
+    let audioURL = try await audioImporter.importAudio(
+      from: sourceURL,
+      sessionID: document.id,
+      audioDirectory: audioDirectory,
+      limits: limits
+    )
+    do {
+      try await store.insert(document, audioURL: audioURL)
+    } catch {
+      try? FileManager.default.removeItem(at: audioURL)
+      throw error
+    }
+    invalidateRetention()
+    scheduleRetention()
   }
 
   public func recentSessions(
