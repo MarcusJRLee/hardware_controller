@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | Explore the UI | `swift run HardwareController --demo` | No |
 | Verify a change | `scripts/check.sh` | No |
+| Verify portable Rust and C ABI | `scripts/check_rust.sh` | No |
 | Exercise real hardware | Signed build from `scripts/build_app.sh` | Yes |
 | Run an opt-in system check | [README verification commands](../README.md#opt-in-system-verification) | Named resource only |
 
@@ -25,8 +26,12 @@ unrelated parallel suites.
 | `Sources/HardwareControllerMac/` | IOKit, Accessibility, audio, speech, local refinement, persistence adapters, and process runtime. |
 | `Sources/HardwareControllerAudioBoundary/` | Narrow Objective-C exception boundary around AVFAudio operations. |
 | `Sources/HardwareControllerApp/` | AppKit application lifecycle, SwiftUI presentation, navigation, and presentation state. |
+| `crates/voice_core/` | Dependency-free portable Voice domain policy; unsafe Rust is denied. |
+| `crates/voice_ffi/` | Versioned synchronous C ABI and source-controlled public header. |
 | `Tests/*Tests/` | Colocated target-level unit and boundary tests mirroring source ownership. |
 | `Tests/*Tests/fixtures/` | Sanitized hardware and Local AI evidence used by deterministic tests. |
+| `Tests/cuj/` | Versioned cross-language behavior fixtures. |
+| `Tests/voice_ffi/` | Real C consumers for ABI compile, link, and execution checks. |
 | `packaging/` | Bundle metadata, entitlements, and source artwork. |
 | `scripts/` | Verification, private signing, release validation, and distribution tooling. |
 
@@ -46,6 +51,11 @@ Tests must not prompt for permissions, require a connected Device, contact a
 remote host, or consume a real microphone unless an explicit opt-in flag names
 that dependency. Use immutable fixtures and injected clocks, stores, and
 system boundaries for the default suite.
+
+Portable policy changes update the shared CUJ fixture, Rust test, Swift
+conformance test, public header when applicable, and decision record together.
+Keep unsafe code inside `voice_ffi`; platform wrappers translate values and
+errors without adding policy.
 
 ## Adding a Driver
 

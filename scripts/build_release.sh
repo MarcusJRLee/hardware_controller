@@ -235,7 +235,10 @@ main() {
     Package.swift Sources Tests
   xcrun clang-format --dry-run --Werror \
     Sources/HardwareControllerAudioBoundary/audio_engine_exception_boundary.m \
-    Sources/HardwareControllerAudioBoundary/include/audio_engine_exception_boundary.h
+    Sources/HardwareControllerAudioBoundary/include/audio_engine_exception_boundary.h \
+    crates/voice_ffi/include/voice_ffi.h \
+    Tests/voice_ffi/retention_smoke.c
+  scripts/check_rust.sh
   swift test
   HC_RUN_SQLITE_CONTENTION=1 swift test \
     --filter finalizationWaitsThroughTransientDatabaseContention

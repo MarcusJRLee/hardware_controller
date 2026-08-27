@@ -1,6 +1,6 @@
 # 0029: Local Voice platform expansion
 
-- **Status:** Accepted; macOS M1–M10 implemented
+- **Status:** Accepted; macOS M1–M11 implemented
 - **Date:** 2026-08-25
 - **Amends:**
   [`0001_native_macos_stack.md`](0001_native_macos_stack.md),
@@ -205,3 +205,11 @@ record action on one process-owned Local AI command dispatcher under
 [decision 0034](0034_voice_trigger_convergence.md). Trigger adapters retain only
 their interaction semantics; session lifecycle, ASR, formatting, History,
 retention, target validation, and delivery stay shared.
+
+M11 begins portable-engine convergence under
+[decision 0035](0035_portable_voice_c_abi.md). A dependency-free Rust planner
+and the Swift production baseline evaluate one versioned retention CUJ fixture.
+A synchronous `V1` C ABI uses caller-owned buffers, contains unsafe code in one
+audited crate, and passes Rust layout plus real C compile/link/execute checks.
+The shipped macOS app remains on the Swift planner until a later vertical slice
+adopts the Rust implementation.

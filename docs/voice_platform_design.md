@@ -317,11 +317,13 @@ Metal, or Core ML kernels merely to satisfy language purity. Go has no planned
 hot-path role because it adds another runtime without a model-serving advantage
 on Apple devices.
 
-Compare UniFFI and a narrow C ABI during the first engine spike. The selected
-binding must provide typed Swift/Kotlin wrappers, explicit ownership, no
-unbounded callbacks, and Swift 6 `Sendable` compatibility. Keep the Rust domain
-free of Apple-only types so later Kotlin and native desktop adapters do not
-require an engine rewrite. WASM compatibility is not a current selection gate.
+The first engine spike selects a narrow synchronous C ABI under
+[decision 0035](decisions/0035_portable_voice_c_abi.md). Caller-owned buffers,
+versioned layouts, no retained pointers or callbacks, and a real C consumer
+make ownership explicit and let thin Swift/Kotlin wrappers remain typed. The
+dependency-free Rust domain imports no Apple type. Reevaluate UniFFI for a later
+object-heavy or asynchronous boundary when its Swift 6 `Sendable` support meets
+the same gates. WASM compatibility is not a current selection gate.
 
 ## Formatting and backtracking
 
@@ -515,13 +517,17 @@ test first or batch the entire implementation behind mocked internals.
 
 ### C2 — portable model and storage spine
 
+- Retention tracer complete: one shared CUJ fixture passes through the Swift
+  baseline and dependency-free Rust policy; the versioned C ABI passes layout
+  and real-consumer checks.
 - Benchmark ASR candidates against the same corpus and device tiers; publish the
   selection evidence before choosing defaults.
 - Introduce the Rust engine behind the stable CUJ contract; run the same tests
   against Swift baseline and Rust implementation during migration.
 - Pass M6–M10 for History, retention, crash recovery, imported files, offline
   enforcement, and model fallback.
-- Benchmark UniFFI versus a narrow C ABI and record the binding/runtime decision.
+- Design separate streaming ownership before exporting ASR or formatting; do
+  not assume the synchronous retention ABI fits an async model boundary.
 
 ### C3 — macOS hardening
 

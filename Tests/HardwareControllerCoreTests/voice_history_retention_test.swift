@@ -7,6 +7,67 @@ struct VoiceHistoryRetentionPlannerTest {
   private let now = Date(timeIntervalSince1970: 2_000_000_000)
 
   @Test
+  func portableFixtureMatchesSwiftPolicy() throws {
+    let fixtureURL = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .appending(path: "cuj/voice_retention_v1.json")
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let fixture = try decoder.decode(
+      RetentionFixture.self,
+      from: Data(contentsOf: fixtureURL)
+    )
+    #expect(fixture.revision == 1)
+
+    for fixtureCase in fixture.cases {
+      let candidates = try fixtureCase.candidates.map { candidate in
+        let identifier = try #require(UUID(uuidString: candidate.id))
+        return VoiceHistoryRetentionCandidate(
+          id: identifier,
+          endedAt: date(candidate.endedAtUnixMilliseconds),
+          audioBytes: candidate.audioBytes,
+          isPinned: candidate.isPinned,
+          isActive: candidate.isActive,
+          isSoleRecoveryArtifact: candidate.isSoleRecoveryArtifact,
+          recoveryExpiresAt: candidate.recoveryExpiresAtUnixMilliseconds.map(
+            date
+          )
+        )
+      }
+      let plan = try VoiceHistoryRetentionPlanner.plan(
+        candidates: candidates,
+        settings: VoiceHistoryRetentionSettings(
+          maximumAgeDays: fixtureCase.settings.maximumAgeDays,
+          maximumAudioBytes: fixtureCase.settings.maximumAudioBytes,
+          maximumArtifactCount: fixtureCase.settings.maximumArtifactCount
+        ),
+        now: date(fixtureCase.nowUnixMilliseconds),
+        lowDiskReclaimBytes: fixtureCase.lowDiskReclaimBytes
+      )
+      let expectedDecisions = try fixtureCase.expected.decisions.map {
+        decision in
+        VoiceHistoryRetentionDecision(
+          sessionID: try #require(UUID(uuidString: decision.sessionId)),
+          reason: decision.reason,
+          audioBytes: decision.audioBytes
+        )
+      }
+      let expected = fixtureCase.expected
+
+      #expect(plan.decisions == expectedDecisions, "\(fixtureCase.name)")
+      #expect(plan.reclaimedBytes == expected.reclaimedBytes)
+      #expect(plan.lowDiskShortfallBytes == expected.lowDiskShortfallBytes)
+      #expect(plan.remainingAudioBytes == expected.remainingAudioBytes)
+      #expect(
+        plan.remainingArtifactCount == expected.remainingArtifactCount
+      )
+      #expect(plan.exceedsByteLimit == expected.exceedsByteLimit)
+      #expect(plan.exceedsArtifactLimit == expected.exceedsArtifactLimit)
+    }
+  }
+
+  @Test
   func defaultsAreExplicitAndValidated() throws {
     let settings = try VoiceHistoryRetentionSettings.macOSDefault.validated()
 
@@ -283,5 +344,55 @@ struct VoiceHistoryRetentionPlannerTest {
       reason: reason,
       audioBytes: candidate.audioBytes
     )
+  }
+
+  private func date(_ unixMilliseconds: Int64) -> Date {
+    Date(timeIntervalSince1970: Double(unixMilliseconds) / 1_000)
+  }
+
+  private struct RetentionFixture: Decodable {
+    let revision: Int
+    let cases: [RetentionFixtureCase]
+  }
+
+  private struct RetentionFixtureCase: Decodable {
+    let name: String
+    let nowUnixMilliseconds: Int64
+    let settings: RetentionFixtureSettings
+    let lowDiskReclaimBytes: Int64
+    let candidates: [RetentionFixtureCandidate]
+    let expected: RetentionFixturePlan
+  }
+
+  private struct RetentionFixtureSettings: Decodable {
+    let maximumAgeDays: Int?
+    let maximumAudioBytes: Int64?
+    let maximumArtifactCount: Int?
+  }
+
+  private struct RetentionFixtureCandidate: Decodable {
+    let id: String
+    let endedAtUnixMilliseconds: Int64
+    let audioBytes: Int64
+    let isPinned: Bool
+    let isActive: Bool
+    let isSoleRecoveryArtifact: Bool
+    let recoveryExpiresAtUnixMilliseconds: Int64?
+  }
+
+  private struct RetentionFixturePlan: Decodable {
+    let decisions: [RetentionFixtureDecision]
+    let reclaimedBytes: Int64
+    let lowDiskShortfallBytes: Int64
+    let remainingAudioBytes: Int64
+    let remainingArtifactCount: Int
+    let exceedsByteLimit: Bool
+    let exceedsArtifactLimit: Bool
+  }
+
+  private struct RetentionFixtureDecision: Decodable {
+    let sessionId: String
+    let reason: VoiceHistoryAudioExpirationReason
+    let audioBytes: Int64
   }
 }

@@ -24,6 +24,7 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 | Voice M8 recovery | Startup deterministically repairs partial, orphan, and expiration-quarantine audio; isolates corrupt rows; preserves a corrupt database; retains text on audio failure; and exposes recovered audio for playback/retranscription for 24 hours. | [`decisions/0032_voice_history_crash_recovery.md`](decisions/0032_voice_history_crash_recovery.md) |
 | Voice M9 local enforcement | Typed provider locality rejects remote-capable adapters before invocation; formatting degrades to validated Edited text; ASR loss preserves captured audio without target mutation. | [`decisions/0033_local_only_voice_enforcement.md`](decisions/0033_local_only_voice_enforcement.md) |
 | Voice M10 trigger convergence | Physical Controls, Hold/latch Voice chords, and the menu-bar record action submit typed commands to one Local AI session workflow without changing History or delivery meaning. | [`decisions/0034_voice_trigger_convergence.md`](decisions/0034_voice_trigger_convergence.md) |
+| Voice M11 portable tracer | The Swift baseline and dependency-free Rust retention planner pass one CUJ fixture; a versioned caller-owned C ABI passes layout and real-consumer checks. | [`decisions/0035_portable_voice_c_abi.md`](decisions/0035_portable_voice_c_abi.md) |
 | Model recommendation | Qwen 3.5 4B is digest-pinned from the fixed evaluation corpus. | [`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md) |
 | Profiles | Transactional named Profiles with independent per-Device setups and active-Action cleanup. | [`decisions/0014_multi_profile_device_configuration.md`](decisions/0014_multi_profile_device_configuration.md) |
 | Application | Controller, History, Profiles, and General in one native foreground window with Dock and menu-bar presence. | [`ux_spec.md`](ux_spec.md) |
@@ -32,7 +33,7 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 
 ## Approved next program
 
-The local Voice expansion is accepted; macOS M1–M10 are implemented across the
+The local Voice expansion is accepted; macOS M1–M11 are implemented across the
 current stacked branches. macOS and iOS are the active roadmap; Android,
 Windows, and Linux remain architectural line-of-sight platforms; web and mobile
 web are deferred. The acceptance and execution authorities are:
@@ -53,13 +54,13 @@ promotion.
 
 | Gate | Contract | Current automated evidence |
 | --- | --- | --- |
-| HID dispatch | p50 ≤ 3 ms, p95 ≤ 8 ms, p99 ≤ 15 ms, max ≤ 30 ms across 10,000 transitions; no loss or duplication. | M7 current-source p50 0.016 ms, p95 0.060 ms, p99 0.115 ms, max 0.846 ms; 10,000 ordered dispatches. |
+| HID dispatch | p50 ≤ 3 ms, p95 ≤ 8 ms, p99 ≤ 15 ms, max ≤ 30 ms across 10,000 transitions; no loss or duplication. | M11 current-source p50 0.012 ms, p95 0.018 ms, p99 0.022 ms, max 0.121 ms; 10,000 ordered dispatches. |
 | Microphone activation | Warm maximum ≤ 250 ms. | p50 48.118 ms, p95/p99/max 87.050 ms across five starts; one-time preparation 149.539 ms. |
 | Local AI semantic safety | No accepted provider output may corrupt protected content; invalid output falls back to Edited text once. | Fixed 17-case corpus plus spoken-edit, replay, Style, structured-block, renderer, controller, and migration tests. |
 | Local AI refinement | Warm raw-final-to-refined p95 ≤ 1 s on the reference Mac. | Prompt-5 Qwen 3.5 4B p95 0.908 s. |
 | Local AI end to end | Warm release-to-insertion p95 ≤ 1.5 s on the reference Mac. | Prompt-5 prewarmed M4 production-controller p95 1.004 s. |
 | Local AI deadline | Preparation plus generation must fall back within three seconds after final speech text. | Deterministic deadline and late-output tests. |
-| Voice History | Warm 5,000-session search p95 ≤ 250 ms; startup recovery precedes retention without delaying the input runtime. | M8 current-source p95 2.639 ms; the M10 corpus passes 480 tests in 72 suites across recovery, storage, trigger convergence, presentation, and existing behavior. |
+| Voice History | Warm 5,000-session search p95 ≤ 250 ms; startup recovery precedes retention without delaying the input runtime. | M8 current-source p95 2.639 ms; M11 passes 482 Swift tests in 72 suites plus 10 Rust domain/ABI tests and one linked C consumer. |
 | Privacy | Voice artifacts remain app-owned and local; no speech content is logged; no remote-capable provider receives a call; Ollama cannot reach a nonloopback endpoint. | Deterministic provider-boundary, SQLite/CAF, fallback, static-scan, and fixed-endpoint transport tests. |
 | Documentation | Canonical docs describe current behavior and all links resolve. | All local links resolve. |
 

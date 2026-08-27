@@ -39,7 +39,7 @@ diagnostics observe that path but cannot block it.
 
 | Concern             | Choice                                                                        |
 | ------------------- | ----------------------------------------------------------------------------- |
-| Language            | Swift 6 with strict concurrency.                                              |
+| Languages           | Swift 6 with strict concurrency; Rust 1.98 for portable Voice policy.         |
 | App UI              | SwiftUI four-destination shell hosted by one AppKit window controller.        |
 | Hardware            | IOKit `IOHIDManager` and `IOHIDDevice` APIs.                                  |
 | Synthetic shortcuts | Core Graphics `CGEvent`, guarded by Accessibility trust.                      |
@@ -50,8 +50,8 @@ diagnostics observe that path but cannot block it.
 | Transcript delivery  | Accessibility insertion plus guarded buffered Unicode event routes.            |
 | Persistence         | Versioned Codable JSON for configuration; system SQLite plus atomic CAF artifacts for Voice History. |
 | Logging and timing  | Unified Logging, `OSSignposter`, and a monotonic clock.                       |
-| Tests               | Swift Testing plus scripted packaged-UI and Accessibility inspection.        |
-| Dependencies        | Apple frameworks only in the app; Ollama is an optional separately installed local service. |
+| Tests               | Swift Testing, Rust/C conformance, and scripted packaged-UI and Accessibility inspection. |
+| Dependencies        | Apple frameworks only in the app; portable retention has no production crate dependency; Ollama is an optional separately installed local service. |
 | Distribution        | Apache License 2.0 source; Apple Development-signed personal iterations; gated Developer ID, notarization, and free-DMG workflow for a future approved public release. |
 
 [`decisions/0001_native_macos_stack.md`](decisions/0001_native_macos_stack.md)
@@ -92,6 +92,23 @@ Pure, hardware-agnostic value types and state machines:
 
 Domain code imports no IOKit, SwiftUI, AppKit, Accessibility, file-system, or
 logging frameworks.
+
+### Portable Voice core
+
+`voice_core` is the first cross-platform engine tracer. It owns a dependency-
+free retention policy using UUID bytes, Unix epoch milliseconds, immutable
+candidates, typed validation failures, and ordered decisions. It imports no
+Apple type and denies unsafe Rust. `Tests/cuj/voice_retention_v1.json` is read by
+both Rust and Swift, proving policy parity while the shipped macOS app still
+uses the Swift baseline.
+
+`voice_ffi` exposes that policy through one synchronous `V1` C ABI. The caller
+owns candidate and decision memory; a capacity-probe call reports the required
+decision count. No callback, allocator, thread, runtime handle, or pointer
+survives return. Reserved bytes and Boolean encodings fail closed. Rust layout
+tests plus a real C17 consumer protect the source-controlled header. Swift and
+Kotlin wrappers remain typed platform adapters and may not add retention policy.
+See [decision 0035](decisions/0035_portable_voice_c_abi.md).
 
 ### HID transport
 

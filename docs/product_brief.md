@@ -277,7 +277,9 @@ edits; M5 preserves target ownership; M6 adds searchable, reusable History.
 M7 bounds retained audio by age, bytes, count, and low disk while protecting
 active, pinned, and sole recovery artifacts. M8 reconciles crash artifacts and
 isolates corruption. M9 enforces provider locality and retains captured audio
-after ASR failure. The portable engine and iOS remain pending. See
+after ASR failure. M10 converges every macOS Voice trigger; M11 proves the first
+portable retention policy and C ABI without changing the shipped Swift runtime.
+Remaining portable engine work and iOS remain pending. See
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 [`voice_platform_design.md`](voice_platform_design.md), and
 [`voice_cujs.md`](voice_cujs.md).
