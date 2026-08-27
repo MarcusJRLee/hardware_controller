@@ -192,12 +192,21 @@ package and authenticated manifest immediately before resolving one model-role
 payload. A Swift actor owns one prewarmed opaque C context, converts the
 app-owned 16 kHz mono CAF to finite float PCM, and receives bounded UTF-8 plus
 timed segments. The containing app alone links and embeds whisper.cpp; neither
-extension sees runtime symbols or model paths. Stop now publishes real Raw text
-or an explicit failure, never the K0 placeholder. Formatting and History remain
-the next I2 slices. See
-[decision 0040](decisions/0040_ios_keyboard_activation_and_handoff.md) and
-[decision 0041](decisions/0041_ios_model_package_admission.md), and
-[decision 0042](decisions/0042_ios_whisper_file_asr.md).
+extension sees runtime symbols or model paths. Stop produces real timed Raw text
+or an explicit failure, never the K0 placeholder. The same platform-neutral
+spoken-edit, semantic-document, renderer, Style, and retention sources used by
+macOS compile into a narrow static iOS core target. The containing app applies
+those deterministic stages, copies the stopped CAF into actor-owned History,
+and commits a versioned SQLite payload before it publishes matching Formatted
+text to the Keychain handoff. History stores immutable Raw, Edited, Formatted,
+timed-segment, model, Style, digest, byte-count, and audio-expiry evidence; its
+UI searches, discloses Raw/model provenance, and plays retained CAFs. Startup
+removes incomplete and unreferenced app-owned audio. Data Protection and backup
+exclusion apply to the owned History directory, database family, and audio. See
+[decision 0040](decisions/0040_ios_keyboard_activation_and_handoff.md),
+[decision 0041](decisions/0041_ios_model_package_admission.md),
+[decision 0042](decisions/0042_ios_whisper_file_asr.md), and
+[decision 0043](decisions/0043_ios_local_formatting_and_history.md).
 
 ### HID transport
 

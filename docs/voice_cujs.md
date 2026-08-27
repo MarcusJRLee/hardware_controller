@@ -1,8 +1,8 @@
 # Voice critical user journeys
 
 **Status:** Accepted behavior contract; macOS M1–M15, iOS Gate K0, I1 local
-onboarding and Model-package admission, and the first I2 Raw-ASR slice are
-implemented. The authority is
+onboarding and Model-package admission, and I2 through local formatting and
+History are implemented. The authority is
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md).
 
 ## Purpose
@@ -381,12 +381,19 @@ by the extension.
 
 **Current C4 evidence:** the containing app can persist one compatible active
 ASR package, prewarm a pinned whisper.cpp context, revalidate all selected bytes
-through Rust immediately before use, convert its CAF to timed Raw text, and
-publish only that real result. Wrong runtimes, missing selection, changed bytes,
-and bounded-output failures remain explicit and do not invent text. A native C
-integration test crosses the production framework with pinned model/audio and
-enforces a permissive RTF gate. Formatting, History commit, and the complete
-signed-device keyboard loop remain required before I2 is accepted.
+through Rust immediately before use, and convert its CAF to timed Raw text. One
+shared deterministic engine applies typed spoken edits and validated semantic
+paragraph/list blocks while preserving Raw. The containing app commits Raw,
+Edited, Formatted, timed segments, Style, model provenance, digest-verified CAF,
+and retention metadata to searchable local History before publishing
+keyboard-ready text. History reload, escaped search, playback, age/byte/count
+expiry, transcript preservation, and partial/orphan cleanup pass real
+SQLite/filesystem tests. Wrong runtimes, missing selection, changed bytes,
+bounded-output failures, and unavailable History remain explicit and do not
+invent or deliver text. A native C integration test crosses the production
+framework with pinned model/audio and enforces a permissive RTF gate. Style
+selection and the complete signed-device keyboard loop remain required before
+I2 is accepted.
 
 **Gate K0 evidence:** a signed app, keyboard, and Control Center extension share
 only bounded this-device-only Keychain records. The containing app records a real

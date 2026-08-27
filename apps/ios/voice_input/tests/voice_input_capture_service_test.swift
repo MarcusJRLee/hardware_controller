@@ -40,7 +40,10 @@ final class VoiceInputCaptureServiceTest: XCTestCase {
       store: store,
       captureURL: FileManager.default.temporaryDirectory
         .appendingPathComponent("\(UUID().uuidString).caf"),
-      asrWorkflow: workflow
+      asrWorkflow: workflow,
+      sessionFinalizer: VoiceInputSessionFinalizer(
+        history: UnusedHistoryStore()
+      )
     )
     let firstSessionID = UUID()
     let firstStart = Task {
@@ -108,6 +111,18 @@ private struct UnusedTranscriber: VoiceInputTranscribing {
     audioURL _: URL,
     model _: VoiceInputInstalledModelPackage
   ) async throws -> VoiceInputRawTranscript {
+    throw CaptureServiceTestError.unused
+  }
+}
+
+private struct UnusedHistoryStore: VoiceInputHistoryStoring {
+  func save(
+    sessionID _: UUID,
+    startedAt _: Date,
+    endedAt _: Date,
+    transcript _: VoiceInputProcessedTranscript,
+    sourceAudioURL _: URL
+  ) async throws -> VoiceInputHistorySession {
     throw CaptureServiceTestError.unused
   }
 }

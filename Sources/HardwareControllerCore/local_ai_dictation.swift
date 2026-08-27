@@ -1,10 +1,5 @@
 import Foundation
 
-public enum LocalAIProviderKind: String, CaseIterable, Codable, Sendable {
-  case appleOnDevice
-  case ollama
-}
-
 /// Declares the furthest boundary a provider can cross with Voice content.
 public enum LocalAIProviderLocality: Equatable, Sendable {
   case inProcess

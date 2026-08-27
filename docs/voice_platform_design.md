@@ -1,8 +1,9 @@
 # Local-first voice platform design
 
 **Status:** Accepted roadmap; macOS M1–M15, iOS Gate K0, I1 onboarding and Model
-admission, and the first I2 Raw-ASR slice are implemented on the current stacked
-branches. Current evidence is called out explicitly. The durable decision is
+admission, and I2 through local formatting and History are implemented on the
+current stacked branches. Current evidence is called out explicitly. The
+durable decision is
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 and [`voice_cujs.md`](voice_cujs.md) is the acceptance contract.
 
@@ -330,6 +331,14 @@ revalidates the active package and resolves the digest-verified model role; a
 Swift actor exclusively owns the opaque C runtime context and prewarms it.
 Framework and model binaries stay out of source control. sherpa-onnx remains
 the streaming challenger and must beat the same physical-device corpus.
+
+Decision [0043](decisions/0043_ios_local_formatting_and_history.md) compiles the
+existing deterministic spoken-edit, semantic-document, renderer, Style, and
+retention sources into the iOS app. The containing app keeps the full Raw stage,
+commits Raw/Edited/Formatted plus copied audio and model evidence to system
+SQLite before publishing keyboard-ready text, and applies the accepted iOS
+90-day/1-GiB/2,000-artifact limits. A later local text-model adapter may improve
+surface style, but it must preserve these stages and deterministic fallback.
 
 ## Formatting and backtracking
 

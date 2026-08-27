@@ -3,13 +3,13 @@ import Foundation
 import HardwareControllerVoiceFFI
 import VoiceWhisperBridge
 
-struct VoiceInputTranscriptSegment: Equatable, Sendable {
+struct VoiceInputTranscriptSegment: Codable, Equatable, Sendable {
   let startMilliseconds: Int64
   let endMilliseconds: Int64
   let text: String
 }
 
-struct VoiceInputRawTranscript: Equatable, Sendable {
+struct VoiceInputRawTranscript: Codable, Equatable, Sendable {
   let text: String
   let segments: [VoiceInputTranscriptSegment]
   let modelPackageID: String

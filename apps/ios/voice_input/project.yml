@@ -22,6 +22,7 @@ targets:
         buildPhase: resources
     dependencies:
       - target: VoiceInputShared
+      - target: HardwareControllerVoiceCore
       - target: HardwareControllerVoiceFFI
         embed: false
       - target: VoiceWhisperBridge
@@ -50,6 +51,7 @@ targets:
         UILaunchScreen: {}
     settings:
       base:
+        OTHER_LDFLAGS: $(inherited) -lsqlite3
         PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput
         TARGETED_DEVICE_FAMILY: 1
 
@@ -62,6 +64,31 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.shared
+
+  HardwareControllerVoiceCore:
+    type: framework.static
+    platform: iOS
+    sources:
+      - path: ../../../Sources/HardwareControllerCore/local_ai_provider_kind.swift
+        group: portable_voice_core
+      - path: ../../../Sources/HardwareControllerCore/voice_formatted_document_builder.swift
+        group: portable_voice_core
+      - path: ../../../Sources/HardwareControllerCore/voice_formatted_text_renderer.swift
+        group: portable_voice_core
+      - path: ../../../Sources/HardwareControllerCore/voice_formatting.swift
+        group: portable_voice_core
+      - path: ../../../Sources/HardwareControllerCore/voice_history_retention.swift
+        group: portable_voice_core
+      - path: ../../../Sources/HardwareControllerCore/voice_spoken_edit.swift
+        group: portable_voice_core
+      - path: ../../../Sources/HardwareControllerCore/voice_spoken_edit_engine.swift
+        group: portable_voice_core
+      - path: ../../../Sources/HardwareControllerCore/voice_spoken_edit_replayer.swift
+        group: portable_voice_core
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.voicecore
 
   HardwareControllerVoiceFFI:
     type: framework.static
@@ -166,6 +193,7 @@ targets:
     dependencies:
       - target: VoiceInputShared
       - target: VoiceInput
+      - target: HardwareControllerVoiceCore
       - target: HardwareControllerVoiceFFI
         embed: false
     entitlements:
