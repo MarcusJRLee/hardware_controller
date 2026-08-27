@@ -20,6 +20,8 @@ identify deep implementation modules without changing that language.
 | Voice chord | Optional machine-wide exact shortcut dedicated to Voice capture and independent of Binding keyboard fallbacks. |
 | Latched capture | Voice capture kept active after a valid double press until the next valid double press. |
 | Refinement provider | Typed local text-to-text boundary implemented by Apple Foundation Models or fixed-loopback Ollama. |
+| Portable Voice core | Dependency-free Rust domain policy shared through versioned CUJ fixtures; it contains no platform lifecycle or UI behavior. |
+| Voice FFI | Versioned synchronous C ABI over the Portable Voice core; callers own every buffer and no pointer survives a call. |
 | Target lease | Captured editable element, process, caret/selection, and delivery capability revalidated before mutation. |
 | Nearby context | Optional bounded text around the caret from an approved nonsecure multiline target, held only for one Local AI session. |
 | Personal dictionary | Machine-wide recognition vocabulary plus deterministic spoken-form replacements. |

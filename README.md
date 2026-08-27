@@ -12,7 +12,7 @@ inference.
 ## Quick start
 
 Requirements: Apple silicon, macOS 15 or later, and Xcode 26 or a compatible
-Swift 6 toolchain.
+Swift 6 toolchain. Contributors also need rustup; the repository pins Rust 1.98.
 
 ```bash
 git clone https://github.com/MarcusJRLee/hardware_controller.git
@@ -29,6 +29,7 @@ identity, or privacy permission.
 | --- | --- | --- |
 | Explore the app | `swift run HardwareController --demo` | None |
 | Contribute | `scripts/check.sh` | Xcode 26 or compatible Swift 6 toolchain |
+| Verify only the portable core | `scripts/check_rust.sh` | rustup and a C17 compiler |
 | Use real hardware | [Signed hardware build](#signed-hardware-build) | Apple Development identity and supported Device |
 | Install as a nondeveloper | [Public distribution](docs/public_distribution.md) | Notarized public release; not yet available |
 
@@ -217,6 +218,8 @@ but preserves a model that another local Ollama client already had running.
   browser, and validated terminal targets.
 - Apple Foundation Models and optional local Ollama refinement behind one typed
   provider contract.
+- A dependency-free Rust retention policy and versioned caller-owned C ABI,
+  checked against the current Swift policy through one shared CUJ fixture.
 - Atomic, schema-versioned local Profiles and application preferences with
   explicit migration, corruption recovery, and forward-schema protection.
 - A native Controller, History, Profiles, and General shell with Dock and

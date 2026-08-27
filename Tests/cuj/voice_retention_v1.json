@@ -1,0 +1,380 @@
+{
+  "revision": 1,
+  "cases": [
+    {
+      "name": "age_preserves_protected_audio",
+      "now_unix_milliseconds": 2000000000000,
+      "settings": {
+        "maximum_age_days": 90,
+        "maximum_audio_bytes": null,
+        "maximum_artifact_count": null
+      },
+      "low_disk_reclaim_bytes": 0,
+      "candidates": [
+        {
+          "id": "00000000-0000-0000-0000-000000000005",
+          "ended_at_unix_milliseconds": 1992224000000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000004",
+          "ended_at_unix_milliseconds": 1991360000000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": true,
+          "recovery_expires_at_unix_milliseconds": null
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000003",
+          "ended_at_unix_milliseconds": 1991360000000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": true,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000002",
+          "ended_at_unix_milliseconds": 1991360000000,
+          "audio_bytes": 10,
+          "is_pinned": true,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000001",
+          "ended_at_unix_milliseconds": 1992137600000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "session_id": "00000000-0000-0000-0000-000000000001",
+            "reason": "age_limit",
+            "audio_bytes": 10
+          }
+        ],
+        "reclaimed_bytes": 10,
+        "low_disk_shortfall_bytes": 0,
+        "remaining_audio_bytes": 40,
+        "remaining_artifact_count": 4,
+        "exceeds_byte_limit": false,
+        "exceeds_artifact_limit": false
+      }
+    },
+    {
+      "name": "stable_artifact_order",
+      "now_unix_milliseconds": 2000000000000,
+      "settings": {
+        "maximum_age_days": null,
+        "maximum_audio_bytes": null,
+        "maximum_artifact_count": 1
+      },
+      "low_disk_reclaim_bytes": 0,
+      "candidates": [
+        {
+          "id": "00000000-0000-0000-0000-000000000003",
+          "ended_at_unix_milliseconds": 1999913600000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000002",
+          "ended_at_unix_milliseconds": 1999827200000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000001",
+          "ended_at_unix_milliseconds": 1999827200000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "session_id": "00000000-0000-0000-0000-000000000001",
+            "reason": "artifact_limit",
+            "audio_bytes": 10
+          },
+          {
+            "session_id": "00000000-0000-0000-0000-000000000002",
+            "reason": "artifact_limit",
+            "audio_bytes": 10
+          }
+        ],
+        "reclaimed_bytes": 20,
+        "low_disk_shortfall_bytes": 0,
+        "remaining_audio_bytes": 10,
+        "remaining_artifact_count": 1,
+        "exceeds_byte_limit": false,
+        "exceeds_artifact_limit": false
+      }
+    },
+    {
+      "name": "byte_limit_reclaims_to_low_water",
+      "now_unix_milliseconds": 2000000000000,
+      "settings": {
+        "maximum_age_days": null,
+        "maximum_audio_bytes": 100,
+        "maximum_artifact_count": null
+      },
+      "low_disk_reclaim_bytes": 0,
+      "candidates": [
+        {
+          "id": "00000000-0000-0000-0000-000000000001",
+          "ended_at_unix_milliseconds": 1999049600000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000002",
+          "ended_at_unix_milliseconds": 1999136000000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000003",
+          "ended_at_unix_milliseconds": 1999222400000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000004",
+          "ended_at_unix_milliseconds": 1999308800000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000005",
+          "ended_at_unix_milliseconds": 1999395200000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000006",
+          "ended_at_unix_milliseconds": 1999481600000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000007",
+          "ended_at_unix_milliseconds": 1999568000000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000008",
+          "ended_at_unix_milliseconds": 1999654400000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000009",
+          "ended_at_unix_milliseconds": 1999740800000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000010",
+          "ended_at_unix_milliseconds": 1999827200000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000011",
+          "ended_at_unix_milliseconds": 1999913600000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "session_id": "00000000-0000-0000-0000-000000000001",
+            "reason": "byte_limit",
+            "audio_bytes": 10
+          },
+          {
+            "session_id": "00000000-0000-0000-0000-000000000002",
+            "reason": "byte_limit",
+            "audio_bytes": 10
+          }
+        ],
+        "reclaimed_bytes": 20,
+        "low_disk_shortfall_bytes": 0,
+        "remaining_audio_bytes": 90,
+        "remaining_artifact_count": 9,
+        "exceeds_byte_limit": false,
+        "exceeds_artifact_limit": false
+      }
+    },
+    {
+      "name": "low_disk_reports_protected_shortfall",
+      "now_unix_milliseconds": 2000000000000,
+      "settings": {
+        "maximum_age_days": null,
+        "maximum_audio_bytes": null,
+        "maximum_artifact_count": null
+      },
+      "low_disk_reclaim_bytes": 60,
+      "candidates": [
+        {
+          "id": "00000000-0000-0000-0000-000000000003",
+          "ended_at_unix_milliseconds": 1999913600000,
+          "audio_bytes": 30,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000002",
+          "ended_at_unix_milliseconds": 1999827200000,
+          "audio_bytes": 40,
+          "is_pinned": true,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000001",
+          "ended_at_unix_milliseconds": 1999740800000,
+          "audio_bytes": 20,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": null
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "session_id": "00000000-0000-0000-0000-000000000001",
+            "reason": "low_disk",
+            "audio_bytes": 20
+          },
+          {
+            "session_id": "00000000-0000-0000-0000-000000000003",
+            "reason": "low_disk",
+            "audio_bytes": 30
+          }
+        ],
+        "reclaimed_bytes": 50,
+        "low_disk_shortfall_bytes": 10,
+        "remaining_audio_bytes": 40,
+        "remaining_artifact_count": 1,
+        "exceeds_byte_limit": false,
+        "exceeds_artifact_limit": false
+      }
+    },
+    {
+      "name": "recovery_window_precedes_general_limits",
+      "now_unix_milliseconds": 2000000000000,
+      "settings": {
+        "maximum_age_days": null,
+        "maximum_audio_bytes": null,
+        "maximum_artifact_count": null
+      },
+      "low_disk_reclaim_bytes": 0,
+      "candidates": [
+        {
+          "id": "00000000-0000-0000-0000-000000000003",
+          "ended_at_unix_milliseconds": 1999827200000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": 2000000000001
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000002",
+          "ended_at_unix_milliseconds": 1999827200000,
+          "audio_bytes": 10,
+          "is_pinned": true,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": 1999999999999
+        },
+        {
+          "id": "00000000-0000-0000-0000-000000000001",
+          "ended_at_unix_milliseconds": 1999827200000,
+          "audio_bytes": 10,
+          "is_pinned": false,
+          "is_active": false,
+          "is_sole_recovery_artifact": false,
+          "recovery_expires_at_unix_milliseconds": 1999999999999
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "session_id": "00000000-0000-0000-0000-000000000001",
+            "reason": "recovery_limit",
+            "audio_bytes": 10
+          }
+        ],
+        "reclaimed_bytes": 10,
+        "low_disk_shortfall_bytes": 0,
+        "remaining_audio_bytes": 20,
+        "remaining_artifact_count": 2,
+        "exceeds_byte_limit": false,
+        "exceeds_artifact_limit": false
+      }
+    }
+  ]
+}

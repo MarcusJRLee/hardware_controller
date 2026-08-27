@@ -17,6 +17,9 @@ xcuserdata/
 .swiftpm/
 Package.resolved
 
+# Rust
+target/
+
 # Local configuration and diagnostics
 .env
 .env.*
