@@ -15,6 +15,13 @@ final class VoiceInputUITest: XCTestCase {
     XCTAssertTrue(app.descendants(matching: .any)["local_model_library"].exists)
     XCTAssertTrue(app.buttons["import_model_package"].exists)
     XCTAssertTrue(app.descendants(matching: .any)["capture_status"].exists)
+    let history = app.descendants(matching: .any)["voice_history"]
+    let search = app.textFields["history_search"]
+    for _ in 0..<6 where !search.exists {
+      app.swipeUp()
+    }
+    XCTAssertTrue(history.waitForExistence(timeout: 2))
+    XCTAssertTrue(search.waitForExistence(timeout: 2))
   }
 
   @MainActor

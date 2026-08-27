@@ -1,4 +1,5 @@
 import AVFAudio
+import HardwareControllerVoiceCore
 import SwiftUI
 import UIKit
 import VoiceInputShared
@@ -7,6 +8,8 @@ import VoiceInputShared
 struct VoiceInputApp: App {
   @StateObject private var model: VoiceInputAppModel
   @StateObject private var modelLibrary: VoiceInputModelLibraryModel
+  @StateObject private var history: VoiceInputHistoryModel
+  @StateObject private var historyAudioPlayer: VoiceInputHistoryAudioPlayerModel
 
   @MainActor
   init() {
@@ -29,6 +32,15 @@ struct VoiceInputApp: App {
           manager: UnavailableModelManager()
         )
       )
+      _history = StateObject(
+        wrappedValue: VoiceInputHistoryModel(
+          history: nil,
+          initializationError: "The local app container is unavailable."
+        )
+      )
+      _historyAudioPlayer = StateObject(
+        wrappedValue: VoiceInputHistoryAudioPlayerModel()
+      )
       return
     }
     let modelRoot =
@@ -46,10 +58,32 @@ struct VoiceInputApp: App {
       modelProvider: registry,
       transcriber: VoiceInputWhisperTranscriber()
     )
+    let historyRoot =
+      applicationSupport
+      .appendingPathComponent(
+        "com.longdevity.hardwarecontroller.voiceinput",
+        isDirectory: true
+      )
+      .appendingPathComponent("history", isDirectory: true)
+    let historyRepository: VoiceInputHistoryRepository?
+    let historyInitializationError: String?
+    do {
+      historyRepository = try VoiceInputHistoryRepository(
+        rootURL: historyRoot,
+        retentionSettings: .iOSDefault
+      )
+      historyInitializationError = nil
+    } catch {
+      historyRepository = nil
+      historyInitializationError = error.localizedDescription
+    }
     let service = VoiceInputCaptureService(
       store: store,
       captureURL: documentsURL.appendingPathComponent("voice_input_capture.caf"),
-      asrWorkflow: asrWorkflow
+      asrWorkflow: asrWorkflow,
+      sessionFinalizer: historyRepository.map {
+        VoiceInputSessionFinalizer(history: $0)
+      }
     )
     _model = StateObject(
       wrappedValue: VoiceInputAppModel(store: store, service: service)
@@ -60,20 +94,37 @@ struct VoiceInputApp: App {
         asrWorkflow: asrWorkflow
       )
     )
+    _history = StateObject(
+      wrappedValue: VoiceInputHistoryModel(
+        history: historyRepository,
+        initializationError: historyInitializationError
+      )
+    )
+    _historyAudioPlayer = StateObject(
+      wrappedValue: VoiceInputHistoryAudioPlayerModel()
+    )
   }
 
   var body: some Scene {
     WindowGroup {
-      VoiceInputView(model: model, modelLibrary: modelLibrary)
-        .onReceive(
-          NotificationCenter.default.publisher(
-            for: AVAudioSession.interruptionNotification
-          )
-        ) { notification in
-          model.handleInterruption(notification)
-        }
-        .onAppear { model.activate() }
-        .onDisappear { model.deactivate() }
+      VoiceInputView(
+        model: model,
+        modelLibrary: modelLibrary,
+        history: history,
+        historyAudioPlayer: historyAudioPlayer
+      )
+      .onReceive(
+        NotificationCenter.default.publisher(
+          for: AVAudioSession.interruptionNotification
+        )
+      ) { notification in
+        model.handleInterruption(notification)
+      }
+      .onAppear { model.activate() }
+      .onDisappear {
+        model.deactivate()
+        historyAudioPlayer.stop()
+      }
     }
   }
 }
@@ -81,6 +132,8 @@ struct VoiceInputApp: App {
 private struct VoiceInputView: View {
   @ObservedObject var model: VoiceInputAppModel
   @ObservedObject var modelLibrary: VoiceInputModelLibraryModel
+  @ObservedObject var history: VoiceInputHistoryModel
+  @ObservedObject var historyAudioPlayer: VoiceInputHistoryAudioPlayerModel
   @Environment(\.openURL) private var openURL
 
   var body: some View {
@@ -109,6 +162,11 @@ private struct VoiceInputView: View {
 
           captureSection
 
+          VoiceInputHistoryView(
+            model: history,
+            audioPlayer: historyAudioPlayer
+          )
+
           if let errorMessage = model.errorMessage ?? model.snapshotErrorMessage {
             Text(errorMessage)
               .foregroundStyle(.red)
@@ -120,6 +178,12 @@ private struct VoiceInputView: View {
       .navigationTitle("Voice Input")
       .task {
         await modelLibrary.refresh()
+        await history.refresh()
+      }
+      .task(id: model.snapshot.sequence) {
+        if model.snapshot.phase == .ready {
+          await history.refresh()
+        }
       }
     }
   }

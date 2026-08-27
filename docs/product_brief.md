@@ -291,11 +291,13 @@ ABI share its V1 fixture. M15 links those portable validators into the Apple
 executable behind typed Swift values; production V1 import now verifies its
 private snapshot in Rust before complete Swift restore validation. iOS Gate K0
 proves the app-owned capture and keyboard handoff boundary. I1 implements local
-onboarding and bounded Model admission. The first I2 slice selects and
-revalidates one compatible package, then produces real timed Raw text through a
-pinned whisper.cpp runtime without exposing runtime or model bytes to either
-extension. Formatting, History, the complete keyboard loop, physical-device
-performance, and broader hardening remain pending. See
+onboarding and bounded Model admission. I2 selects and revalidates one compatible
+package, produces real timed Raw text through a pinned whisper.cpp runtime,
+applies shared deterministic edits and semantic formatting, and commits
+searchable/playable bounded local History before publishing text without
+exposing runtime, model, audio, or History bytes to either extension. Style
+selection, the complete keyboard loop, physical-device performance, and broader
+hardening remain pending. See
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 [`voice_platform_design.md`](voice_platform_design.md), and
 [`voice_cujs.md`](voice_cujs.md).

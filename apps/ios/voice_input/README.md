@@ -40,14 +40,25 @@ bounded, link-free inventory into private storage, validates the exact package
 through the linked Rust boundary, installs matching identity/version bytes
 atomically, and preserves the original folder. Installed models use Data
 Protection and stay outside OS backup. Files-picker imports are labeled manual;
-admission does not yet make a package an active transcription runtime. The
-library defaults to 12 GiB and eight installed versions. These limits are
+the user explicitly selects an admitted compatible package for transcription.
+The library defaults to 12 GiB and eight installed versions. These limits are
 configurable policy; the app never age-evicts a model and provides explicit
 removal of only its private installed copy.
+
+An active compatible package now drives pinned local whisper.cpp file ASR in
+the containing app. The runtime revalidates selected model bytes before load,
+prewarms one actor-owned context, and returns bounded Raw text with timed
+segments. Neither extension links the runtime or can read model bytes.
+
+The app applies the shared deterministic spoken-edit and semantic-formatting
+core, then commits Raw, Edited, Formatted, Style, model provenance, and copied
+audio evidence to searchable local SQLite History before publishing text.
+History supports retained-audio playback and configurable age, byte, and count
+caps; its default 90-day, 1-GiB, 2,000-artifact policy expires audio without
+deleting transcripts.
 
 The keyboard cannot access the microphone or launch the containing app. A cold
 capture starts from the containing app or its Control Center control. While the
 app owns capture, the keyboard can request stop, wait for a matching result, and
-insert it once. The current result text remains an explicit handoff placeholder;
-local ASR, formatting, History, retention, and model activation follow in the
-next iOS vertical slices.
+insert it once. Explicit Style selection and the complete signed-device
+keyboard journey remain in the next iOS vertical slices.

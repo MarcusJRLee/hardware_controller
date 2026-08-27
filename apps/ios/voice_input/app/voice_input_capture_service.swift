@@ -7,6 +7,7 @@ import VoiceInputShared
 enum VoiceInputCaptureError: Error, LocalizedError, Sendable {
   case alreadyRecording
   case microphoneDenied
+  case localHistoryUnavailable
   case localModelUnavailable
   case recordingFailed
 
@@ -16,6 +17,8 @@ enum VoiceInputCaptureError: Error, LocalizedError, Sendable {
       "A recording is already active."
     case .microphoneDenied:
       "Microphone access is required. Enable it in Settings."
+    case .localHistoryUnavailable:
+      "Local Voice History must be available before recording."
     case .localModelUnavailable:
       "Choose a compatible local speech-to-text model before recording."
     case .recordingFailed:
@@ -28,20 +31,24 @@ actor VoiceInputCaptureService {
   private let store: any VoiceInputStateStoring
   private let captureURL: URL
   private let asrWorkflow: VoiceInputASRWorkflow?
+  private let sessionFinalizer: VoiceInputSessionFinalizer?
   private var recorder: AVAudioRecorder?
   private var activityID: String?
   private var heartbeatTask: Task<Void, Never>?
   private var sessionID: UUID?
+  private var sessionStartedAt: Date?
   private var sequence: UInt64
 
   init(
     store: any VoiceInputStateStoring,
     captureURL: URL,
-    asrWorkflow: VoiceInputASRWorkflow? = nil
+    asrWorkflow: VoiceInputASRWorkflow? = nil,
+    sessionFinalizer: VoiceInputSessionFinalizer? = nil
   ) {
     self.store = store
     self.captureURL = captureURL
     self.asrWorkflow = asrWorkflow
+    self.sessionFinalizer = sessionFinalizer
     sequence = (try? store.readSnapshot().sequence) ?? 0
   }
 
@@ -57,6 +64,9 @@ actor VoiceInputCaptureService {
     do {
       guard let asrWorkflow else {
         throw VoiceInputCaptureError.localModelUnavailable
+      }
+      guard sessionFinalizer != nil else {
+        throw VoiceInputCaptureError.localHistoryUnavailable
       }
       try await asrWorkflow.prewarmSelectedModel()
       guard sessionID == requestedSessionID, recorder == nil else {
@@ -88,6 +98,7 @@ actor VoiceInputCaptureService {
       }
 
       recorder = newRecorder
+      sessionStartedAt = .now
       try writeSnapshot(
         .recording(
           sessionID: requestedSessionID,
@@ -113,13 +124,18 @@ actor VoiceInputCaptureService {
   }
 
   func stop() async throws {
-    guard let recorder, let sessionID else {
+    guard
+      let recorder,
+      let sessionID,
+      let sessionStartedAt
+    else {
       return
     }
     heartbeatTask?.cancel()
     heartbeatTask = nil
     recorder.stop()
     self.recorder = nil
+    let sessionEndedAt = Date.now
 
     do {
       try writeSnapshot(
@@ -135,12 +151,28 @@ actor VoiceInputCaptureService {
       guard let asrWorkflow else {
         throw VoiceInputCaptureError.localModelUnavailable
       }
-      let result = try await asrWorkflow.transcribe(audioURL: captureURL)
+      guard let sessionFinalizer else {
+        throw VoiceInputCaptureError.localHistoryUnavailable
+      }
+      let rawTranscript = try await asrWorkflow.transcribe(audioURL: captureURL)
+      guard self.sessionID == sessionID else {
+        return
+      }
+      let processed = try await sessionFinalizer.finalize(
+        sessionID: sessionID,
+        startedAt: sessionStartedAt,
+        endedAt: sessionEndedAt,
+        rawTranscript: rawTranscript,
+        sourceAudioURL: captureURL
+      )
+      guard self.sessionID == sessionID else {
+        return
+      }
       try writeSnapshot(
         .ready(
           sessionID: sessionID,
           sequence: nextSequence(),
-          text: result.text
+          text: processed.formattedText
         )
       )
       await relinquishCapture(endingPhase: .ready)
@@ -256,6 +288,7 @@ actor VoiceInputCaptureService {
     recorder = nil
     await endLiveActivity(phase: endingPhase)
     sessionID = nil
+    sessionStartedAt = nil
     try? AVAudioSession.sharedInstance().setActive(
       false,
       options: .notifyOthersOnDeactivation
