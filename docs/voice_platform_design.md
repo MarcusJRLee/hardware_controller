@@ -395,7 +395,7 @@ versioned `session.json`, optional audio, transcript stages, and checksums.
 Deletion removes the owned record and files. Product copy must not promise
 secure erasure from SSD wear-leveling, filesystem snapshots, or device backups.
 
-The current M9 macOS baseline stores linked immutable results in SQLite,
+The current M12 macOS baseline stores linked immutable results in SQLite,
 searches every text stage, plays bounded timed CAF spans, and supports explicit
 correction, retranscription, reformatting, re-delivery, export, pinning, and
 transactional deletion. A portable policy plus dedicated SQLite retention actor
@@ -406,6 +406,13 @@ readable partial and orphan audio into typed Recovery sessions, isolates
 malformed rows, preserves physically corrupt databases, and retains completed
 text when audio finalization fails. Recovery audio remains playable and locally
 retranscribable for 24 hours unless pinned.
+
+M12 adds a native History import path: it validates independent source-byte,
+decoded-byte, and duration limits, balances security-scoped access, streams a
+supported external recording into one app-owned CAF, and stores typed
+imported-audio provenance. The original file remains untouched. Apple
+on-device ASR and the selected local Style run before commit; ASR and formatting
+fail independently to audio-only and transcript-only History evidence.
 Formatting adapters now declare typed identity and locality. The router rejects
 remote-capable adapters before any invocation, while in-process Apple and fixed-
 loopback Ollama remain independent of external network availability. Formatting
@@ -524,8 +531,9 @@ test first or batch the entire implementation behind mocked internals.
   selection evidence before choosing defaults.
 - Introduce the Rust engine behind the stable CUJ contract; run the same tests
   against Swift baseline and Rust implementation during migration.
-- Pass M6–M10 for History, retention, crash recovery, imported files, offline
-  enforcement, and model fallback.
+- M6–M12 now pass for History, retention, crash recovery, imported files,
+  offline enforcement, trigger convergence, portable retention, and model
+  fallback.
 - Design separate streaming ownership before exporting ASR or formatting; do
   not assume the synchronous retention ABI fits an async model boundary.
 

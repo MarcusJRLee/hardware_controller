@@ -35,6 +35,7 @@ actor SQLiteVoiceSessionStore {
   private let handle: SQLiteDatabaseHandle
   private let audioDirectory: URL
   private var didBackfillResults = false
+  private var isBackfillingResults = false
   private var invalidSessionRecordCount = 0
 
   private var database: OpaquePointer { handle.pointer }
@@ -96,7 +97,8 @@ actor SQLiteVoiceSessionStore {
           audio_expired_at REAL,
           audio_expiration_reason TEXT,
           recovery_kind TEXT,
-          recovered_at REAL
+          recovered_at REAL,
+          input_kind TEXT NOT NULL DEFAULT 'microphoneCapture'
         );
         CREATE TABLE IF NOT EXISTS voice_results (
           id TEXT PRIMARY KEY NOT NULL,
@@ -173,6 +175,11 @@ actor SQLiteVoiceSessionStore {
     )
     try Self.addColumnIfNeeded(
       opened,
+      name: "input_kind",
+      definition: "TEXT NOT NULL DEFAULT 'microphoneCapture'"
+    )
+    try Self.addColumnIfNeeded(
+      opened,
       table: "voice_results",
       name: "delivery_outcome",
       definition: "TEXT"
@@ -211,8 +218,8 @@ actor SQLiteVoiceSessionStore {
           delivery_outcome, delivery_failure, audio_filename,
           formatted_document_json, spoken_edits_json,
           delivery_failure_reason, audio_duration_ms, is_pinned,
-          recovery_kind, recovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?);
+          recovery_kind, recovered_at, input_kind
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?);
         """
       var statement: OpaquePointer?
       guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
@@ -268,6 +275,7 @@ actor SQLiteVoiceSessionStore {
           "Voice History contains incomplete recovery evidence."
         )
       }
+      try bind(document.inputKind.rawValue, to: 18, in: statement)
       guard sqlite3_step(statement) == SQLITE_DONE else {
         throw storageFailure()
       }
@@ -537,7 +545,7 @@ actor SQLiteVoiceSessionStore {
         formatted_document_json, spoken_edits_json,
         delivery_failure_reason, audio_duration_ms, is_pinned,
         audio_expired_at, audio_expiration_reason, recovery_kind,
-        recovered_at
+        recovered_at, input_kind
       FROM voice_sessions
       \(whereClause)
       ORDER BY ended_at DESC;
@@ -584,6 +592,9 @@ actor SQLiteVoiceSessionStore {
       let id = UUID(uuidString: text(statement, column: 0)),
       let outcome = VoiceSessionDeliveryOutcome(
         rawValue: text(statement, column: 8)
+      ),
+      let inputKind = VoiceSessionInputKind(
+        rawValue: text(statement, column: 20)
       )
     else {
       throw VoiceSessionHistoryError.storageUnavailable(
@@ -615,7 +626,8 @@ actor SQLiteVoiceSessionStore {
       ),
       spokenEdits: try spokenEdits(
         from: optionalText(statement, column: 12)
-      )
+      ),
+      inputKind: inputKind
     )
     try validateDeliveryEvidence(document)
     let audioFilename = optionalText(statement, column: 10)
@@ -657,6 +669,23 @@ actor SQLiteVoiceSessionStore {
       )
     }
     let storedResults = try results(sessionID: id)
+    let expectedRawOrigin: VoiceHistoryResultOrigin =
+      inputKind == .importedAudio ? .audioImport : .capture
+    if let baselineRaw = storedResults.first {
+      guard
+        baselineRaw.stage == .raw,
+        baselineRaw.origin == expectedRawOrigin,
+        baselineRaw.sourceResultID == nil
+      else {
+        throw VoiceSessionHistoryError.storageUnavailable(
+          "Voice History contains contradictory input provenance."
+        )
+      }
+    } else if !isBackfillingResults {
+      throw VoiceSessionHistoryError.storageUnavailable(
+        "Voice History contains incomplete result evidence."
+      )
+    }
     for result in storedResults {
       try validateTiming(
         result,
@@ -780,6 +809,8 @@ actor SQLiteVoiceSessionStore {
     let editedID = UUID()
     let formattedID = UUID()
     let evidence = document.formattedDocument?.evidence.first
+    let rawOrigin: VoiceHistoryResultOrigin =
+      document.inputKind == .importedAudio ? .audioImport : .capture
     let rawSpans: [VoiceHistoryTimedSpan]
     if let audioDurationMilliseconds, !document.rawText.isEmpty {
       rawSpans = [
@@ -798,7 +829,7 @@ actor SQLiteVoiceSessionStore {
         sessionID: document.id,
         createdAt: document.endedAt,
         stage: .raw,
-        origin: .capture,
+        origin: rawOrigin,
         text: document.rawText,
         sourceResultID: nil,
         timedSpans: rawSpans
@@ -910,7 +941,7 @@ actor SQLiteVoiceSessionStore {
       validPair = (.formatted, .reformatting)
     case .redelivery:
       validPair = (.delivered, .redelivery)
-    case .capture, .spokenEdits, .formatting, .delivery:
+    case .capture, .audioImport, .spokenEdits, .formatting, .delivery:
       throw VoiceSessionHistoryError.invalidResult(
         "Captured History stages can only be created during session finalization."
       )
@@ -959,6 +990,7 @@ actor SQLiteVoiceSessionStore {
     let hasValidStageOrigin: Bool
     switch (result.stage, result.origin) {
     case (.raw, .capture),
+      (.raw, .audioImport),
       (.raw, .retranscription),
       (.edited, .spokenEdits),
       (.formatted, .formatting),
@@ -1061,10 +1093,10 @@ actor SQLiteVoiceSessionStore {
     _ result: VoiceHistoryResult,
     priorResultIDs: Set<UUID>
   ) throws {
-    if result.origin == .capture {
+    if result.origin == .capture || result.origin == .audioImport {
       guard result.sourceResultID == nil else {
         throw VoiceSessionHistoryError.invalidResult(
-          "Captured History evidence cannot derive from another result."
+          "Source History evidence cannot derive from another result."
         )
       }
       return
@@ -1154,6 +1186,8 @@ actor SQLiteVoiceSessionStore {
   }
 
   private func backfillMissingResults() throws {
+    isBackfillingResults = true
+    defer { isBackfillingResults = false }
     while let session = try querySessions(
       predicate: """
         NOT EXISTS (

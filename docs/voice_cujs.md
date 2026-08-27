@@ -1,6 +1,6 @@
 # Voice critical user journeys
 
-**Status:** Accepted behavior contract; macOS M1 and M2 are implemented. The
+**Status:** Accepted behavior contract; macOS M1–M12 are implemented. The
 authority is
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md).
 
@@ -254,6 +254,42 @@ Local AI dispatcher. Phase-policy tests cover Record, Stop, unavailable, and
 post-capture states. Boundary tests cover Hold, double-press latch/finish, and
 runtime start/suspend/resume/stop gates. The complete 480-test/72-suite host
 corpus passes.
+
+### M11 — Prove the first portable policy boundary
+
+The Swift and dependency-free Rust retention planners produce the same ordered
+decisions from one versioned CUJ fixture. A synchronous versioned C ABI exposes
+that policy with caller-owned buffers, stable typed errors, and no retained
+pointer or callback.
+
+**Current evidence:** Swift and Rust conformance tests share
+`Tests/cuj/voice_retention_v1.json`; Rust layout and domain tests pass; and a
+real C17 consumer compiles, links, and executes against the optimized static
+library. Decision
+[`0035`](decisions/0035_portable_voice_c_abi.md) owns the boundary.
+
+### M12 — Import a local recording
+
+**Given** History is available and the user selects a supported local audio
+file within configured source-byte, decoded-byte, and duration limits.
+
+**When** the user chooses **Import Audio Recording**.
+
+**Then** the app balances access to the selected file, runs local ASR and the
+selected Style, streams the recording into one app-owned CAF, and stores a
+searchable session with typed imported-audio provenance. It never changes or
+deletes the selected file and never inserts text automatically. Formatting
+failure stores the Raw transcript fallback; ASR failure stores replayable audio
+with empty text for explicit retranscription. Cancellation, unsupported audio,
+corruption, or a breached limit creates no History row or owned artifact.
+
+**Current evidence:** the macOS defaults cap source and decoded audio at 2 GiB
+and duration at 12 hours before model work. Actor-owned tests cover the real
+streaming CAF/SQLite path, source preservation, Raw/Formatted provenance,
+search selection, source/duration/decoded-size rejection, cancellation,
+formatting fallback, ASR fallback, legacy JSON/database defaults, and export
+schema revision 4. The complete host corpus passes 496 tests in 74 suites.
+Decision [`0036`](decisions/0036_imported_voice_audio.md) owns the boundary.
 
 ## iOS journeys
 

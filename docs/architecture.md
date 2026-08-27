@@ -431,8 +431,9 @@ preferences are not work-mode data.
 ### Voice History store
 
 One actor owns the SQLite connection, schema migration, result validation, and
-session transactions. `voice_sessions` retains capture metadata and the single
-optional CAF path. `voice_results` stores immutable linked results with typed
+session transactions. `voice_sessions` retains typed microphone-capture or
+imported-audio provenance and the single optional CAF path. `voice_results`
+stores immutable linked results with typed
 stage, origin, Style, model, prompt, structured-document, timed-span, and
 delivery evidence. Legacy session rows receive baseline Raw, Edited, Formatted,
 and Delivered results lazily and transactionally; the original rows are not
@@ -445,6 +446,18 @@ malformed session row while returning unrelated valid rows. Appending a
 derived result validates its source against the same session. Export copies
 evidence into one atomic open package with streaming SHA-256 file checksums
 without modifying the database.
+
+The History presentation composes a separate import actor with the same Apple
+on-device ASR and local formatting boundaries used for retained-audio reuse.
+It balances security-scoped source access, validates configurable source-byte,
+decoded-byte, and duration caps before model work, and reads/writes sequential
+4,096-frame PCM buffers. The importer syncs and atomically renames one partial
+CAF before SQLite commit; database failure removes that artifact. It never
+mutates or retains a path to the selected source. ASR failure commits audio-only
+evidence; formatting failure commits Raw text as the deterministic Formatted
+fallback; import never performs delivery. Existing rows migrate to
+`microphoneCapture`, and export revision 4 carries the input kind. Decision
+[`0036`](decisions/0036_imported_voice_audio.md) owns this flow.
 
 Deletion first quarantines owned audio, commits metadata removal, then removes
 the quarantine; a failed database commit restores the file. A separate

@@ -26,7 +26,9 @@ finalization failure must not discard completed transcript evidence.
   row so another interruption leaves an idempotently recoverable orphan.
 - Store Recovery kind and reconciliation time beside four empty baseline
   stages with `notAttempted` delivery. Permit local playback and retranscription.
-  Export schema revision 3 carries the Recovery provenance.
+  Export schema revision 3 introduced Recovery provenance. Decision
+  [0036](0036_imported_voice_audio.md) later advances the schema to revision 4
+  without changing that evidence.
 - Expire unpinned recovered audio 24 hours after reconciliation with the typed
   `recovery_limit` reason. Preserve its searchable session and result graph.
   Preserve recent unreadable owned audio for that interval; remove stale,

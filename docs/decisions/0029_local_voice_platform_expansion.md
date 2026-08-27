@@ -1,6 +1,6 @@
 # 0029: Local Voice platform expansion
 
-- **Status:** Accepted; macOS M1–M11 implemented
+- **Status:** Accepted; macOS M1–M12 implemented
 - **Date:** 2026-08-25
 - **Amends:**
   [`0001_native_macos_stack.md`](0001_native_macos_stack.md),

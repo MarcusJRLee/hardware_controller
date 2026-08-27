@@ -15,6 +15,7 @@ identify deep implementation modules without changing that language.
 | Audio artifact recorder | Bounded nonblocking tee from immutable capture buffers to an atomically finalized local CAF. |
 | Voice session store | Actor-owned system SQLite connection that serializes local session metadata transactions. |
 | Voice History service | Actor that retranscribes retained audio, reformats reusable text, retries delivery, and appends each outcome as a linked immutable result. |
+| Voice audio importer | Actor that bounds a user-selected recording, runs local ASR/formatting, streams one app-owned CAF, and commits typed imported-audio History without mutating the source. |
 | Reusable result | Newest nonempty result selected deterministically from one session for copy, correction, retranscription, reformatting, export, or explicit re-delivery. |
 | Voice trigger | Input adapter that maps physical, exact-chord, or in-app intent into the shared Voice-session contract. |
 | Voice chord | Optional machine-wide exact shortcut dedicated to Voice capture and independent of Binding keyboard fallbacks. |

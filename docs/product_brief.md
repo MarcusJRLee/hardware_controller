@@ -58,6 +58,7 @@ automatically formatted result.
 | Voice chord | The optional machine-wide exact keyboard shortcut dedicated to Voice capture; it is distinct from a Binding keyboard fallback. |
 | Latched capture | A Voice session kept active after two short Voice-chord presses until the next valid double press. |
 | Retained audio | The optional app-owned CAF linked to one completed Voice session. |
+| Voice-session input | Typed microphone-capture or imported-audio provenance; it never substitutes for result-stage origin. |
 | Audio expiration | Automatic removal of Retained audio while keeping its session, results, timing metadata, and typed reason. |
 | Voice retention policy | Versioned age, byte, count, pin, recovery, and low-disk rules for Retained audio. |
 | Recovery session | A History session synthesized from readable app-owned audio after interruption; it has typed origin and no invented transcript. |
@@ -279,7 +280,9 @@ active, pinned, and sole recovery artifacts. M8 reconciles crash artifacts and
 isolates corruption. M9 enforces provider locality and retains captured audio
 after ASR failure. M10 converges every macOS Voice trigger; M11 proves the first
 portable retention policy and C ABI without changing the shipped Swift runtime.
-Remaining portable engine work and iOS remain pending. See
+M12 imports bounded user-selected audio into app-owned History and runs the same
+local ASR and formatting boundaries without automatic delivery. Remaining
+portable engine work and iOS remain pending. See
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 [`voice_platform_design.md`](voice_platform_design.md), and
 [`voice_cujs.md`](voice_cujs.md).

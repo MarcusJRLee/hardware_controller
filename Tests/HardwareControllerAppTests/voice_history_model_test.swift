@@ -53,6 +53,25 @@ struct VoiceHistoryModelTest {
   }
 
   @Test
+  func importingAudioSelectsTheNewSearchableSession() async throws {
+    let fixture = try HistoryModelFixture()
+    defer { fixture.remove() }
+    let sourceURL = try fixture.makeImportSource()
+    let model = fixture.model()
+    await model.load()
+
+    await model.importAudio(from: sourceURL)
+
+    #expect(model.sessions.count == 1)
+    #expect(model.selectedSession?.document.inputKind == .importedAudio)
+    #expect(model.selectedResult?.text == "Retranscribed.")
+    #expect(
+      model.notice
+        == "Recording imported, transcribed, and formatted locally."
+    )
+  }
+
+  @Test
   func newerSearchCannotBeReplacedByAnOlderSlowResult() async {
     let history = RacingHistoryRepository()
     let model = VoiceHistoryModel(
@@ -287,6 +306,31 @@ private final class HistoryModelFixture: @unchecked Sendable {
     try await history.complete(document)
   }
 
+  func makeImportSource() throws -> URL {
+    let sourceURL = root.appending(path: "model_import_source.wav")
+    guard
+      let format = AVAudioFormat(
+        commonFormat: .pcmFormatFloat32,
+        sampleRate: 16_000,
+        channels: 1,
+        interleaved: false
+      ),
+      let buffer = AVAudioPCMBuffer(
+        pcmFormat: format,
+        frameCapacity: 1_600
+      )
+    else {
+      throw MicrophoneCaptureError.invalidBuffer("Fixture failed.")
+    }
+    buffer.frameLength = 1_600
+    let file = try AVAudioFile(
+      forWriting: sourceURL,
+      settings: buffer.format.settings
+    )
+    try file.write(from: buffer)
+    return sourceURL
+  }
+
   @MainActor
   func model(
     player: (any VoiceHistoryAudioPlaying)? = nil
@@ -298,6 +342,11 @@ private final class HistoryModelFixture: @unchecked Sendable {
         transcriber: HistoryModelTranscriber(),
         reformatter: HistoryModelReformatter(),
         redeliverer: HistoryModelRedeliverer()
+      ),
+      importer: VoiceAudioImportService(
+        history: history,
+        transcriber: HistoryModelTranscriber(),
+        reformatter: HistoryModelReformatter()
       ),
       retentionManager: history,
       exporter: HistoryModelExporter(),

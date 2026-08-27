@@ -2,6 +2,7 @@ import AppKit
 import HardwareControllerCore
 import HardwareControllerMac
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Presents searchable immutable Voice sessions as a quiet local tape archive.
 struct VoiceHistoryView: View {
@@ -49,6 +50,14 @@ struct VoiceHistoryView: View {
               .foregroundStyle(.secondary)
           }
           Spacer()
+          Button("Import", systemImage: "square.and.arrow.down") {
+            beginImport()
+          }
+          .buttonStyle(.borderless)
+          .help("Import Audio Recording")
+          .disabled(model.work.isBusy)
+          .accessibilityLabel("Import audio recording")
+          .accessibilityIdentifier("voice_history_import_audio")
           Button {
             Task { await model.load() }
           } label: {
@@ -63,6 +72,17 @@ struct VoiceHistoryView: View {
         TextField("Search every text stage", text: $model.searchQuery)
           .textFieldStyle(.roundedBorder)
           .accessibilityIdentifier("voice_history_search")
+
+        if model.work == .importing {
+          HStack(spacing: 8) {
+            ProgressView()
+              .controlSize(.small)
+            Text(model.work.title)
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
+          .accessibilityIdentifier("voice_history_import_progress")
+        }
 
         if let error = model.errorMessage {
           Label(error, systemImage: "exclamationmark.triangle")
@@ -82,7 +102,7 @@ struct VoiceHistoryView: View {
           systemImage: "waveform",
           description: Text(
             model.searchQuery.isEmpty
-              ? "Local AI Dictation sessions will appear here."
+              ? "Voice sessions and imported recordings will appear here."
               : "Try a word from Raw, Formatted, Delivered, or corrected text."
           )
         )
@@ -513,10 +533,7 @@ struct VoiceHistoryView: View {
   private func sessionSubtitle(
     _ session: VoiceSessionHistoryItem
   ) -> String {
-    let source =
-      session.recoveryKind == nil
-      ? session.document.targetApplicationName ?? "Unknown app"
-      : "Recovered audio"
+    let source = session.sourceTitle
     let duration =
       session.audioDurationMilliseconds.map {
         String(format: "%.1f sec", Double($0) / 1_000)
@@ -572,6 +589,18 @@ struct VoiceHistoryView: View {
     }
     Task { await model.exportSelectedSession(to: destination) }
   }
+
+  private func beginImport() {
+    let panel = NSOpenPanel()
+    panel.title = "Import Audio Recording"
+    panel.allowedContentTypes = [.audio]
+    panel.allowsMultipleSelection = false
+    panel.canChooseDirectories = false
+    guard panel.runModal() == .OK, let sourceURL = panel.url else {
+      return
+    }
+    Task { await model.importAudio(from: sourceURL) }
+  }
 }
 
 private struct VoiceHistoryRow: View {
@@ -596,11 +625,7 @@ private struct VoiceHistoryRow: View {
       .font(.subheadline)
       .lineLimit(2)
       HStack(spacing: 5) {
-        Text(
-          session.recoveryKind == nil
-            ? session.document.targetApplicationName ?? "Unknown app"
-            : "Recovered audio"
-        )
+        Text(session.sourceTitle)
         Text("·")
         Text(session.document.deliveryOutcome.title)
       }
@@ -654,6 +679,7 @@ extension VoiceHistoryResultOrigin {
     case .retranscription: "Retranscription"
     case .reformatting: "Reformat"
     case .redelivery: "Re-delivery"
+    case .audioImport: "Audio import"
     }
   }
 }
@@ -689,11 +715,24 @@ extension VoiceSessionDeliveryOutcome {
   }
 }
 
+extension VoiceSessionHistoryItem {
+  fileprivate var sourceTitle: String {
+    if recoveryKind != nil {
+      return "Recovered audio"
+    }
+    if document.inputKind == .importedAudio {
+      return "Imported recording"
+    }
+    return document.targetApplicationName ?? "Unknown app"
+  }
+}
+
 extension VoiceHistoryWork {
   fileprivate var title: String {
     switch self {
     case .idle: "Ready"
     case .loading: "Refreshing History…"
+    case .importing: "Importing and transcribing locally…"
     case .correcting: "Saving correction…"
     case .retranscribing: "Retranscribing locally…"
     case .reformatting: "Formatting locally…"

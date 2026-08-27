@@ -263,6 +263,65 @@ struct SQLiteVoiceSessionStoreTest {
   }
 
   @Test
+  func inputKindCannotContradictItsBaselineRawOrigin() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_input_kind_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let sessionID = UUID()
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    try await history.complete(try historyDocument(sessionID: sessionID))
+    _ = try await history.session(id: sessionID)
+    var database: OpaquePointer?
+    #expect(
+      sqlite3_open(
+        rootDirectory.appending(path: "history.sqlite3").path,
+        &database
+      ) == SQLITE_OK
+    )
+    let opened = try #require(database)
+    #expect(
+      sqlite3_exec(
+        opened,
+        "UPDATE voice_sessions SET input_kind = 'importedAudio';",
+        nil,
+        nil,
+        nil
+      ) == SQLITE_OK
+    )
+    sqlite3_close(opened)
+    database = nil
+
+    #expect(try await history.session(id: sessionID) == nil)
+  }
+
+  @Test
+  func captureCompletionRejectsImportedInputProvenance() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_capture_origin_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let baseline = try historyDocument(sessionID: UUID())
+    let imported = VoiceSessionDocument(
+      id: baseline.id,
+      startedAt: baseline.startedAt,
+      endedAt: baseline.endedAt,
+      rawText: baseline.rawText,
+      editedText: baseline.editedText,
+      formattedText: baseline.formattedText,
+      deliveredText: baseline.deliveredText,
+      targetApplicationName: baseline.targetApplicationName,
+      deliveryOutcome: baseline.deliveryOutcome,
+      formattedDocument: baseline.formattedDocument,
+      inputKind: .importedAudio
+    )
+
+    await #expect(throws: VoiceSessionHistoryError.self) {
+      try await history.complete(imported)
+    }
+    #expect(try await history.recentSessions(limit: 1).isEmpty)
+  }
+
+  @Test
   func brokenStoredResultRelationshipIsIsolated() async throws {
     let rootDirectory = FileManager.default.temporaryDirectory
       .appending(path: "voice_history_relationship_\(UUID().uuidString)")
@@ -497,6 +556,7 @@ struct SQLiteVoiceSessionStoreTest {
     #expect(item.formattedDocument == nil)
     #expect(item.document.spokenEdits == nil)
     #expect(item.document.deliveryFailureReason == nil)
+    #expect(item.document.inputKind == .microphoneCapture)
   }
 
   @Test
