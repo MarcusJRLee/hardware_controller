@@ -98,6 +98,14 @@ the connected-Device and active-Profile state. Its native accessibility tree
 uses the same label, and the installed app retains Controller readiness after a
 verified quit and exact-bundle relaunch.
 
+The signed M12 packaged History UI exposes an enabled **Import Audio Recording**
+action with identifier `voice_history_import_audio`, presents the native audio
+open panel, and returns to History without mutation when cancelled. The
+installed arm64 binary is byte-identical to the verified candidate, has CDHash
+`58c6a1aadc20ea8f12983db7ad6efbe676a3cc85`, and carries only the audio-input
+entitlement. The replaced M11 app remains recoverable from the private
+validation backup until this candidate is superseded.
+
 ## Remaining evidence
 
 These checks are required before claiming their corresponding environment or
