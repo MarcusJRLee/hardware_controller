@@ -5,8 +5,62 @@ import VoiceInputShared
 
 @main
 struct VoiceInputApp: App {
-  @StateObject private var model = VoiceInputAppModel()
-  @StateObject private var modelLibrary = VoiceInputModelLibraryModel()
+  @StateObject private var model: VoiceInputAppModel
+  @StateObject private var modelLibrary: VoiceInputModelLibraryModel
+
+  @MainActor
+  init() {
+    let store = VoiceInputKeychainStore()
+    guard
+      let documentsURL = FileManager.default.urls(
+        for: .documentDirectory,
+        in: .userDomainMask
+      ).first,
+      let applicationSupport = FileManager.default.urls(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask
+      ).first
+    else {
+      _model = StateObject(
+        wrappedValue: VoiceInputAppModel(store: store, service: nil)
+      )
+      _modelLibrary = StateObject(
+        wrappedValue: VoiceInputModelLibraryModel(
+          manager: UnavailableModelManager()
+        )
+      )
+      return
+    }
+    let modelRoot =
+      applicationSupport
+      .appendingPathComponent(
+        "com.longdevity.hardwarecontroller.voiceinput",
+        isDirectory: true
+      )
+      .appendingPathComponent("voice_models", isDirectory: true)
+    let registry = VoiceInputASRModelRegistry(
+      installer: VoiceInputModelPackageInstaller(rootURL: modelRoot),
+      selectionURL: modelRoot.appendingPathComponent("active_asr.json")
+    )
+    let asrWorkflow = VoiceInputASRWorkflow(
+      modelProvider: registry,
+      transcriber: VoiceInputWhisperTranscriber()
+    )
+    let service = VoiceInputCaptureService(
+      store: store,
+      captureURL: documentsURL.appendingPathComponent("voice_input_capture.caf"),
+      asrWorkflow: asrWorkflow
+    )
+    _model = StateObject(
+      wrappedValue: VoiceInputAppModel(store: store, service: service)
+    )
+    _modelLibrary = StateObject(
+      wrappedValue: VoiceInputModelLibraryModel(
+        manager: registry,
+        asrWorkflow: asrWorkflow
+      )
+    )
+  }
 
   var body: some Scene {
     WindowGroup {

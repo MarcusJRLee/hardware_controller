@@ -23,6 +23,93 @@ final class VoiceInputCaptureServiceTest: XCTestCase {
     XCTAssertEqual(try store.readSnapshot(), .idle(sequence: 0))
     XCTAssertFalse(FileManager.default.fileExists(atPath: captureURL.path))
   }
+
+  func testStartReservesCaptureOwnershipWhileTheModelPrewarms() async throws {
+    let entered = AsyncStream<Void>.makeStream()
+    let release = AsyncStream<Void>.makeStream()
+    let provider = BlockingASRModelProvider(
+      entered: entered.continuation,
+      release: release.stream
+    )
+    let workflow = VoiceInputASRWorkflow(
+      modelProvider: provider,
+      transcriber: UnusedTranscriber()
+    )
+    let store = LockedProbeStore(command: nil)
+    let service = VoiceInputCaptureService(
+      store: store,
+      captureURL: FileManager.default.temporaryDirectory
+        .appendingPathComponent("\(UUID().uuidString).caf"),
+      asrWorkflow: workflow
+    )
+    let firstSessionID = UUID()
+    let firstStart = Task {
+      try await service.start(sessionID: firstSessionID)
+    }
+    for await _ in entered.stream.prefix(1) {}
+
+    do {
+      try await service.start(sessionID: UUID())
+      XCTFail("A second start must not enter model preparation.")
+    } catch {
+      XCTAssertEqual(error as? VoiceInputCaptureError, .alreadyRecording)
+    }
+
+    release.continuation.finish()
+    do {
+      try await firstStart.value
+      XCTFail("The released test prewarm must fail.")
+    } catch {
+      XCTAssertEqual(error as? CaptureServiceTestError, .released)
+    }
+    let providerCallCount = await provider.callCount
+    XCTAssertEqual(providerCallCount, 1)
+    XCTAssertEqual(try store.readSnapshot().sessionID, firstSessionID)
+    XCTAssertEqual(try store.readSnapshot().phase, .failed)
+  }
+}
+
+private enum CaptureServiceTestError: Error {
+  case concurrentStart
+  case released
+  case unused
+}
+
+private actor BlockingASRModelProvider: VoiceInputASRModelProviding {
+  private let entered: AsyncStream<Void>.Continuation
+  private let release: AsyncStream<Void>
+  private(set) var callCount = 0
+
+  init(
+    entered: AsyncStream<Void>.Continuation,
+    release: AsyncStream<Void>
+  ) {
+    self.entered = entered
+    self.release = release
+  }
+
+  func selectedASRModel() async throws -> VoiceInputInstalledModelPackage {
+    callCount += 1
+    guard callCount == 1 else {
+      throw CaptureServiceTestError.concurrentStart
+    }
+    entered.yield()
+    for await _ in release {}
+    throw CaptureServiceTestError.released
+  }
+}
+
+private struct UnusedTranscriber: VoiceInputTranscribing {
+  func prewarm(model _: VoiceInputInstalledModelPackage) async throws {
+    throw CaptureServiceTestError.unused
+  }
+
+  func transcribe(
+    audioURL _: URL,
+    model _: VoiceInputInstalledModelPackage
+  ) async throws -> VoiceInputRawTranscript {
+    throw CaptureServiceTestError.unused
+  }
 }
 
 private final class LockedProbeStore: VoiceInputStateStoring, Sendable {

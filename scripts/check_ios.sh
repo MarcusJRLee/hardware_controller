@@ -32,6 +32,8 @@ git diff --exit-code -- apps/ios/voice_input/VoiceInput.xcodeproj
 
 swift format lint --recursive --strict apps/ios/voice_input
 plutil -lint apps/ios/voice_input/config/*.plist >/dev/null
+scripts/check_voice_whisper_bridge.sh
+scripts/prepare_ios_whisper_model_package_test.sh
 
 xcrun simctl bootstatus "$simulator_udid" -b
 xcrun simctl privacy "$simulator_udid" grant microphone \

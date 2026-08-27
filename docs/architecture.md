@@ -185,11 +185,19 @@ Protection, remain outside backup, and retain manual-versus-pinned provenance.
 The library separately defaults to 12 GiB and eight installed versions, with
 both limits injected as policy. It never age-evicts Model packages. Explicit
 removal revalidates and quarantines only the app-owned copy before deleting its
-provenance and bytes. No inference runtime is activated by admission. C4 next
-replaces the explicit placeholder result with portable local ASR, formatting,
-and History behind the same state-store protocol. See
+provenance and bytes.
+
+The first C4 runtime is pinned whisper.cpp file ASR. Rust revalidates the active
+package and authenticated manifest immediately before resolving one model-role
+payload. A Swift actor owns one prewarmed opaque C context, converts the
+app-owned 16 kHz mono CAF to finite float PCM, and receives bounded UTF-8 plus
+timed segments. The containing app alone links and embeds whisper.cpp; neither
+extension sees runtime symbols or model paths. Stop now publishes real Raw text
+or an explicit failure, never the K0 placeholder. Formatting and History remain
+the next I2 slices. See
 [decision 0040](decisions/0040_ios_keyboard_activation_and_handoff.md) and
-[decision 0041](decisions/0041_ios_model_package_admission.md).
+[decision 0041](decisions/0041_ios_model_package_admission.md), and
+[decision 0042](decisions/0042_ios_whisper_file_asr.md).
 
 ### HID transport
 

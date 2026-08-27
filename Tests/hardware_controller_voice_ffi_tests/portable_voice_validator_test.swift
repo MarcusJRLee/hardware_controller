@@ -99,6 +99,47 @@ struct PortableVoiceValidatorTests {
     }
   }
 
+  @Test("Whisper ASR resolution revalidates package bytes before load")
+  func resolvesWhisperModelOnlyAfterPinnedRevalidation() throws {
+    let source = repositoryRoot.appending(
+      path: "Tests/cuj/voice_model_package_v1/valid",
+      directoryHint: .isDirectory
+    )
+    let temporary = FileManager.default.temporaryDirectory.appending(
+      path: "voice_whisper_resolver_\(UUID().uuidString)",
+      directoryHint: .isDirectory
+    )
+    try FileManager.default.copyItem(at: source, to: temporary)
+    defer { try? FileManager.default.removeItem(at: temporary) }
+    let manifestURL = temporary.appending(path: "manifest.json")
+    let manifest = try String(contentsOf: manifestURL, encoding: .utf8)
+    try manifest.replacing(
+      "\"runtime\": \"sherpa_onnx\"",
+      with: "\"runtime\": \"whisper_cpp\""
+    ).write(to: manifestURL, atomically: true, encoding: .utf8)
+    let validator = RustPortableVoiceValidator()
+    let package = try validator.validateModelPackage(
+      at: temporary,
+      limits: .standardModelPackage,
+      expectedManifestSHA256: nil
+    )
+
+    let modelURL = try validator.resolveWhisperASRModel(
+      at: temporary,
+      limits: .standardModelPackage,
+      expectedManifestSHA256: package.manifestSHA256
+    )
+
+    #expect(modelURL == temporary.appending(path: "model.bin"))
+    #expect(throws: PortableVoiceValidationError.integrityMismatch) {
+      try validator.resolveWhisperASRModel(
+        at: temporary,
+        limits: .standardModelPackage,
+        expectedManifestSHA256: Data(repeating: 0, count: 32)
+      )
+    }
+  }
+
   private var repositoryRoot: URL {
     URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent()

@@ -47,6 +47,23 @@ final class VoiceInputAppModel: ObservableObject {
     }
   }
 
+  convenience init(
+    store: VoiceInputKeychainStore,
+    service: VoiceInputCaptureService?
+  ) {
+    self.init(
+      microphoneAuthorizationProvider: { Self.systemMicrophoneAuthorization },
+      microphonePermissionRequester: {
+        await AVAudioApplication.requestRecordPermission()
+      },
+      keyboardObservedAtReader: { try store.readKeyboardObservedAt() },
+      service: service
+    )
+    if service == nil {
+      errorMessage = "The local app container is unavailable."
+    }
+  }
+
   init(
     microphoneAuthorizationProvider:
       @escaping @MainActor @Sendable () ->

@@ -18,29 +18,20 @@ final class VoiceInputUITest: XCTestCase {
   }
 
   @MainActor
-  func testLocalCaptureReachesAReadyHandoff() {
+  func testLocalCaptureRequiresASelectedModelBeforeRecording() {
     let app = XCUIApplication()
-    addUIInterruptionMonitor(withDescription: "Microphone permission") { alert in
-      for label in ["Allow", "Allow While Using App", "OK"] where alert.buttons[label].exists {
-        alert.buttons[label].tap()
-        return true
-      }
-      return false
-    }
     app.launch()
 
     let start = app.buttons["start_capture"]
     XCTAssertTrue(start.waitForExistence(timeout: 5))
     start.tap()
 
-    let stop = app.buttons["stop_capture"]
-    XCTAssertTrue(stop.waitForExistence(timeout: 5))
-    stop.tap()
-
     let captureStatus = app.descendants(matching: .any)["capture_status"]
-    let ready = NSPredicate(format: "value == 'Ready'")
-    expectation(for: ready, evaluatedWith: captureStatus)
+    let failed = NSPredicate(format: "value == 'Failed'")
+    expectation(for: failed, evaluatedWith: captureStatus)
     waitForExpectations(timeout: 5)
+    XCTAssertTrue(app.staticTexts["capture_error"].exists)
+    XCTAssertFalse(app.buttons["stop_capture"].exists)
   }
 
   @MainActor

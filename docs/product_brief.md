@@ -259,9 +259,10 @@ Given a configured Voice chord and ready Local AI Dictation:
 - Cloud sync, accounts, analytics, telemetry, remote control, or remote model
   providers.
 - Private Cloud Compute fallback.
-- A second speech recognizer, Whisper runtime, or direct-audio language model.
-- A shipped mobile, Windows, or Linux app in the current macOS release. iOS is
-  an accepted active roadmap; Android, Windows, and Linux remain line of sight.
+- A second iOS ASR runtime or direct-audio language model before the pinned
+  whisper.cpp file-ASR path meets its device quality gates.
+- Shipped Android, Windows, Linux, web, or mobile-web apps. Android and other
+  native desktops remain line of sight; web and mobile web are deferred.
 - Downloaded Driver code or user-authored plug-ins.
 - Arbitrary shell commands, scripts, or AppleScript.
 - Automatic per-application Profile switching.
@@ -288,8 +289,13 @@ M14 exports and restores one bounded, checksum-complete portable History
 archive without changing evidence or delivering text; Swift, Rust, and the C
 ABI share its V1 fixture. M15 links those portable validators into the Apple
 executable behind typed Swift values; production V1 import now verifies its
-private snapshot in Rust before complete Swift restore validation. Streaming
-model-runtime work, hardening, and iOS remain pending. See
+private snapshot in Rust before complete Swift restore validation. iOS Gate K0
+proves the app-owned capture and keyboard handoff boundary. I1 implements local
+onboarding and bounded Model admission. The first I2 slice selects and
+revalidates one compatible package, then produces real timed Raw text through a
+pinned whisper.cpp runtime without exposing runtime or model bytes to either
+extension. Formatting, History, the complete keyboard loop, physical-device
+performance, and broader hardening remain pending. See
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 [`voice_platform_design.md`](voice_platform_design.md), and
 [`voice_cujs.md`](voice_cujs.md).

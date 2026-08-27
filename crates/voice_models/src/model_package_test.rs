@@ -2,8 +2,8 @@ use std::fs;
 
 use crate::model_package_test_support::{TemporaryPackage, fixture_path, limits};
 use crate::{
-    ModelCapability, ModelPackageError, ModelPackageLimits, ModelRuntime, ModelStage,
-    validate_model_package,
+    ModelCapability, ModelFileRole, ModelPackageError, ModelPackageLimits, ModelRuntime,
+    ModelStage, validate_model_package,
 };
 
 #[test]
@@ -23,6 +23,11 @@ fn valid_package_verifies_identity_capabilities_license_and_every_file() {
     assert_eq!(package.languages, ["en-US"]);
     assert_eq!(package.license.spdx_expression, "Apache-2.0");
     assert_eq!(package.license.notice_file, "NOTICE.txt");
+    assert_eq!(package.files.len(), 2);
+    assert_eq!(package.files[0].path, "model.bin");
+    assert_eq!(package.files[0].role, ModelFileRole::Model);
+    assert_eq!(package.files[0].bytes, 23);
+    assert_eq!(package.files[0].sha256.len(), 64);
     assert_eq!(package.file_count, 2);
     assert_eq!(package.verified_bytes, 73);
     assert_ne!(package.manifest_sha256, [0; 32]);

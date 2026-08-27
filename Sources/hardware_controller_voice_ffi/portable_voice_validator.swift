@@ -117,6 +117,40 @@ public struct PortableModelPackage: Equatable, Sendable {
   public let minimumMemoryBytes: UInt64
   public let recommendedMemoryBytes: UInt64
   public let manifestSHA256: Data
+
+  public init(
+    packageID: String,
+    version: String,
+    displayName: String,
+    languages: [String],
+    runtime: PortableModelRuntime,
+    stage: PortableModelStage,
+    capabilities: PortableModelCapabilities,
+    spdxExpression: String,
+    noticeFile: String,
+    sourceURL: String,
+    fileCount: UInt32,
+    verifiedBytes: UInt64,
+    minimumMemoryBytes: UInt64,
+    recommendedMemoryBytes: UInt64,
+    manifestSHA256: Data
+  ) {
+    self.packageID = packageID
+    self.version = version
+    self.displayName = displayName
+    self.languages = languages
+    self.runtime = runtime
+    self.stage = stage
+    self.capabilities = capabilities
+    self.spdxExpression = spdxExpression
+    self.noticeFile = noticeFile
+    self.sourceURL = sourceURL
+    self.fileCount = fileCount
+    self.verifiedBytes = verifiedBytes
+    self.minimumMemoryBytes = minimumMemoryBytes
+    self.recommendedMemoryBytes = recommendedMemoryBytes
+    self.manifestSHA256 = manifestSHA256
+  }
 }
 
 public enum PortableVoiceValidationError:
@@ -132,6 +166,9 @@ public enum PortableVoiceValidationError:
   case invalidInventory
   case integrityMismatch
   case invalidIdentity
+  case unsupportedRuntime
+  case unsupportedCapability
+  case ambiguousModel
   case inputOutputFailure
   case internalFailure
   case unexpectedStatus(UInt32)
@@ -144,8 +181,17 @@ public protocol PortableVoiceHistoryArchiveValidating: Sendable {
   ) throws -> PortableVoiceHistoryArchive
 }
 
+public protocol PortableASRModelResolving: Sendable {
+  func resolveWhisperASRModel(
+    at root: URL,
+    limits: PortableModelPackageLimits,
+    expectedManifestSHA256: Data
+  ) throws -> URL
+}
+
 public struct RustPortableVoiceValidator:
   PortableVoiceHistoryArchiveValidating,
+  PortableASRModelResolving,
   Sendable
 {
   public init() {}
@@ -209,6 +255,53 @@ public struct RustPortableVoiceValidator:
     )
   }
 
+  public func resolveWhisperASRModel(
+    at root: URL,
+    limits: PortableModelPackageLimits,
+    expectedManifestSHA256: Data
+  ) throws -> URL {
+    guard expectedManifestSHA256.count == 32 else {
+      throw PortableVoiceValidationError.invalidArgument
+    }
+    let pathBytes = Array(root.path(percentEncoded: false).utf8)
+    var request = VoiceModelPackageRequestV1()
+    request.root_path_length = pathBytes.count
+    request.maximum_manifest_bytes = limits.maximumManifestBytes
+    request.maximum_installed_bytes = limits.maximumInstalledBytes
+    request.maximum_file_count = limits.maximumFileCount
+    request.has_expected_manifest_sha256 = 1
+    _ = withUnsafeMutableBytes(of: &request.expected_manifest_sha256) { target in
+      expectedManifestSHA256.copyBytes(to: target)
+    }
+    var modelPath = Data(count: 4_096)
+    let length = try modelPath.withUnsafeMutableBytes { modelPathBytes in
+      var output = VoiceASRModelInfoV1()
+      output.model_path = Self.utf8Buffer(modelPathBytes)
+      let status = pathBytes.withUnsafeBufferPointer { path in
+        request.root_path_utf8 = path.baseAddress
+        return voice_asr_model_resolve_v1(&request, &output)
+      }
+      guard status == VoiceFFIBridgeStatusOK.rawValue else {
+        if status == VoiceFFIBridgeStatusBufferTooSmall.rawValue {
+          throw PortableVoiceValidationError.internalFailure
+        }
+        throw Self.error(for: status)
+      }
+      guard
+        output.model_path.length <= modelPathBytes.count,
+        Self.data(from: output.manifest_sha256) == expectedManifestSHA256
+      else {
+        throw PortableVoiceValidationError.internalFailure
+      }
+      return output.model_path.length
+    }
+    let resolvedPath = String(decoding: modelPath.prefix(length), as: UTF8.self)
+    guard !resolvedPath.isEmpty else {
+      throw PortableVoiceValidationError.internalFailure
+    }
+    return URL(fileURLWithPath: resolvedPath)
+  }
+
   private static func error(for status: UInt32) -> PortableVoiceValidationError {
     switch status {
     case VoiceFFIBridgeStatusNullPointer.rawValue,
@@ -242,6 +335,12 @@ public struct RustPortableVoiceValidator:
       .invalidIdentity
     case VoiceFFIBridgeStatusHistoryArchiveIoFailure.rawValue:
       .inputOutputFailure
+    case VoiceFFIBridgeStatusASRRuntimeUnsupported.rawValue:
+      .unsupportedRuntime
+    case VoiceFFIBridgeStatusASRCapabilityUnsupported.rawValue:
+      .unsupportedCapability
+    case VoiceFFIBridgeStatusASRModelAmbiguous.rawValue:
+      .ambiguousModel
     case VoiceFFIBridgeStatusInternalFailure.rawValue:
       .internalFailure
     default:
