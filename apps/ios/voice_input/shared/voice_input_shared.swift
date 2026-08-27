@@ -76,6 +76,7 @@ public struct VoiceInputSnapshot: Codable, Equatable, Sendable {
 
 public enum VoiceInputKeyboardDecision: Equatable, Sendable {
   case requiresFullAccess
+  case unsupportedField
   case manualActivationRequired
   case requestStop(sessionID: UUID)
   case waitingForResult
@@ -104,11 +105,15 @@ public struct VoiceInputKeyboardPolicy: Equatable, Sendable {
   public func microphoneDecision(
     snapshot: VoiceInputSnapshot,
     hasFullAccess: Bool,
+    fieldEligibility: VoiceInputFieldEligibility = .supported,
     lastInsertionReceipt: VoiceInputInsertionReceipt?,
     now: Date
   ) -> VoiceInputKeyboardDecision {
     guard hasFullAccess else {
       return .requiresFullAccess
+    }
+    guard fieldEligibility == .supported else {
+      return .unsupportedField
     }
     guard snapshot.schemaRevision == VoiceInputSnapshot.schemaRevision else {
       return .serviceStale

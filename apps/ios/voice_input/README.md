@@ -66,3 +66,9 @@ the exact stop command, and a matching session can insert only once. The durable
 insertion claim precedes the host-field change; after a crash, History is the
 recovery source for a claimed result that did not reach the field. Physical
 iPhone keyboard evidence remains required.
+
+Voice is available only in recognized general-text fields. Constrained,
+sensitive, and unverified traits keep the keyboard usable but disable its mic.
+The keyboard retains only an ephemeral session/document/change identity while
+waiting; changing text, selection, or fields sends recovery to History instead
+of inserting at a changed target.

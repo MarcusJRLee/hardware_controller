@@ -4,6 +4,9 @@ import VoiceInputShared
 @MainActor
 final class KeyboardViewController: UIInputViewController {
   private let policy = VoiceInputKeyboardPolicy()
+  private let hostFieldPolicy = VoiceInputHostFieldPolicy()
+  private let fieldMapper = VoiceInputUIKitFieldMapper()
+  private let deliveryTargetPolicy = VoiceInputDeliveryTargetPolicy()
   private let store = VoiceInputKeychainStore()
   private let stylePreference = VoiceInputStylePreferenceStore(
     key: VoiceInputEnvironment.keyboardStyleKindKey
@@ -12,7 +15,8 @@ final class KeyboardViewController: UIInputViewController {
   private let styleButton = UIButton(type: .system)
   private let microphoneButton = UIButton(type: .system)
   private var pollTimer: Timer?
-  private var awaitingSessionID: UUID?
+  private var deliveryTarget: VoiceInputDeliveryTarget?
+  private var hostChangeRevision: UInt64 = 0
   private var selectedStyleKind = VoiceInputStyleKind.natural
   private var isUppercase = false
 
@@ -45,6 +49,18 @@ final class KeyboardViewController: UIInputViewController {
     super.viewDidDisappear(animated)
     pollTimer?.invalidate()
     pollTimer = nil
+  }
+
+  override func textDidChange(_ textInput: (any UITextInput)?) {
+    hostChangeRevision &+= 1
+    super.textDidChange(textInput)
+    refreshStatus()
+  }
+
+  override func selectionDidChange(_ textInput: (any UITextInput)?) {
+    hostChangeRevision &+= 1
+    super.selectionDidChange(textInput)
+    refreshStatus()
   }
 
   private func buildKeyboard() {
@@ -191,6 +207,15 @@ final class KeyboardViewController: UIInputViewController {
   }
 
   @objc private func handleMicrophone() {
+    guard hasFullAccess else {
+      showStatus("Typing works. Enable Full Access for local voice handoff.")
+      return
+    }
+    guard currentFieldEligibility == .supported else {
+      deliveryTarget = nil
+      showStatus("Typing works. Voice capture is unavailable in this field.")
+      return
+    }
     guard let snapshot = try? store.readSnapshot() else {
       showStatus("Shared local state is unavailable.")
       return
@@ -199,24 +224,28 @@ final class KeyboardViewController: UIInputViewController {
   }
 
   @objc private func pollForResult() {
-    guard let awaitingSessionID else {
+    guard let deliveryTarget else {
+      return
+    }
+    guard !invalidateDeliveryTargetIfNeeded() else {
+      showStatus("The field changed. Recover the completed transcript from Voice Input History.")
       return
     }
     guard let snapshot = try? store.readSnapshot() else {
       showStatus("Shared local state is unavailable.")
-      self.awaitingSessionID = nil
+      self.deliveryTarget = nil
       return
     }
-    guard snapshot.sessionID == awaitingSessionID else {
+    guard snapshot.sessionID == deliveryTarget.sessionID else {
       showStatus("The active capture session changed. Tap the mic again.")
-      self.awaitingSessionID = nil
+      self.deliveryTarget = nil
       return
     }
     if snapshot.phase == .ready {
       applyDecision(for: snapshot)
     } else if snapshot.phase == .interrupted || snapshot.phase == .failed {
       showStatus("Capture stopped without a result. Start again in Voice Input.")
-      self.awaitingSessionID = nil
+      self.deliveryTarget = nil
     }
   }
 
@@ -231,15 +260,26 @@ final class KeyboardViewController: UIInputViewController {
     let decision = policy.microphoneDecision(
       snapshot: snapshot,
       hasFullAccess: hasFullAccess,
+      fieldEligibility: currentFieldEligibility,
       lastInsertionReceipt: insertionReceipt,
       now: .now
     )
     switch decision {
     case .requiresFullAccess:
+      deliveryTarget = nil
       showStatus("Typing works. Enable Full Access for local voice handoff.")
+    case .unsupportedField:
+      deliveryTarget = nil
+      showStatus("Typing works. Voice capture is unavailable in this field.")
     case .manualActivationRequired:
+      deliveryTarget = nil
       showStatus("Start capture in Voice Input or its Control Center control, then return here.")
     case .requestStop(let sessionID):
+      let requestedTarget = VoiceInputDeliveryTarget(
+        sessionID: sessionID,
+        documentIdentifier: textDocumentProxy.documentIdentifier,
+        hostChangeRevision: hostChangeRevision
+      )
       do {
         try store.writeCommand(
           .stop(
@@ -248,27 +288,44 @@ final class KeyboardViewController: UIInputViewController {
             issuedAt: .now
           )
         )
-        awaitingSessionID = sessionID
+        deliveryTarget = requestedTarget
         showStatus("Stopping local capture…")
       } catch VoiceInputStoreError.commandPending {
-        awaitingSessionID = sessionID
-        showStatus("A local capture command is already pending…")
+        if deliveryTarget == requestedTarget {
+          showStatus("A local capture command is already pending…")
+        } else {
+          deliveryTarget = nil
+          showStatus("Another stop is pending. Recover its result from Voice Input History.")
+        }
       } catch {
+        deliveryTarget = nil
         showStatus("The stop request could not be written locally.")
       }
     case .waitingForResult:
-      awaitingSessionID = snapshot.sessionID
       showStatus("Finalizing locally…")
     case .serviceStale:
+      deliveryTarget = nil
       showStatus("The app-owned capture is not responding. Start again in Voice Input.")
     case .insert(let sessionID, let sequence, let text):
+      guard
+        deliveryTargetPolicy.decision(
+          sessionID: sessionID,
+          documentIdentifier: textDocumentProxy.documentIdentifier,
+          hostChangeRevision: hostChangeRevision,
+          target: deliveryTarget
+        ) == .deliver
+      else {
+        deliveryTarget = nil
+        showStatus("The field changed. Recover the completed transcript from Voice Input History.")
+        return
+      }
       let receipt = VoiceInputInsertionReceipt(
         sessionID: sessionID,
         sequence: sequence
       )
       do {
         guard try store.claimInsertion(receipt) else {
-          awaitingSessionID = nil
+          deliveryTarget = nil
           showStatus("This result was already inserted.")
           return
         }
@@ -277,21 +334,22 @@ final class KeyboardViewController: UIInputViewController {
         return
       }
       // The durable claim precedes the host-app side effect to guarantee at-most-once delivery.
+      deliveryTarget = nil
       textDocumentProxy.insertText(text)
-      if awaitingSessionID == sessionID {
-        awaitingSessionID = nil
-      }
       showStatus("Inserted once.")
     case .alreadyInserted:
-      awaitingSessionID = nil
+      deliveryTarget = nil
       showStatus("This result was already inserted.")
     }
   }
 
   private func refreshStatus() {
+    let deliveryTargetWasInvalidated = invalidateDeliveryTargetIfNeeded()
     let fullAccess = hasFullAccess
-    microphoneButton.isEnabled = fullAccess
-    microphoneButton.alpha = fullAccess ? 1 : 0.45
+    let fieldEligibility = currentFieldEligibility
+    let voiceAvailable = fullAccess && fieldEligibility == .supported
+    microphoneButton.isEnabled = voiceAvailable
+    microphoneButton.alpha = voiceAvailable ? 1 : 0.45
     if fullAccess {
       do {
         try store.markKeyboardObserved(at: .now)
@@ -302,9 +360,37 @@ final class KeyboardViewController: UIInputViewController {
     }
     if !fullAccess {
       showStatus("Typing works. Full Access enables only the local keychain handoff.")
+    } else if fieldEligibility == .unsupported {
+      showStatus("Typing works. Voice capture is unavailable in this field.")
+    } else if deliveryTargetWasInvalidated {
+      showStatus("The field changed. Recover the completed transcript from Voice Input History.")
     } else if statusLabel.text == nil {
       showStatus("Tap the mic after starting capture in Voice Input or Control Center.")
     }
+  }
+
+  private var currentFieldEligibility: VoiceInputFieldEligibility {
+    hostFieldPolicy.eligibility(
+      for: fieldMapper.kind(
+        keyboardType: textDocumentProxy.keyboardType,
+        textContentType: textDocumentProxy.textContentType
+      )
+    )
+  }
+
+  private func invalidateDeliveryTargetIfNeeded() -> Bool {
+    guard let deliveryTarget else {
+      return false
+    }
+    guard
+      currentFieldEligibility == .supported,
+      deliveryTarget.documentIdentifier == textDocumentProxy.documentIdentifier,
+      deliveryTarget.hostChangeRevision == hostChangeRevision
+    else {
+      self.deliveryTarget = nil
+      return true
+    }
+    return false
   }
 
   private func showStatus(_ text: String) {

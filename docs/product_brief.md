@@ -297,9 +297,12 @@ applies shared deterministic edits and semantic formatting, and commits
 searchable/playable bounded local History before publishing text without
 exposing runtime, model, audio, or History bytes to either extension. App and
 keyboard surface defaults expose all five Styles; the exact keyboard stop
-captures its Style and insertion deduplicates by session. Physical-device
-keyboard evidence, performance, and broader interruption/recovery hardening
-remain pending. See
+captures its Style and insertion deduplicates by session. Only recognized
+general-text traits permit Voice, and an ephemeral session/document/change
+identity prevents a late result from crossing target state without retaining
+target content.
+Physical-device keyboard evidence, performance, and broader interruption/
+recovery hardening remain pending. See
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 [`voice_platform_design.md`](voice_platform_design.md), and
 [`voice_cujs.md`](voice_cujs.md).

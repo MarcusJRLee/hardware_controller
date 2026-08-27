@@ -347,6 +347,11 @@ canonical formatter only inside the containing app. A session insertion receipt
 wins over any later sequence for the same session and is durably claimed before
 the host field changes.
 
+Decision [0045](decisions/0045_ios_host_field_and_delivery_target_safety.md)
+permits Voice only for recognized general-text traits and binds delivery to one
+ephemeral session/document/change-revision tuple. It retains neither target text
+nor host identity; any mismatch recovers from History.
+
 ## Formatting and backtracking
 
 The spoken-edit engine handles high-confidence commands before generative
@@ -635,8 +640,12 @@ test first or batch the entire implementation behind mocked internals.
   when no model is selected. The containing app now applies shared deterministic
   formatting, commits bounded History before publish, and accepts an exact
   Style-qualified keyboard stop. Real-Keychain tests prove warm stop/ready and
-  session-level exactly-once insertion. Physical-iPhone percentiles and keyboard
-  evidence remain open because its free profile is at the three-app limit.
+  session-level exactly-once insertion. Typed UIKit traits now disable Voice in
+  constrained or unverified fields without disabling QWERTY, and an opaque
+  document/session plus host-change revision prevents late target-state
+  insertion. Physical-iPhone
+  percentiles and keyboard evidence remain open because its free profile is at
+  the three-app limit.
 - Every repository check runs the real pinned native transcription and output
   safety assertions. `HC_RUN_IOS_ASR_PERFORMANCE=1` additionally enforces the
   RTF ≤ 0.75 gate only on named hardware; shared virtual CI is not performance
@@ -658,6 +667,11 @@ test first or batch the entire implementation behind mocked internals.
 
 ## Sources
 
+- [Apple custom keyboard interface constraints](https://developer.apple.com/documentation/uikit/configuring-a-custom-keyboard-interface)
+- [Apple document identifier](https://developer.apple.com/documentation/uikit/uitextdocumentproxy/documentidentifier)
+- [Apple text interaction callbacks](https://developer.apple.com/documentation/uikit/handling-text-interactions-in-custom-keyboards)
+- [Apple keyboard type](https://developer.apple.com/documentation/uikit/uitextinputtraits/keyboardtype)
+- [Apple text content type](https://developer.apple.com/documentation/uikit/uitextcontenttype)
 - [Apple custom keyboard open-access capabilities](https://developer.apple.com/documentation/uikit/configuring-open-access-for-a-custom-keyboard)
 - [Apple App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)
 - [Apple Audio Recording Intent](https://developer.apple.com/documentation/appintents/audiorecordingintent)

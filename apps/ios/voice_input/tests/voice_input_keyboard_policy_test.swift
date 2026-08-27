@@ -26,6 +26,22 @@ final class VoiceInputKeyboardPolicyTest: XCTestCase {
     XCTAssertEqual(decision, .requiresFullAccess)
   }
 
+  func testUnsupportedFieldNeverStopsOrDeliversVoice() {
+    let decision = VoiceInputKeyboardPolicy().microphoneDecision(
+      snapshot: .recording(
+        sessionID: UUID(),
+        sequence: 1,
+        heartbeatAt: Date(timeIntervalSince1970: 10)
+      ),
+      hasFullAccess: true,
+      fieldEligibility: .unsupported,
+      lastInsertionReceipt: nil,
+      now: Date(timeIntervalSince1970: 10)
+    )
+
+    XCTAssertEqual(decision, .unsupportedField)
+  }
+
   func testWarmRecordingCanBeStoppedThroughItsExactSession() {
     let sessionID = UUID()
     let decision = VoiceInputKeyboardPolicy(staleAfter: 3).microphoneDecision(
