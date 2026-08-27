@@ -52,8 +52,8 @@ final class VoiceInputAppModelTest: XCTestCase {
   func testRefreshSurfacesCaptureStateReadFailure() async {
     let service = VoiceInputCaptureService(
       store: FailingSnapshotStore(),
-      captureURL: FileManager.default.temporaryDirectory
-        .appendingPathComponent("\(UUID().uuidString).caf")
+      captureDirectoryURL: FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
     )
     let model = VoiceInputAppModel(
       microphoneAuthorizationProvider: { .authorized },
@@ -108,9 +108,70 @@ final class VoiceInputAppModelTest: XCTestCase {
     XCTAssertEqual(stoppedStyles, [.technical])
   }
 
+  @MainActor
+  func testLifecycleDecisionPublishesExplicitAdvisoryAndInterruptionState() async {
+    let service = LifecycleCaptureService(
+      decisions: [
+        .continueCapture(advisory: .lowPowerMode),
+        .interrupt(.thermalPressure),
+      ]
+    )
+    let model = VoiceInputAppModel(
+      microphoneAuthorizationProvider: { .authorized },
+      microphonePermissionRequester: { true },
+      keyboardObservedAtReader: { nil },
+      service: service
+    )
+
+    await model.applyLifecycleEvent(.lowPowerModeChanged(isEnabled: true))
+
+    XCTAssertEqual(
+      model.lifecycleMessage,
+      "Low Power Mode is active. Recording remains local and continues."
+    )
+
+    await model.applyLifecycleEvent(.thermalStateChanged(.critical))
+
+    XCTAssertEqual(
+      model.lifecycleMessage,
+      "Critical thermal pressure stopped capture. The partial recording is in History."
+    )
+    let events = await service.events
+    XCTAssertEqual(
+      events,
+      [
+        .lowPowerModeChanged(isEnabled: true),
+        .thermalStateChanged(.critical),
+      ]
+    )
+  }
+
   private enum TestError: Error {
     case unavailable
   }
+}
+
+private actor LifecycleCaptureService: VoiceInputCapturing {
+  private var remainingDecisions: [VoiceInputLifecycleDecision]
+  private(set) var events: [VoiceInputLifecycleEvent] = []
+
+  init(decisions: [VoiceInputLifecycleDecision]) {
+    remainingDecisions = decisions
+  }
+
+  func snapshot() throws -> VoiceInputSnapshot { .idle(sequence: 0) }
+  func start(sessionID _: UUID) async throws {}
+  func stop(styleKind _: VoiceInputStyleKind) async throws {}
+  func interrupt(reason _: VoiceInputCaptureInterruptionReason) async {}
+
+  func handleLifecycleEvent(
+    _ event: VoiceInputLifecycleEvent
+  ) -> VoiceInputLifecycleDecision {
+    events.append(event)
+    return remainingDecisions.removeFirst()
+  }
+
+  func processPendingCommand() async throws {}
 }
 
 private actor RecordingCaptureService: VoiceInputCapturing {
@@ -139,7 +200,13 @@ private actor RecordingCaptureService: VoiceInputCapturing {
     }
   }
 
-  func interrupt() async {}
+  func interrupt(reason _: VoiceInputCaptureInterruptionReason) async {}
+
+  func handleLifecycleEvent(
+    _: VoiceInputLifecycleEvent
+  ) async -> VoiceInputLifecycleDecision {
+    .ignore
+  }
 
   func processPendingCommand() async throws {}
 }

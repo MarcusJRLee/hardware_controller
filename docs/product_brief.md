@@ -300,9 +300,10 @@ keyboard surface defaults expose all five Styles; the exact keyboard stop
 captures its Style and insertion deduplicates by session. Only recognized
 general-text traits permit Voice, and an ephemeral session/document/change
 identity prevents a late result from crossing target state without retaining
-target content.
-Physical-device keyboard evidence, performance, and broader interruption/
-recovery hardening remain pending. See
+target content. Typed iOS lifecycle policy requires Live Activity ownership for
+background recording, stops privacy-sensitive interruptions without automatic
+resume, and preserves exact partial audio in 24-hour Recovery History. Physical-
+device keyboard, lifecycle, and performance evidence remain pending. See
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 [`voice_platform_design.md`](voice_platform_design.md), and
 [`voice_cujs.md`](voice_cujs.md).

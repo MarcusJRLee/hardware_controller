@@ -72,3 +72,14 @@ sensitive, and unverified traits keep the keyboard usable but disable its mic.
 The keyboard retains only an ephemeral session/document/change identity while
 waiting; changing text, selection, or fields sends recovery to History instead
 of inserting at a changed target.
+
+The containing app maps audio interruptions, route changes, media-service loss,
+background transitions, Low Power Mode, and thermal pressure into explicit
+capture decisions. Background recording continues only while its Live Activity
+is owned. Capture never automatically resumes after a sensitive interruption.
+Stopped audio gets a bounded background-finalization task; expiration or another
+stop condition preserves the exact partial as playable Recovery History when
+storage is available. On first History access after launch, only readable exact
+session artifacts are adopted. Damaged, empty, unknown, and noncanonical files
+remain untouched and cannot hide valid History. Recovery audio expires after 24
+hours without inventing transcript or model evidence.

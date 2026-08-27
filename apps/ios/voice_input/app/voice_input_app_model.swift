@@ -12,8 +12,10 @@ final class VoiceInputAppModel: ObservableObject {
   @Published private(set) var microphoneAuthorization: VoiceInputMicrophoneAuthorization
   @Published private(set) var keyboardHandoffObserved = false
   @Published private(set) var selectedStyleKind: VoiceInputStyleKind
+  @Published private(set) var lifecycleMessage: String?
 
   private let onboardingPolicy = VoiceInputOnboardingPolicy()
+  private let lifecycleNotificationMapper = VoiceInputLifecycleNotificationMapper()
   private let microphoneAuthorizationProvider:
     @MainActor @Sendable () -> VoiceInputMicrophoneAuthorization
   private let microphonePermissionRequester: @MainActor @Sendable () async -> Bool
@@ -31,7 +33,7 @@ final class VoiceInputAppModel: ObservableObject {
     ).first {
       service = VoiceInputCaptureService(
         store: store,
-        captureURL: documentsURL.appendingPathComponent("voice_input_capture.caf")
+        captureDirectoryURL: documentsURL
       )
     } else {
       service = nil
@@ -126,6 +128,7 @@ final class VoiceInputAppModel: ObservableObject {
   }
 
   func start() {
+    lifecycleMessage = nil
     perform { service in
       try await service.start(sessionID: UUID())
     }
@@ -172,19 +175,39 @@ final class VoiceInputAppModel: ObservableObject {
   }
 
   func handleInterruption(_ notification: Notification) {
-    guard
-      let rawValue = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
-      AVAudioSession.InterruptionType(rawValue: rawValue) == .began
-    else {
+    guard let event = lifecycleNotificationMapper.audioInterruption(notification) else {
       return
     }
+    handleLifecycleEvent(event)
+  }
+
+  func handleRouteChange(_ notification: Notification) {
+    guard let event = lifecycleNotificationMapper.audioRouteChange(notification) else {
+      return
+    }
+    handleLifecycleEvent(event)
+  }
+
+  func handleLifecycleEvent(_ event: VoiceInputLifecycleEvent) {
+    Task {
+      await applyLifecycleEvent(event)
+    }
+  }
+
+  func applyLifecycleEvent(_ event: VoiceInputLifecycleEvent) async {
     guard let service else {
       return
     }
-    Task {
-      await service.interrupt()
-      await refresh()
+    let decision = await service.handleLifecycleEvent(event)
+    switch decision {
+    case .ignore:
+      break
+    case .continueCapture(let advisory):
+      lifecycleMessage = advisory?.message
+    case .interrupt(let reason):
+      lifecycleMessage = reason.message
     }
+    await refresh()
   }
 
   private func processPendingCommand() async {
@@ -265,6 +288,44 @@ final class VoiceInputAppModel: ObservableObject {
       } catch {
         errorMessage = error.localizedDescription
       }
+    }
+  }
+}
+
+extension VoiceInputLifecycleAdvisory {
+  fileprivate var message: String {
+    switch self {
+    case .audioRouteChanged:
+      "The system changed the audio route. Local recording continues on the confirmed route."
+    case .backgroundRecording:
+      "Recording continues in the background with a visible Live Activity."
+    case .lowPowerMode:
+      "Low Power Mode is active. Recording remains local and continues."
+    case .thermalPressure:
+      "The iPhone is warm. Recording continues, but finalization may be slower."
+    }
+  }
+}
+
+extension VoiceInputCaptureInterruptionReason {
+  fileprivate var message: String {
+    switch self {
+    case .audioInterruption:
+      "An audio interruption stopped capture. The partial recording is in History."
+    case .audioRouteChange:
+      "An audio route change stopped capture. The partial recording is in History."
+    case .mediaServicesUnavailable:
+      "iOS audio services stopped capture. The partial recording is in History."
+    case .backgroundOwnershipUnavailable:
+      "Capture stopped because no visible Live Activity owned background recording. The partial recording is in History."
+    case .backgroundExecutionExpired:
+      "iOS ended background finalization. The partial recording is in History."
+    case .thermalPressure:
+      "Critical thermal pressure stopped capture. The partial recording is in History."
+    case .processTermination:
+      "A previous capture ended unexpectedly. Its partial recording is in History."
+    case .finalizationFailure:
+      "Finalization failed. The recoverable recording remains in History."
     }
   }
 }

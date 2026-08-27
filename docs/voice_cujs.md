@@ -470,6 +470,20 @@ Live Activity/system recording indication matches Capture ownership. A partial
 session remains recoverable; automatic resume never occurs after privacy-
 sensitive interruptions without an approved rule.
 
+**Current evidence:** the containing-app actor owns recorder, audio session,
+Live Activity, heartbeat, and bounded background-finalization task. Exhaustive
+notification mapping distinguishes route swaps from category/override changes;
+policy stops calls/Siri-class interruptions, media-service loss, missing
+background ownership, critical thermal pressure, and background expiration.
+Low Power Mode and serious thermal pressure continue with explicit advisories.
+Interruption commits typed Recovery History before ownership release when
+storage is available; first History access adopts exact readable partial/orphan
+audio, preserves damaged or unknown files, migrates revision 1, and expires the
+sole recovery artifact after 24 hours. No path automatically resumes. Signed
+physical-iPhone lifecycle evidence remains open under the free-profile limit.
+Decision
+[`0046`](decisions/0046_ios_capture_lifecycle_and_recovery.md) owns the boundary.
+
 ### I8 — Detect a stale service
 
 If the containing app is killed, upgraded, or no longer publishing a valid
