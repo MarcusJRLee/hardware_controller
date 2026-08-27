@@ -64,6 +64,30 @@ final class VoiceInputUITest: XCTestCase {
   }
 
   @MainActor
+  func testHistoryStorageExposesConfigurableLocalCaps() {
+    let app = XCUIApplication()
+    app.launch()
+
+    let storage = app.buttons["history_storage"]
+    for _ in 0..<8 where !storage.isHittable {
+      app.swipeUp()
+    }
+    XCTAssertTrue(storage.isHittable)
+    storage.tap()
+
+    for identifier in [
+      "history_retention_age",
+      "history_retention_size",
+      "history_retention_count",
+    ] {
+      XCTAssertTrue(
+        app.descendants(matching: .any)[identifier]
+          .waitForExistence(timeout: 2)
+      )
+    }
+  }
+
+  @MainActor
   func testLargeTextKeepsCaptureControlReachable() {
     let app = XCUIApplication()
     app.launchArguments += [

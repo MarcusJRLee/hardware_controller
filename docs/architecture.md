@@ -213,7 +213,13 @@ post-commit partial is removed only when its digest matches committed audio;
 differing bytes recover under a new session identifier. Recovery
 audio expires after 24 hours without inventing transcript stages. Data
 Protection and backup exclusion apply to the owned History directory, database
-family, and audio.
+family, and audio. History payload revision 3 persists `isPinned`; earlier
+revisions migrate to unpinned. A versioned local preference envelope configures
+age, byte, and recording-count caps, while basic volume capacity requests a
+1 GiB free-space reserve. Retention runs after durable commit and on History
+access; maintenance failure stays visible and retries without invalidating the
+capture. Pinned and sole-Recovery audio remain protected. Model-package limits
+remain a separate admission boundary and never trigger implicit eviction.
 The app and keyboard retain separate surface Style defaults. A schema-revision-2
 stop command captures the keyboard's explicit Style for its exact session; the
 app maps that bounded identifier exhaustively into the canonical formatter.
@@ -244,7 +250,9 @@ preserves the exact partial, and never auto-resumes. See
 [decision 0046](decisions/0046_ios_capture_lifecycle_and_recovery.md).
 The keyboard treats missing, future, expired, or unknown-schema active state as
 stale, clears its ephemeral delivery target, and never launches the app. See
-[decision 0047](decisions/0047_ios_stale_service_recovery.md).
+[decision 0047](decisions/0047_ios_stale_service_recovery.md). The iOS build
+also runs a static local-only source and capability check. See
+[decision 0049](decisions/0049_ios_offline_storage_enforcement.md).
 
 ### HID transport
 

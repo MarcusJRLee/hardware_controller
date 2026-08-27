@@ -37,6 +37,7 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 | iOS I7 lifecycle recovery | Live Activity ownership gates background recording; typed interruption, route, power, thermal, and background-finalization decisions preserve exact partial audio in 24-hour Recovery History without automatic resume. | [`decisions/0046_ios_capture_lifecycle_and_recovery.md`](decisions/0046_ios_capture_lifecycle_and_recovery.md) |
 | iOS I8 stale-service recovery | Recording and Transcribing publish bounded heartbeats; stale or replayed state stops keyboard polling, exposes one honest restart path, and cannot revive completed delivery. | [`decisions/0047_ios_stale_service_recovery.md`](decisions/0047_ios_stale_service_recovery.md) |
 | iOS I9 insertion recovery | One automatic attempt may expose one explicit same-process retry and local-only expiring copy only while the exact claimed result and target remain unchanged; every ambiguity falls back to History. | [`decisions/0048_ios_bounded_insertion_recovery.md`](decisions/0048_ios_bounded_insertion_recovery.md) |
+| iOS I10 offline storage | Versioned local presets enforce age/byte/count and 1-GiB-reserve cleanup, persisted pinning protects selected audio, maintenance never invalidates a durable capture, and Model limits never evict implicitly. | [`decisions/0049_ios_offline_storage_enforcement.md`](decisions/0049_ios_offline_storage_enforcement.md) |
 | Model recommendation | Qwen 3.5 4B is digest-pinned from the fixed evaluation corpus. | [`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md) |
 | Profiles | Transactional named Profiles with independent per-Device setups and active-Action cleanup. | [`decisions/0014_multi_profile_device_configuration.md`](decisions/0014_multi_profile_device_configuration.md) |
 | Application | Controller, History, Profiles, and General in one native foreground window with Dock and menu-bar presence. | [`ux_spec.md`](ux_spec.md) |
@@ -49,8 +50,9 @@ The local Voice expansion is accepted; macOS M1–M15, iOS Gate K0, I1 local
 onboarding and Model admission, and I2 through Style-qualified local formatting,
 History, warm keyboard delivery, target-safe field handling, I7 lifecycle
 recovery, I8 stale-service recovery, and I9 bounded insertion recovery are
-implemented across the current
-stacked branches. macOS and iOS are the active roadmap; Android, Windows, and
+implemented across the current stacked branches. I10 offline storage is
+implemented in source on its focused branch. macOS and iOS are the active
+roadmap; Android, Windows, and
 Linux remain architectural line-of-sight platforms; web and mobile web are
 deferred.
 The acceptance and execution authorities are:
@@ -78,9 +80,9 @@ promotion.
 | Local AI end to end | Warm release-to-insertion p95 ≤ 1.5 s on the reference Mac. | Prompt-5 prewarmed M4 production-controller p95 1.004 s. |
 | Local AI deadline | Preparation plus generation must fall back within three seconds after final speech text. | Deterministic deadline and late-output tests. |
 | Voice History | Warm 5,000-session search p95 ≤ 250 ms; startup recovery precedes retention without delaying the input runtime. | M8 current-source p95 2.639 ms; current source passes 513 Swift tests in 76 suites plus 34 Rust domain/archive/model/ABI tests and two linked/native C consumers. |
-| Privacy | Voice artifacts remain app-owned and local; no speech content is logged; no remote-capable provider receives a call; Ollama cannot reach a nonloopback endpoint. | Deterministic provider-boundary, SQLite/CAF, fallback, static-scan, and fixed-endpoint transport tests. |
+| Privacy | Voice artifacts remain app-owned and local; no speech content is logged; no remote-capable provider receives a call; Ollama cannot reach a nonloopback endpoint. | Deterministic provider-boundary, SQLite/CAF, fallback, fixed-endpoint transport tests, and an iOS source/capability network scan. |
 | iOS local ASR | File-ASR RTF ≤ 0.75 on the pinned native integration corpus; selected bytes are revalidated immediately before load. | `HC_RUN_IOS_ASR_PERFORMANCE=1` enforces the named-hardware gate; whisper.cpp `b4938` + `tiny.en` reference warm CPU RTF 0.0111. Every check runs real transcription correctness; Rust digest/runtime/capability/tamper and timed C/Swift result tests pass. |
-| iOS local History | Final output is unavailable until Raw/Edited/Formatted plus audio evidence commit; 90-day/1-GiB/2,000-artifact defaults retain transcripts after audio expiry. | Real SQLite/filesystem tests cover reload, escaped search, playback state, SHA-256 evidence, cap expiry, transcript preservation, partial cleanup, and orphan cleanup. |
+| iOS local History | Final output is unavailable until Raw/Edited/Formatted plus audio evidence commit; configurable 90-day/1-GiB/2,000-artifact defaults retain transcripts after audio expiry. | Real SQLite/filesystem tests cover reload, search, digest evidence, migration, pinning, recovery protection, age/count/byte/low-disk expiry, post-commit maintenance failure, Data Protection where exposed, backup exclusion, partial cleanup, and orphan cleanup. |
 | iOS keyboard delivery | One exact session and Style stop command produces one automatic attempt; only one explicit same-process retry is available after an unconfirmed result, and stale or malformed state cannot revive delivery. | Stable-Style, exhaustive-mapping, schema-migration, durable-Keychain-claim, exact recovery-policy, real-Keychain warm-journey, re-published-ready, and app-stop tests. |
 | iOS stale service | A killed, suspended, or upgraded capture service becomes non-active within three seconds and cannot leave an unbounded wait or revive delivery. | Active-phase heartbeat expiry, future/missing/unknown-schema state, strictly newer result sequence, same-session receipt dominance, and blocked-finalization actor tests. Physical kill/suspension/upgrade evidence remains open. |
 | iOS field safety | Unsupported traits never read capture state or receive Voice; a late result cannot cross document or session identity. | Normalized-trait, UIKit-mapping, unknown-custom-field, unsupported-policy, and exact-target tests. |

@@ -44,6 +44,9 @@ Run the same formatting, build, test, and release-script checks as GitHub:
 scripts/check.sh
 ```
 
+`scripts/check_ios.sh` additionally rejects network clients and network/cloud
+capabilities in iOS product sources before building or testing.
+
 See the [contributor guide](docs/contributor_guide.md) for source ownership,
 test placement, Driver additions, and opt-in system checks.
 
@@ -61,6 +64,13 @@ If no field update is confirmed, **Recover…** permits one explicit same-target
 retry or an on-device clipboard copy that expires after ten minutes and cannot
 cross Universal Clipboard. Any field, session, or process change falls back to
 **Voice Input → History**, where completed text remains copyable.
+
+**Voice Input → History → History storage** configures recording age, total
+bytes, and count. The defaults are 90 days, 1 GiB, and 2,000 recordings. Pin
+important audio to exclude it from automatic cleanup; transcripts remain after
+audio expires. Low-disk maintenance restores a 1 GiB free-space reserve without
+discarding a committed capture. Installed Model packages use a separate budget
+and are removed only by an explicit user action.
 
 ## Signed hardware build
 

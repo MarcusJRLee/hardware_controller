@@ -30,6 +30,7 @@ trap 'rm -rf "$derived_data"' EXIT
 scripts/generate_ios_project.sh
 git diff --exit-code -- apps/ios/voice_input/VoiceInput.xcodeproj
 
+scripts/check_ios_local_only.sh
 swift format lint --recursive --strict apps/ios/voice_input
 plutil -lint apps/ios/voice_input/config/*.plist >/dev/null
 scripts/check_voice_whisper_bridge.sh

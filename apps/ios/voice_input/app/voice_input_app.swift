@@ -62,12 +62,27 @@ struct VoiceInputApp: App {
         isDirectory: true
       )
       .appendingPathComponent("history", isDirectory: true)
+    let retentionPreferenceStore =
+      VoiceInputHistoryRetentionPreferenceStore()
+    let retentionSettings: VoiceHistoryRetentionSettings
+    let retentionPreferences: VoiceInputHistoryRetentionPreferenceStore?
+    let retentionInitializationError: String?
+    do {
+      retentionSettings = try retentionPreferenceStore.read()
+      retentionPreferences = retentionPreferenceStore
+      retentionInitializationError = nil
+    } catch {
+      retentionSettings = .iOSDefault
+      retentionPreferences = nil
+      retentionInitializationError =
+        "History storage settings are read-only: \(error.localizedDescription) The saved value was preserved."
+    }
     let historyRepository: VoiceInputHistoryRepository?
     let historyInitializationError: String?
     do {
       historyRepository = try VoiceInputHistoryRepository(
         rootURL: historyRoot,
-        retentionSettings: .iOSDefault
+        retentionSettings: retentionSettings
       )
       historyInitializationError = nil
     } catch {
@@ -95,7 +110,10 @@ struct VoiceInputApp: App {
     _history = StateObject(
       wrappedValue: VoiceInputHistoryModel(
         history: historyRepository,
-        initializationError: historyInitializationError
+        initializationError: historyInitializationError,
+        retentionSettings: retentionSettings,
+        retentionPreferences: retentionPreferences,
+        retentionInitializationError: retentionInitializationError
       )
     )
     _historyAudioPlayer = StateObject(

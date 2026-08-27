@@ -29,6 +29,8 @@ private final class VoiceInputSQLiteHandle: @unchecked Sendable {
 }
 
 actor VoiceInputHistoryRepository {
+  static let lowDiskReserveBytes: Int64 = 1_024 * 1_024 * 1_024
+
   private static let schemaRevision = VoiceInputHistorySession.currentSchemaRevision
   private static let transientDestructor = unsafeBitCast(
     -1,
@@ -36,19 +38,32 @@ actor VoiceInputHistoryRepository {
   )
 
   private let audioDirectoryURL: URL
-  private let retentionSettings: VoiceHistoryRetentionSettings
+  private var retentionSettings: VoiceHistoryRetentionSettings
+  private let availableCapacity: @Sendable (URL) throws -> Int64?
+  private let removeRetainedAudio: @Sendable (URL) throws -> Void
   private let handle: VoiceInputSQLiteHandle
   private var isClosed = false
   private var needsReconciliation = true
+  private var maintenanceMessage: String?
 
   private var database: OpaquePointer { handle.pointer }
 
   init(
     rootURL: URL,
-    retentionSettings: VoiceHistoryRetentionSettings
+    retentionSettings: VoiceHistoryRetentionSettings,
+    availableCapacity: @escaping @Sendable (URL) throws -> Int64? = {
+      url in
+      try url.resourceValues(forKeys: [.volumeAvailableCapacityKey])
+        .volumeAvailableCapacity.map(Int64.init)
+    },
+    removeRetainedAudio: @escaping @Sendable (URL) throws -> Void = {
+      try FileManager.default.removeItem(at: $0)
+    }
   ) throws {
     audioDirectoryURL = rootURL.appendingPathComponent("audio", isDirectory: true)
     self.retentionSettings = try retentionSettings.validated()
+    self.availableCapacity = availableCapacity
+    self.removeRetainedAudio = removeRetainedAudio
     try Self.prepareOwnedDirectory(rootURL)
     try Self.prepareOwnedDirectory(audioDirectoryURL)
 
@@ -125,7 +140,7 @@ actor VoiceInputHistoryRepository {
       try? FileManager.default.removeItem(at: artifact.url)
       throw error
     }
-    try applyRetention(now: endedAt)
+    enforceAfterCommit(now: endedAt)
     guard let stored = try session(id: sessionID) else {
       throw VoiceInputHistoryError.storageUnavailable
     }
@@ -178,7 +193,7 @@ actor VoiceInputHistoryRepository {
       try? FileManager.default.removeItem(at: artifact.url)
       throw error
     }
-    try applyRetention(now: endedAt)
+    enforceAfterCommit(now: endedAt)
     guard let stored = try session(id: sessionID) else {
       throw VoiceInputHistoryError.storageUnavailable
     }
@@ -250,10 +265,42 @@ actor VoiceInputHistoryRepository {
     ).first
   }
 
-  func enforceRetention(now: Date) throws {
+  @discardableResult
+  func enforceRetention(now: Date) throws -> VoiceHistoryRetentionPlan {
     try reconcileIfNeeded()
     try requireOpen()
-    try applyRetention(now: now)
+    do {
+      return try applyRetention(now: now)
+    } catch {
+      maintenanceMessage = "History storage maintenance could not finish and will retry."
+      throw error
+    }
+  }
+
+  func setRetentionSettings(
+    _ settings: VoiceHistoryRetentionSettings,
+    now: Date
+  ) throws -> VoiceHistoryRetentionPlan {
+    retentionSettings = try settings.validated()
+    return try enforceRetention(now: now)
+  }
+
+  func setPinned(
+    sessionID: UUID,
+    isPinned: Bool
+  ) throws -> VoiceInputHistorySession {
+    try reconcileIfNeeded()
+    try requireOpen()
+    guard let existing = try storedSession(id: sessionID), existing.audioArtifact != nil else {
+      throw VoiceInputHistoryError.invalidSession
+    }
+    let updated = existing.settingPinned(isPinned)
+    try update(updated)
+    return updated
+  }
+
+  func retentionMaintenanceMessage() -> String? {
+    maintenanceMessage
   }
 
   func close() throws {
@@ -349,8 +396,8 @@ actor VoiceInputHistoryRepository {
         database,
         """
         UPDATE voice_input_history
-        SET search_text = ?1, payload = ?2
-        WHERE id = ?3;
+        SET schema_revision = ?1, search_text = ?2, payload = ?3
+        WHERE id = ?4;
         """,
         -1,
         &statement,
@@ -361,15 +408,20 @@ actor VoiceInputHistoryRepository {
       throw VoiceInputHistoryError.storageUnavailable
     }
     defer { sqlite3_finalize(statement) }
-    try Self.bind(Self.searchText(for: session), at: 1, in: statement)
-    try Self.bind(try Self.encode(session), at: 2, in: statement)
-    try Self.bind(session.id.uuidString, at: 3, in: statement)
+    guard
+      sqlite3_bind_int(statement, 1, Int32(Self.schemaRevision)) == SQLITE_OK
+    else {
+      throw VoiceInputHistoryError.storageUnavailable
+    }
+    try Self.bind(Self.searchText(for: session), at: 2, in: statement)
+    try Self.bind(try Self.encode(session), at: 3, in: statement)
+    try Self.bind(session.id.uuidString, at: 4, in: statement)
     guard sqlite3_step(statement) == SQLITE_DONE, sqlite3_changes(database) == 1 else {
       throw VoiceInputHistoryError.storageUnavailable
     }
   }
 
-  private func applyRetention(now: Date) throws {
+  private func applyRetention(now: Date) throws -> VoiceHistoryRetentionPlan {
     let retained = try allSessions().compactMap { session -> VoiceHistoryRetentionCandidate? in
       guard let artifact = session.audioArtifact else {
         return nil
@@ -378,16 +430,18 @@ actor VoiceInputHistoryRepository {
         id: session.id,
         endedAt: session.endedAt,
         audioBytes: artifact.byteCount,
-        isPinned: false,
+        isPinned: session.isPinned,
         isActive: false,
         isSoleRecoveryArtifact: session.recoveryReason != nil,
         recoveryExpiresAt: session.recoveryExpiresAt
       )
     }
+    let lowDiskReclaimBytes = try automaticLowDiskReclaimBytes()
     let plan = try VoiceHistoryRetentionPlanner.plan(
       candidates: retained,
       settings: retentionSettings,
-      now: now
+      now: now,
+      lowDiskReclaimBytes: lowDiskReclaimBytes
     )
     for decision in plan.decisions {
       guard
@@ -396,17 +450,49 @@ actor VoiceInputHistoryRepository {
       else {
         continue
       }
-      try update(
-        existing.expiringAudio(at: now, reason: decision.reason)
-      )
+      try update(existing.expiringAudio(at: now, reason: decision.reason))
       if FileManager.default.fileExists(atPath: artifact.url.path) {
         do {
-          try FileManager.default.removeItem(at: artifact.url)
+          try removeRetainedAudio(artifact.url)
         } catch {
+          // Restore the evidence reference so a failed deletion remains retryable.
+          try update(existing)
           throw VoiceInputHistoryError.storageUnavailable
         }
       }
     }
+    maintenanceMessage = Self.maintenanceMessage(for: plan)
+    return plan
+  }
+
+  private func enforceAfterCommit(now: Date) {
+    do {
+      _ = try applyRetention(now: now)
+    } catch {
+      maintenanceMessage = "History storage maintenance could not finish and will retry."
+    }
+  }
+
+  private func automaticLowDiskReclaimBytes() throws -> Int64 {
+    guard let capacity = try availableCapacity(audioDirectoryURL) else {
+      throw VoiceInputHistoryError.storageUnavailable
+    }
+    guard capacity >= 0 else {
+      throw VoiceHistoryRetentionValidationError.invalidReclaimRequest
+    }
+    return max(0, Self.lowDiskReserveBytes - capacity)
+  }
+
+  private static func maintenanceMessage(
+    for plan: VoiceHistoryRetentionPlan
+  ) -> String? {
+    if plan.lowDiskShortfallBytes > 0 {
+      return "Pinned or recovery audio blocks the 1 GiB free-space reserve."
+    }
+    if plan.exceedsByteLimit || plan.exceedsArtifactLimit {
+      return "Pinned or recovery audio currently exceeds a History storage limit."
+    }
+    return nil
   }
 
   private func allSessions() throws -> [VoiceInputHistorySession] {

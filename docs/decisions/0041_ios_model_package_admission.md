@@ -78,3 +78,7 @@ and energy remain separate measured gates.
 - `apps/ios/voice_input/tests/voice_input_model_package_validator_test.swift`
 - `apps/ios/voice_input/tests/voice_input_model_package_installer_test.swift`
 - `apps/ios/voice_input/ui_tests/voice_input_ui_test.swift`
+
+Decision [0049](0049_ios_offline_storage_enforcement.md) adds explicit
+regressions proving that byte/version admission failures leave every installed
+package unchanged; History retention never evicts Model packages.

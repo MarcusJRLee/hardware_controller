@@ -17,7 +17,8 @@ HC_IOS_SIMULATOR_UDID='<simulator-udid>' \
 
 The check grants microphone access only to the Voice Input bundle on the selected
 simulator so the real-capture UI test is deterministic. It does not change
-physical-device privacy settings.
+physical-device privacy settings. It also rejects network clients, network/cloud
+capabilities, and Network.framework linkage in iOS product sources.
 
 `build_ios_device.sh` reads the private `HC_EXPECTED_TEAM_ID` from
 `.env.local`. It emits the signed `.app` path but does not install it.
@@ -42,7 +43,8 @@ atomically, and preserves the original folder. Installed models use Data
 Protection and stay outside OS backup. Files-picker imports are labeled manual;
 the user explicitly selects an admitted compatible package for transcription.
 The library defaults to 12 GiB and eight installed versions. These limits are
-configurable policy; the app never age-evicts a model and provides explicit
+configurable policy; rejected admission leaves every installed package
+unchanged. The app never implicitly evicts a model and provides explicit
 removal of only its private installed copy.
 
 An active compatible package now drives pinned local whisper.cpp file ASR in
@@ -55,12 +57,19 @@ core, then commits Raw, Edited, Formatted, Style, model provenance, and copied
 audio evidence to searchable local SQLite History before publishing text.
 History supports retained-audio playback and configurable age, byte, and count
 caps; its default 90-day, 1-GiB, 2,000-artifact policy expires audio without
-deleting transcripts.
+deleting transcripts. History storage presets persist in a versioned local
+preference. Users can pin retained successful or Recovery audio. Automatic
+maintenance skips pinned audio, restores a 1 GiB basic-volume free-space
+reserve, and surfaces failures without invalidating a durable capture. Future or
+damaged preference state is preserved read-only instead of being overwritten.
 
 The keyboard cannot access the microphone or launch the containing app. A cold
 capture starts from the containing app or its Control Center control. While the
 app owns capture, the keyboard can request stop, wait for a matching result, and
-insert it once. App and keyboard menus persist separate defaults for Natural,
+make one automatic insertion attempt. If UIKit cannot confirm that update, one
+explicit same-process retry and one 10-minute local-only copy remain available
+only while the exact result and target still match; otherwise History is the
+recovery path. App and keyboard menus persist separate defaults for Natural,
 Casual, Formal, Technical, and Verbatim. The keyboard freezes its selection on
 the exact stop command, and a matching session can insert only once. The durable
 insertion claim precedes the host-field change; after a crash, History is the

@@ -54,7 +54,7 @@ final class VoiceInputModelPackageInstallerTest: XCTestCase {
     let installer = VoiceInputModelPackageInstaller(
       rootURL: temporary.appendingPathComponent("models")
     )
-    _ = try await installer.install(
+    let installed = try await installer.install(
       from: firstSource,
       expectedManifestSHA256: nil
     )
@@ -68,6 +68,9 @@ final class VoiceInputModelPackageInstallerTest: XCTestCase {
     } catch {
       XCTAssertEqual(error as? VoiceInputModelPackageInstallError, .identityConflict)
     }
+    let remaining = try await installer.installedPackages()
+
+    XCTAssertEqual(remaining, [installed])
   }
 
   func testInvalidPackageLeavesNoStagingArtifact() async throws {
@@ -149,7 +152,7 @@ final class VoiceInputModelPackageInstallerTest: XCTestCase {
         maximumPackageVersions: 2
       )
     )
-    _ = try await installer.install(
+    let installed = try await installer.install(
       from: firstSource,
       expectedManifestSHA256: nil
     )
@@ -166,6 +169,9 @@ final class VoiceInputModelPackageInstallerTest: XCTestCase {
         .libraryLimitExceeded
       )
     }
+    let remaining = try await installer.installedPackages()
+
+    XCTAssertEqual(remaining, [installed])
   }
 
   func testTotalLibraryPackageLimitRejectsAnotherVersion() async throws {
@@ -187,7 +193,7 @@ final class VoiceInputModelPackageInstallerTest: XCTestCase {
         maximumPackageVersions: 1
       )
     )
-    _ = try await installer.install(
+    let installed = try await installer.install(
       from: firstSource,
       expectedManifestSHA256: nil
     )
@@ -204,6 +210,9 @@ final class VoiceInputModelPackageInstallerTest: XCTestCase {
         .libraryLimitExceeded
       )
     }
+    let remaining = try await installer.installedPackages()
+
+    XCTAssertEqual(remaining, [installed])
   }
 
   func testExplicitRemovalDeletesOnlyTheInstalledCopy() async throws {

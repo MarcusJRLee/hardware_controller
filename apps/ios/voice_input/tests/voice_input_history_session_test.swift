@@ -42,7 +42,7 @@ final class VoiceInputHistorySessionTest: XCTestCase {
     XCTAssertEqual(expired.formattedText, "Owned paths only.")
   }
 
-  func testRevisionOnePayloadMigratesWithoutInventingRecoveryState() throws {
+  func testEarlierPayloadMigratesWithoutInventingRecoveryOrPinState() throws {
     let sessionID = UUID()
     let audioDirectory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -56,17 +56,21 @@ final class VoiceInputHistorySessionTest: XCTestCase {
     var payload = try XCTUnwrap(
       JSONSerialization.jsonObject(with: encoded) as? [String: Any]
     )
-    payload["schemaRevision"] = 1
-    payload.removeValue(forKey: "recoveryReason")
+    for revision in [1, 2] {
+      payload["schemaRevision"] = revision
+      payload.removeValue(forKey: "recoveryReason")
+      payload.removeValue(forKey: "isPinned")
 
-    let migrated = try JSONDecoder().decode(
-      VoiceInputHistorySession.self,
-      from: JSONSerialization.data(withJSONObject: payload)
-    )
+      let migrated = try JSONDecoder().decode(
+        VoiceInputHistorySession.self,
+        from: JSONSerialization.data(withJSONObject: payload)
+      )
 
-    XCTAssertEqual(migrated.schemaRevision, 2)
-    XCTAssertNil(migrated.recoveryReason)
-    XCTAssertEqual(migrated.formattedText, session.formattedText)
+      XCTAssertEqual(migrated.schemaRevision, 3)
+      XCTAssertNil(migrated.recoveryReason)
+      XCTAssertFalse(migrated.isPinned)
+      XCTAssertEqual(migrated.formattedText, session.formattedText)
+    }
   }
 
   func testRecoveryPresentationExplainsWhyTranscriptIsUnavailable() throws {

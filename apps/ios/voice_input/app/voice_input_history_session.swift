@@ -28,7 +28,7 @@ struct VoiceInputHistoryAudioArtifact: Codable, Equatable, Sendable {
 }
 
 struct VoiceInputHistorySession: Codable, Equatable, Identifiable, Sendable {
-  static let currentSchemaRevision = 2
+  static let currentSchemaRevision = 3
   static let recoveryLifetime: TimeInterval = 86_400
 
   let schemaRevision: Int
@@ -48,6 +48,7 @@ struct VoiceInputHistorySession: Codable, Equatable, Identifiable, Sendable {
   let audioExpiredAt: Date?
   let audioExpiredReason: VoiceHistoryAudioExpirationReason?
   let recoveryReason: VoiceInputCaptureInterruptionReason?
+  let isPinned: Bool
 
   init(
     id: UUID,
@@ -56,7 +57,8 @@ struct VoiceInputHistorySession: Codable, Equatable, Identifiable, Sendable {
     transcript: VoiceInputProcessedTranscript,
     audioArtifact: VoiceInputHistoryAudioArtifact?,
     audioExpiredAt: Date? = nil,
-    audioExpiredReason: VoiceHistoryAudioExpirationReason? = nil
+    audioExpiredReason: VoiceHistoryAudioExpirationReason? = nil,
+    isPinned: Bool = false
   ) {
     schemaRevision = Self.currentSchemaRevision
     self.id = id
@@ -75,6 +77,7 @@ struct VoiceInputHistorySession: Codable, Equatable, Identifiable, Sendable {
     self.audioExpiredAt = audioExpiredAt
     self.audioExpiredReason = audioExpiredReason
     recoveryReason = nil
+    self.isPinned = isPinned
   }
 
   init(
@@ -111,6 +114,31 @@ struct VoiceInputHistorySession: Codable, Equatable, Identifiable, Sendable {
     audioExpiredAt = nil
     audioExpiredReason = nil
     recoveryReason = reason
+    isPinned = false
+  }
+
+  private init(
+    pinning session: VoiceInputHistorySession,
+    isPinned: Bool
+  ) {
+    schemaRevision = session.schemaRevision
+    id = session.id
+    startedAt = session.startedAt
+    endedAt = session.endedAt
+    rawText = session.rawText
+    editedText = session.editedText
+    formattedText = session.formattedText
+    style = session.style
+    spokenEdits = session.spokenEdits
+    formattedDocument = session.formattedDocument
+    timedSegments = session.timedSegments
+    modelPackageID = session.modelPackageID
+    modelVersion = session.modelVersion
+    audioArtifact = session.audioArtifact
+    audioExpiredAt = session.audioExpiredAt
+    audioExpiredReason = session.audioExpiredReason
+    recoveryReason = session.recoveryReason
+    self.isPinned = isPinned
   }
 
   private init(
@@ -135,6 +163,7 @@ struct VoiceInputHistorySession: Codable, Equatable, Identifiable, Sendable {
     audioExpiredAt = date
     audioExpiredReason = reason
     recoveryReason = session.recoveryReason
+    isPinned = false
   }
 
   func expiringAudio(
@@ -142,6 +171,10 @@ struct VoiceInputHistorySession: Codable, Equatable, Identifiable, Sendable {
     reason: VoiceHistoryAudioExpirationReason
   ) -> Self {
     Self(expiring: self, at: date, reason: reason)
+  }
+
+  func settingPinned(_ isPinned: Bool) -> Self {
+    Self(pinning: self, isPinned: isPinned)
   }
 
   func validated(audioDirectoryURL: URL) throws -> Self {
@@ -198,7 +231,7 @@ struct VoiceInputHistorySession: Codable, Equatable, Identifiable, Sendable {
         throw VoiceInputHistoryError.invalidSession
       }
     } else {
-      guard audioExpiredAt != nil, audioExpiredReason != nil else {
+      guard audioExpiredAt != nil, audioExpiredReason != nil, !isPinned else {
         throw VoiceInputHistoryError.invalidSession
       }
     }
@@ -257,6 +290,7 @@ struct VoiceInputHistorySession: Codable, Equatable, Identifiable, Sendable {
     case audioExpiredAt
     case audioExpiredReason
     case recoveryReason
+    case isPinned
   }
 
   init(from decoder: any Decoder) throws {
@@ -297,6 +331,10 @@ struct VoiceInputHistorySession: Codable, Equatable, Identifiable, Sendable {
       VoiceInputCaptureInterruptionReason.self,
       forKey: .recoveryReason
     )
+    isPinned =
+      decodedRevision >= 3
+      ? try container.decode(Bool.self, forKey: .isPinned)
+      : false
   }
 
   func encode(to encoder: any Encoder) throws {
@@ -318,6 +356,7 @@ struct VoiceInputHistorySession: Codable, Equatable, Identifiable, Sendable {
     try container.encodeIfPresent(audioExpiredAt, forKey: .audioExpiredAt)
     try container.encodeIfPresent(audioExpiredReason, forKey: .audioExpiredReason)
     try container.encodeIfPresent(recoveryReason, forKey: .recoveryReason)
+    try container.encode(isPinned, forKey: .isPinned)
   }
 
   private static func isLowercaseHexDigit(_ byte: UInt8) -> Bool {

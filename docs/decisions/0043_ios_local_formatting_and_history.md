@@ -65,3 +65,8 @@ one-time signed-device keyboard loop. iOS History intentionally exposes the
 first complete capture/search/playback subset; correction, retranscription,
 portable archive, pin, export, and transactional deletion remain later slices
 under the same canonical domain language.
+
+Decision [0049](0049_ios_offline_storage_enforcement.md) later implements
+persisted pinning, configurable presets, low-disk maintenance, and the offline
+source boundary for I10. Export, transactional deletion, correction, and
+retranscription remain later iOS slices.
