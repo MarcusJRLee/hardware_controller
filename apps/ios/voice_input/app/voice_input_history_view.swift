@@ -1,5 +1,6 @@
 import HardwareControllerVoiceCore
 import SwiftUI
+import VoiceInputShared
 
 struct VoiceInputHistoryView: View {
   @ObservedObject var model: VoiceInputHistoryModel
@@ -52,6 +53,8 @@ private struct VoiceInputHistorySessionView: View {
   let session: VoiceInputHistorySession
   let isPlaying: Bool
   let togglePlayback: () -> Void
+  private let localClipboard = VoiceInputSystemLocalClipboard()
+  @State private var copyMessage: String?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
@@ -102,6 +105,15 @@ private struct VoiceInputHistorySessionView: View {
         }
         .disabled(session.audioArtifact == nil)
 
+        if !session.isRecovery {
+          Button {
+            copyTranscript()
+          } label: {
+            Label("Copy text", systemImage: "doc.on.doc")
+          }
+          .accessibilityIdentifier("history_copy")
+        }
+
         if session.audioArtifact == nil {
           Text(
             session.isRecovery
@@ -111,6 +123,13 @@ private struct VoiceInputHistorySessionView: View {
           .font(.caption)
           .foregroundStyle(.secondary)
         }
+      }
+
+      if let copyMessage {
+        Text(copyMessage)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .accessibilityIdentifier("history_copy_status")
       }
 
       if !session.isRecovery {
@@ -128,6 +147,15 @@ private struct VoiceInputHistorySessionView: View {
     }
     .padding(16)
     .background(.quaternary, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+  }
+
+  private func copyTranscript() {
+    do {
+      try localClipboard.copy(session.formattedText)
+      copyMessage = "Copied on this device for 10 minutes."
+    } catch {
+      copyMessage = "This transcript is too large to copy safely."
+    }
   }
 }
 

@@ -1,6 +1,6 @@
 # Decision 0044: iOS Style-qualified keyboard delivery
 
-**Status:** Accepted
+**Status:** Accepted; amended by [decision 0048](0048_ios_bounded_insertion_recovery.md)
 
 ## Context
 
@@ -58,3 +58,10 @@ still required; the paired phone currently rejects another development app
 because its free provisioning profile already has three unrelated apps
 installed. Removing one is a user-owned destructive choice and is not performed
 automatically.
+
+## Amendment
+
+Decision 0048 preserves the durable claim before the first host-field side
+effect and every automatic replay guarantee. It adds one explicitly requested,
+process-local retry after an unconfirmed attempt. That retry never survives an
+extension restart and requires the exact claimed result and unchanged target.

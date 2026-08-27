@@ -1,6 +1,6 @@
 # Decision 0045: iOS host-field and delivery-target safety
 
-**Status:** Accepted
+**Status:** Accepted; amended by [decision 0048](0048_ios_bounded_insertion_recovery.md)
 
 ## Context
 
@@ -54,6 +54,14 @@ delivery intentionally becomes unavailable after extension restart or target
 change; the committed History transcript is the recovery source. A later
 explicit retry design needs a new target-confirmation contract and cannot reuse
 text context or host identity implicitly.
+
+## Amendment
+
+Decision 0048 completes the explicit retry design without introducing target
+text or host identity. One same-process retry and local-only expiring copy are
+available only while the original session/document/revision tuple, exact Ready
+result, and durable receipt still match. Every mismatch continues to recover
+through History.
 
 ## Sources
 

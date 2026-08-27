@@ -166,14 +166,20 @@ the extension boundary:
 
 The supported warm CUJ begins after the containing app has confirmed Capture
 ownership. The keyboard mic requests stop, waits for the same session to become
-ready, and inserts it once at the current cursor. Tapping mic while idle provides
-concise instructions instead of displaying false recording state.
+ready, and makes one automatic insertion attempt at the current cursor. Tapping
+mic while idle provides concise instructions instead of displaying false
+recording state.
 
 Recording and Transcribing publish bounded heartbeats. After three seconds
 without a valid pulse, the keyboard clears its target, stops polling, and shows
 one `Restart…` action that explains the approved app or Control Center path.
 The action never launches the app. A result must be newer than the snapshot that
 caused the stop, and a durable same-session receipt defeats every replay.
+If UIKit does not confirm a field update within 500 milliseconds, one
+`Recover…` menu offers a single explicit same-process retry or local-only copy.
+Every action revalidates the exact result, receipt, document, and host-change
+revision. Copy is capped at 256 KiB of UTF-8 and expires after ten minutes;
+target ambiguity and extension restart use containing-app History.
 
 Gate K0 confirms that a keyboard cannot access the microphone or launch its
 containing app under documented App Review rules. Cold capture starts through
@@ -357,6 +363,11 @@ Decision [0045](decisions/0045_ios_host_field_and_delivery_target_safety.md)
 permits Voice only for recognized general-text traits and binds delivery to one
 ephemeral session/document/change-revision tuple. It retains neither target text
 nor host identity; any mismatch recovers from History.
+
+Decision [0048](decisions/0048_ios_bounded_insertion_recovery.md) preserves one
+automatic attempt and adds one explicit same-process retry plus local-only,
+expiring copy. Recovery requires the exact claimed result and unchanged target;
+History remains authoritative across ambiguity or process loss.
 
 ## Formatting and backtracking
 
@@ -646,7 +657,7 @@ test first or batch the entire implementation behind mocked internals.
   when no model is selected. The containing app now applies shared deterministic
   formatting, commits bounded History before publish, and accepts an exact
   Style-qualified keyboard stop. Real-Keychain tests prove warm stop/ready and
-  session-level exactly-once insertion. Typed UIKit traits now disable Voice in
+  session-level automatic replay suppression. Typed UIKit traits now disable Voice in
   constrained or unverified fields without disabling QWERTY, and an opaque
   document/session plus host-change revision prevents late target-state
   insertion. Physical-iPhone
@@ -668,6 +679,14 @@ test first or batch the entire implementation behind mocked internals.
   reject regressed or same-session replay. Policy, actor, and real-Keychain
   tests cover I8; physical kill/suspension/upgrade evidence remains open.
   Decision [`0047`](decisions/0047_ios_stale_service_recovery.md) owns I8.
+- **Current insertion-recovery evidence:** an unconfirmed insertion exposes one
+  bounded `Recover…` surface. A single explicit retry and ten-minute local-only
+  copy require the exact Ready result, durable receipt, document, and host-change
+  revision; every mismatch recovers from History. The app History surface also
+  offers bounded copy. Pure policy tests run within the complete simulator
+  build; host-specific callback and rejection behavior remains physical-iPhone
+  evidence. Decision
+  [`0048`](decisions/0048_ios_bounded_insertion_recovery.md) owns I9.
 - Every repository check runs the real pinned native transcription and output
   safety assertions. `HC_RUN_IOS_ASR_PERFORMANCE=1` additionally enforces the
   RTF ≤ 0.75 gate only on named hardware; shared virtual CI is not performance
