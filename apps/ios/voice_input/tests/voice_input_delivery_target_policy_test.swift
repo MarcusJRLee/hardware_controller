@@ -27,7 +27,8 @@ final class VoiceInputDeliveryTargetPolicyTest: XCTestCase {
     let target = VoiceInputDeliveryTarget(
       sessionID: sessionID,
       documentIdentifier: documentIdentifier,
-      hostChangeRevision: 4
+      hostChangeRevision: 4,
+      stopRequestedAfterSequence: 1
     )
     XCTAssertEqual(
       keyboardPolicy.microphoneDecision(
@@ -50,6 +51,7 @@ final class VoiceInputDeliveryTargetPolicyTest: XCTestCase {
     XCTAssertEqual(
       VoiceInputDeliveryTargetPolicy().decision(
         sessionID: sessionID,
+        resultSequence: 2,
         documentIdentifier: documentIdentifier,
         hostChangeRevision: 4,
         target: target
@@ -58,19 +60,21 @@ final class VoiceInputDeliveryTargetPolicyTest: XCTestCase {
     )
   }
 
-  func testOnlyTheExactSessionDocumentAndRevisionCanReceiveTheResult() {
+  func testOnlyTheExactNewerSessionDocumentAndRevisionCanReceiveTheResult() {
     let sessionID = UUID()
     let documentIdentifier = UUID()
     let target = VoiceInputDeliveryTarget(
       sessionID: sessionID,
       documentIdentifier: documentIdentifier,
-      hostChangeRevision: 4
+      hostChangeRevision: 4,
+      stopRequestedAfterSequence: 3
     )
     let policy = VoiceInputDeliveryTargetPolicy()
 
     XCTAssertEqual(
       policy.decision(
         sessionID: sessionID,
+        resultSequence: 4,
         documentIdentifier: documentIdentifier,
         hostChangeRevision: 4,
         target: target
@@ -80,6 +84,7 @@ final class VoiceInputDeliveryTargetPolicyTest: XCTestCase {
     XCTAssertEqual(
       policy.decision(
         sessionID: UUID(),
+        resultSequence: 4,
         documentIdentifier: documentIdentifier,
         hostChangeRevision: 4,
         target: target
@@ -89,6 +94,7 @@ final class VoiceInputDeliveryTargetPolicyTest: XCTestCase {
     XCTAssertEqual(
       policy.decision(
         sessionID: sessionID,
+        resultSequence: 4,
         documentIdentifier: UUID(),
         hostChangeRevision: 4,
         target: target
@@ -98,6 +104,7 @@ final class VoiceInputDeliveryTargetPolicyTest: XCTestCase {
     XCTAssertEqual(
       policy.decision(
         sessionID: sessionID,
+        resultSequence: 4,
         documentIdentifier: documentIdentifier,
         hostChangeRevision: 5,
         target: target
@@ -107,9 +114,20 @@ final class VoiceInputDeliveryTargetPolicyTest: XCTestCase {
     XCTAssertEqual(
       policy.decision(
         sessionID: sessionID,
+        resultSequence: 4,
         documentIdentifier: documentIdentifier,
         hostChangeRevision: 4,
         target: nil
+      ),
+      .recoverFromHistory
+    )
+    XCTAssertEqual(
+      policy.decision(
+        sessionID: sessionID,
+        resultSequence: 3,
+        documentIdentifier: documentIdentifier,
+        hostChangeRevision: 4,
+        target: target
       ),
       .recoverFromHistory
     )

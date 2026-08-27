@@ -169,6 +169,12 @@ ownership. The keyboard mic requests stop, waits for the same session to become
 ready, and inserts it once at the current cursor. Tapping mic while idle provides
 concise instructions instead of displaying false recording state.
 
+Recording and Transcribing publish bounded heartbeats. After three seconds
+without a valid pulse, the keyboard clears its target, stops polling, and shows
+one `Restart…` action that explains the approved app or Control Center path.
+The action never launches the app. A result must be newer than the snapshot that
+caused the stop, and a durable same-session receipt defeats every replay.
+
 Gate K0 confirms that a keyboard cannot access the microphone or launch its
 containing app under documented App Review rules. Cold capture starts through
 the containing app, Control Center, Siri, Action button, or another approved
@@ -655,6 +661,13 @@ test first or batch the entire implementation behind mocked internals.
   readable canonical session artifacts, preserves damaged/unknown files, and
   never auto-resumes. Decision
   [`0046`](decisions/0046_ios_capture_lifecycle_and_recovery.md) owns I7.
+- **Current stale-service evidence:** Recording and Transcribing maintain one
+  phase-aware heartbeat task. Missing, future, expired, and unknown-schema
+  active state stops the keyboard wait within three seconds and exposes one
+  honest restart-instruction action. Result sequencing and the durable receipt
+  reject regressed or same-session replay. Policy, actor, and real-Keychain
+  tests cover I8; physical kill/suspension/upgrade evidence remains open.
+  Decision [`0047`](decisions/0047_ios_stale_service_recovery.md) owns I8.
 - Every repository check runs the real pinned native transcription and output
   safety assertions. `HC_RUN_IOS_ASR_PERFORMANCE=1` additionally enforces the
   RTF ≤ 0.75 gate only on named hardware; shared virtual CI is not performance

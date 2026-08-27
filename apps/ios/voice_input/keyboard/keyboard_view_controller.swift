@@ -12,6 +12,7 @@ final class KeyboardViewController: UIInputViewController {
     key: VoiceInputEnvironment.keyboardStyleKindKey
   )
   private let statusLabel = UILabel()
+  private let restartButton = UIButton(type: .system)
   private let styleButton = UIButton(type: .system)
   private let microphoneButton = UIButton(type: .system)
   private var pollTimer: Timer?
@@ -29,7 +30,6 @@ final class KeyboardViewController: UIInputViewController {
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
     refreshStatus()
-    startPolling()
   }
 
   private func startPolling() {
@@ -47,6 +47,10 @@ final class KeyboardViewController: UIInputViewController {
 
   override func viewDidDisappear(_ animated: Bool) {
     super.viewDidDisappear(animated)
+    stopPolling()
+  }
+
+  private func stopPolling() {
     pollTimer?.invalidate()
     pollTimer = nil
   }
@@ -93,13 +97,20 @@ final class KeyboardViewController: UIInputViewController {
   }
 
   private var statusAndStyleRow: UIStackView {
+    restartButton.setTitle("Restart…", for: .normal)
+    restartButton.accessibilityLabel = "Show voice restart steps"
+    restartButton.accessibilityIdentifier = "voice_restart"
+    restartButton.isHidden = true
+    restartButton.addTarget(self, action: #selector(showRestartSteps), for: .touchUpInside)
+    restartButton.setContentHuggingPriority(.required, for: .horizontal)
+
     styleButton.accessibilityLabel = "Dictation style"
     styleButton.accessibilityIdentifier = "voice_style"
     styleButton.showsMenuAsPrimaryAction = true
     styleButton.setContentHuggingPriority(.required, for: .horizontal)
     configureStyleMenu()
 
-    let row = UIStackView(arrangedSubviews: [statusLabel, styleButton])
+    let row = UIStackView(arrangedSubviews: [statusLabel, restartButton, styleButton])
     row.axis = .horizontal
     row.spacing = 8
     return row
@@ -208,16 +219,18 @@ final class KeyboardViewController: UIInputViewController {
 
   @objc private func handleMicrophone() {
     guard hasFullAccess else {
+      restartButton.isHidden = true
       showStatus("Typing works. Enable Full Access for local voice handoff.")
       return
     }
     guard currentFieldEligibility == .supported else {
       deliveryTarget = nil
+      restartButton.isHidden = true
       showStatus("Typing works. Voice capture is unavailable in this field.")
       return
     }
     guard let snapshot = try? store.readSnapshot() else {
-      showStatus("Shared local state is unavailable.")
+      showStaleService("Shared local state is unavailable.")
       return
     }
     applyDecision(for: snapshot)
@@ -225,36 +238,64 @@ final class KeyboardViewController: UIInputViewController {
 
   @objc private func pollForResult() {
     guard let deliveryTarget else {
+      stopPolling()
       return
     }
     guard !invalidateDeliveryTargetIfNeeded() else {
+      stopPolling()
       showStatus("The field changed. Recover the completed transcript from Voice Input History.")
       return
     }
     guard let snapshot = try? store.readSnapshot() else {
-      showStatus("Shared local state is unavailable.")
-      self.deliveryTarget = nil
+      showStaleService("Shared local state is unavailable.")
       return
     }
     guard snapshot.sessionID == deliveryTarget.sessionID else {
-      showStatus("The active capture session changed. Tap the mic again.")
+      showStatus(
+        "The capture session changed. Recover the earlier result from Voice Input History.")
       self.deliveryTarget = nil
+      stopPolling()
       return
     }
-    if snapshot.phase == .ready {
-      applyDecision(for: snapshot)
-    } else if snapshot.phase == .interrupted || snapshot.phase == .failed {
-      showStatus("Capture stopped without a result. Start again in Voice Input.")
-      self.deliveryTarget = nil
-    }
-  }
-
-  private func applyDecision(for snapshot: VoiceInputSnapshot) {
     let insertionReceipt: VoiceInputInsertionReceipt?
     do {
       insertionReceipt = try store.readInsertionReceipt()
     } catch {
-      showStatus("The local insertion receipt is unavailable.")
+      showStaleService("The local insertion receipt is unavailable.")
+      return
+    }
+    let decision = policy.microphoneDecision(
+      snapshot: snapshot,
+      hasFullAccess: hasFullAccess,
+      fieldEligibility: currentFieldEligibility,
+      lastInsertionReceipt: insertionReceipt,
+      now: .now
+    )
+    switch decision {
+    case .requestStop:
+      showStatus("Stopping local capture…")
+    case .waitingForResult:
+      showStatus("Finalizing locally…")
+    case .serviceStale:
+      showStaleService("The app-owned capture stopped responding.")
+    case .insert, .alreadyInserted:
+      applyDecision(for: snapshot)
+    case .manualActivationRequired:
+      showStatus("Capture stopped without a result. Start again in Voice Input.")
+      self.deliveryTarget = nil
+      stopPolling()
+    case .requiresFullAccess, .unsupportedField:
+      applyDecision(for: snapshot)
+    }
+  }
+
+  private func applyDecision(for snapshot: VoiceInputSnapshot) {
+    restartButton.isHidden = true
+    let insertionReceipt: VoiceInputInsertionReceipt?
+    do {
+      insertionReceipt = try store.readInsertionReceipt()
+    } catch {
+      showStaleService("The local insertion receipt is unavailable.")
       return
     }
     let decision = policy.microphoneDecision(
@@ -267,9 +308,11 @@ final class KeyboardViewController: UIInputViewController {
     switch decision {
     case .requiresFullAccess:
       deliveryTarget = nil
+      stopPolling()
       showStatus("Typing works. Enable Full Access for local voice handoff.")
     case .unsupportedField:
       deliveryTarget = nil
+      stopPolling()
       showStatus("Typing works. Voice capture is unavailable in this field.")
     case .manualActivationRequired:
       deliveryTarget = nil
@@ -278,7 +321,8 @@ final class KeyboardViewController: UIInputViewController {
       let requestedTarget = VoiceInputDeliveryTarget(
         sessionID: sessionID,
         documentIdentifier: textDocumentProxy.documentIdentifier,
-        hostChangeRevision: hostChangeRevision
+        hostChangeRevision: hostChangeRevision,
+        stopRequestedAfterSequence: snapshot.sequence
       )
       do {
         try store.writeCommand(
@@ -289,6 +333,8 @@ final class KeyboardViewController: UIInputViewController {
           )
         )
         deliveryTarget = requestedTarget
+        restartButton.isHidden = true
+        startPolling()
         showStatus("Stopping local capture…")
       } catch VoiceInputStoreError.commandPending {
         if deliveryTarget == requestedTarget {
@@ -304,18 +350,19 @@ final class KeyboardViewController: UIInputViewController {
     case .waitingForResult:
       showStatus("Finalizing locally…")
     case .serviceStale:
-      deliveryTarget = nil
-      showStatus("The app-owned capture is not responding. Start again in Voice Input.")
+      showStaleService("The app-owned capture is not responding.")
     case .insert(let sessionID, let sequence, let text):
       guard
         deliveryTargetPolicy.decision(
           sessionID: sessionID,
+          resultSequence: sequence,
           documentIdentifier: textDocumentProxy.documentIdentifier,
           hostChangeRevision: hostChangeRevision,
           target: deliveryTarget
         ) == .deliver
       else {
         deliveryTarget = nil
+        stopPolling()
         showStatus("The field changed. Recover the completed transcript from Voice Input History.")
         return
       }
@@ -326,6 +373,7 @@ final class KeyboardViewController: UIInputViewController {
       do {
         guard try store.claimInsertion(receipt) else {
           deliveryTarget = nil
+          stopPolling()
           showStatus("This result was already inserted.")
           return
         }
@@ -335,10 +383,12 @@ final class KeyboardViewController: UIInputViewController {
       }
       // The durable claim precedes the host-app side effect to guarantee at-most-once delivery.
       deliveryTarget = nil
+      stopPolling()
       textDocumentProxy.insertText(text)
       showStatus("Inserted once.")
     case .alreadyInserted:
       deliveryTarget = nil
+      stopPolling()
       showStatus("This result was already inserted.")
     }
   }
@@ -359,10 +409,13 @@ final class KeyboardViewController: UIInputViewController {
       }
     }
     if !fullAccess {
+      restartButton.isHidden = true
       showStatus("Typing works. Full Access enables only the local keychain handoff.")
     } else if fieldEligibility == .unsupported {
+      restartButton.isHidden = true
       showStatus("Typing works. Voice capture is unavailable in this field.")
     } else if deliveryTargetWasInvalidated {
+      restartButton.isHidden = true
       showStatus("The field changed. Recover the completed transcript from Voice Input History.")
     } else if statusLabel.text == nil {
       showStatus("Tap the mic after starting capture in Voice Input or Control Center.")
@@ -395,6 +448,19 @@ final class KeyboardViewController: UIInputViewController {
 
   private func showStatus(_ text: String) {
     statusLabel.text = text
+  }
+
+  private func showStaleService(_ text: String) {
+    deliveryTarget = nil
+    stopPolling()
+    restartButton.isHidden = false
+    showStatus(text)
+  }
+
+  @objc private func showRestartSteps() {
+    restartButton.isHidden = true
+    showStatus(
+      "Open Voice Input or use its Control Center control to start again, then return here.")
   }
 
   private func configureStyleMenu() {

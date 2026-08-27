@@ -72,6 +72,20 @@ public struct VoiceInputSnapshot: Codable, Equatable, Sendable {
       text: text
     )
   }
+
+  public static func transcribing(
+    sessionID: UUID,
+    sequence: UInt64,
+    heartbeatAt: Date
+  ) -> VoiceInputSnapshot {
+    VoiceInputSnapshot(
+      phase: .transcribing,
+      sessionID: sessionID,
+      sequence: sequence,
+      heartbeatAt: heartbeatAt,
+      text: nil
+    )
+  }
 }
 
 public enum VoiceInputKeyboardDecision: Equatable, Sendable {
@@ -118,21 +132,27 @@ public struct VoiceInputKeyboardPolicy: Equatable, Sendable {
     guard snapshot.schemaRevision == VoiceInputSnapshot.schemaRevision else {
       return .serviceStale
     }
+    if let lastInsertionReceipt,
+      lastInsertionReceipt.sessionID == snapshot.sessionID
+    {
+      return .alreadyInserted
+    }
     switch snapshot.phase {
     case .idle, .interrupted, .failed:
       return .manualActivationRequired
     case .recording:
       guard
         let sessionID = snapshot.sessionID,
-        let heartbeatAt = snapshot.heartbeatAt,
-        now.timeIntervalSince(heartbeatAt) >= 0,
-        now.timeIntervalSince(heartbeatAt) <= staleAfter
+        hasCurrentHeartbeat(snapshot.heartbeatAt, now: now)
       else {
         return .serviceStale
       }
       return .requestStop(sessionID: sessionID)
     case .transcribing:
-      guard snapshot.sessionID != nil else {
+      guard
+        snapshot.sessionID != nil,
+        hasCurrentHeartbeat(snapshot.heartbeatAt, now: now)
+      else {
         return .serviceStale
       }
       return .waitingForResult
@@ -155,5 +175,13 @@ public struct VoiceInputKeyboardPolicy: Equatable, Sendable {
         text: text
       )
     }
+  }
+
+  private func hasCurrentHeartbeat(_ heartbeatAt: Date?, now: Date) -> Bool {
+    guard let heartbeatAt else {
+      return false
+    }
+    let age = now.timeIntervalSince(heartbeatAt)
+    return age >= 0 && age <= staleAfter
   }
 }

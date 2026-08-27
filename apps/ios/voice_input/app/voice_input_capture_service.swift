@@ -53,6 +53,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
   private var recorder: (any VoiceInputAudioRecording)?
   private var activityID: String?
   private var heartbeatTask: Task<Void, Never>?
+  private var heartbeatPhase: VoiceInputSnapshot.Phase?
   private var sessionID: UUID?
   private var sessionStartedAt: Date?
   private var activeCaptureURL: URL?
@@ -158,7 +159,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
           heartbeatAt: now()
         )
       )
-      startHeartbeat()
+      startHeartbeat(phase: .recording)
     } catch {
       if sessionID == requestedSessionID {
         if recorder != nil {
@@ -188,8 +189,6 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
     else {
       return
     }
-    heartbeatTask?.cancel()
-    heartbeatTask = nil
     recorder.stop()
     self.recorder = nil
     let sessionEndedAt = now()
@@ -201,14 +200,13 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
 
     do {
       try writeSnapshot(
-        VoiceInputSnapshot(
-          phase: .transcribing,
+        .transcribing(
           sessionID: sessionID,
           sequence: nextSequence(),
-          heartbeatAt: nil,
-          text: nil
+          heartbeatAt: now()
         )
       )
+      startHeartbeat(phase: .transcribing)
       await activityManager.update(
         id: activityID,
         phase: .transcribing,
@@ -286,6 +284,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
     }
     heartbeatTask?.cancel()
     heartbeatTask = nil
+    heartbeatPhase = nil
     recorder?.stop()
     recorder = nil
     let disposition = await preservePartial(reason: reason, endedAt: now())
@@ -364,8 +363,11 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
     }
   }
 
-  private func startHeartbeat() {
-    heartbeatTask?.cancel()
+  private func startHeartbeat(phase: VoiceInputSnapshot.Phase) {
+    heartbeatPhase = phase
+    guard heartbeatTask == nil else {
+      return
+    }
     let interval = heartbeatInterval
     heartbeatTask = Task { [weak self] in
       while !Task.isCancelled {
@@ -379,28 +381,48 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
   }
 
   private func heartbeat() async {
-    guard let sessionID, recorder != nil else {
+    guard let sessionID, let heartbeatPhase else {
       return
     }
-    try? writeSnapshot(
-      .recording(
+    let snapshot: VoiceInputSnapshot
+    switch heartbeatPhase {
+    case .recording:
+      guard recorder != nil else {
+        return
+      }
+      snapshot = .recording(
         sessionID: sessionID,
         sequence: nextSequence(),
         heartbeatAt: now()
       )
-    )
+    case .transcribing:
+      guard recorder == nil else {
+        return
+      }
+      snapshot = .transcribing(
+        sessionID: sessionID,
+        sequence: nextSequence(),
+        heartbeatAt: now()
+      )
+    case .idle, .ready, .interrupted, .failed:
+      return
+    }
+    try? writeSnapshot(snapshot)
     await activityManager.update(
       id: activityID,
-      phase: .recording,
+      phase: heartbeatPhase,
       at: now()
     )
-    try? await processPendingCommand()
+    if heartbeatPhase == .recording, recorder != nil {
+      try? await processPendingCommand()
+    }
   }
 
   private func relinquishCapture(endingPhase: VoiceInputSnapshot.Phase) async {
     isTearingDown = true
     heartbeatTask?.cancel()
     heartbeatTask = nil
+    heartbeatPhase = nil
     let endingRecorder = recorder
     recorder = nil
     let endingActivityID = activityID

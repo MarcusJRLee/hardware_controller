@@ -170,11 +170,13 @@ surface invoking `AudioRecordingIntent`.
 The app, keyboard, and Control Center extension share one same-team generic-
 password Keychain service. Snapshot and single-slot command JSON is limited to
 64 KiB per record, marked this-device-only, and excluded from Keychain
-synchronization. Session identity, monotonic sequence, 30-second command
-freshness, bounded heartbeat, and a keyboard-local insertion receipt reject
-stale, duplicate, and late results. The
-keyboard polls Keychain only while awaiting a matching result. Audio, models,
-History, logs, host identity, and target context stay outside the handoff.
+synchronization. Recording and Transcribing publish 500-millisecond heartbeats;
+the keyboard rejects active state after three seconds. Session identity, a
+strictly newer monotonic result sequence, 30-second command freshness, and a
+keyboard-local insertion receipt reject stale, duplicate, and late results. The
+keyboard polls Keychain only while awaiting a matching result and stops before
+showing one documented restart path. Audio, models, History, logs, host
+identity, and target context stay outside the handoff.
 
 Gate K0 established signing, extension, and lifecycle feasibility. The same
 generated project now lives at `apps/ios/voice_input/` as the production iOS
@@ -231,6 +233,9 @@ ownership is mandatory for background recording; stopped capture gets one
 bounded background-finalization task. Expiration invalidates late output,
 preserves the exact partial, and never auto-resumes. See
 [decision 0046](decisions/0046_ios_capture_lifecycle_and_recovery.md).
+The keyboard treats missing, future, expired, or unknown-schema active state as
+stale, clears its ephemeral delivery target, and never launches the app. See
+[decision 0047](decisions/0047_ios_stale_service_recovery.md).
 
 ### HID transport
 
