@@ -123,7 +123,9 @@ audio at startup before applying storage limits. Recovered audio is marked,
 playable, and locally retranscribable without invented text; unpinned recovery
 audio expires after 24 hours while its History row remains searchable.
 History can also import a supported local recording, transcribe and format it
-on-device, and retain one app-owned copy without changing the original.
+on-device, and retain one app-owned copy without changing the original. V1
+`.voice_history` archives move immutable transcript/audio evidence between
+installations through bounded Swift/Rust/schema/C verification without delivery.
 
 ## Dictation Actions
 
@@ -220,8 +222,9 @@ but preserves a model that another local Ollama client already had running.
   browser, and validated terminal targets.
 - Apple Foundation Models and optional local Ollama refinement behind one typed
   provider contract.
-- A dependency-free Rust retention policy plus a bounded, digest-verifying
-  Model-package validator behind one versioned caller-owned C ABI.
+- A dependency-free Rust retention policy plus bounded, digest-verifying Model-
+  package and Voice History archive validators behind one versioned caller-
+  owned C ABI.
 - Atomic, schema-versioned local Profiles and application preferences with
   explicit migration, corruption recovery, and forward-schema protection.
 - A native Controller, History, Profiles, and General shell with Dock and

@@ -1,5 +1,10 @@
 [workspace]
-members = ["crates/voice_core", "crates/voice_ffi", "crates/voice_models"]
+members = [
+  "crates/voice_archive",
+  "crates/voice_core",
+  "crates/voice_ffi",
+  "crates/voice_models",
+]
 resolver = "3"
 
 [workspace.package]

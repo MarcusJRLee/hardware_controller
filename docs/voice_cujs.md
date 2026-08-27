@@ -1,6 +1,6 @@
 # Voice critical user journeys
 
-**Status:** Accepted behavior contract; macOS M1–M13 are implemented. The
+**Status:** Accepted behavior contract; macOS M1–M14 are implemented. The
 authority is
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md).
 
@@ -287,8 +287,8 @@ corruption, or a breached limit creates no History row or owned artifact.
 and duration at 12 hours before model work. Actor-owned tests cover the real
 streaming CAF/SQLite path, source preservation, Raw/Formatted provenance,
 search selection, source/duration/decoded-size rejection, cancellation,
-formatting fallback, ASR fallback, legacy JSON/database defaults, and export
-schema revision 4. The complete host corpus passes 496 tests in 74 suites.
+formatting fallback, ASR fallback, and legacy JSON/database defaults. Portable
+archive export and restore are owned by M14.
 Decision [`0036`](decisions/0036_imported_voice_audio.md) owns the boundary.
 
 ### M13 — Admit only verifiable Model packages
@@ -313,6 +313,29 @@ undeclared files, traversal/nonportable paths, duplicates, stage mismatch,
 case-insensitive language aliases, independent limits, empty payloads, and
 symbolic links. Decision
 [`0037`](decisions/0037_portable_model_package_validation.md) owns the boundary.
+
+### M14 — Move one Voice session without losing evidence
+
+**Given** a user-selected V1 `.voice_history` archive, configurable byte/result
+limits, and no network connectivity.
+
+**When** the user chooses **Import → Voice History Archive**.
+
+**Then** the app snapshots and verifies the exact bounded manifest, checksums,
+optional CAF, session identity, and immutable result graph before copying audio
+into app-owned storage and atomically restoring History. Restore never delivers
+text. Reimporting identical evidence is a no-op; a UUID collision with different
+evidence, tampering, undeclared entry, link, unsupported schema, or breached
+limit creates no row or owned artifact. The final revision 4 macOS archive
+migrates during import; all new exports use portable V1.
+
+**Current evidence:** Swift exports and imports the shared V1 fixture and a real
+CAF/SQLite round trip. Rust verifies the same fixture and exposes fixed-layout
+metadata through the C ABI. Focused suites cover legacy migration, idempotence,
+conflict, tampering, inventory, limits, custody, and a linked optimized C17
+consumer. The complete host corpus passes 507 tests in 75 suites; portable Rust
+passes 26 tests. Decision
+[`0038`](decisions/0038_portable_voice_history_archives.md) owns the boundary.
 
 ## iOS journeys
 

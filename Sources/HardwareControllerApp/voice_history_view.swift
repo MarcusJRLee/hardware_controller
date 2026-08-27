@@ -50,14 +50,21 @@ struct VoiceHistoryView: View {
               .foregroundStyle(.secondary)
           }
           Spacer()
-          Button("Import", systemImage: "square.and.arrow.down") {
-            beginImport()
+          Menu("Import", systemImage: "square.and.arrow.down") {
+            Button("Audio Recording…") {
+              beginAudioImport()
+            }
+            .accessibilityIdentifier("voice_history_import_audio")
+            Button("Voice History Archive…") {
+              beginArchiveImport()
+            }
+            .accessibilityIdentifier("voice_history_import_archive")
           }
-          .buttonStyle(.borderless)
-          .help("Import Audio Recording")
+          .menuStyle(.borderlessButton)
+          .help("Import audio or a Voice History archive")
           .disabled(model.work.isBusy)
-          .accessibilityLabel("Import audio recording")
-          .accessibilityIdentifier("voice_history_import_audio")
+          .accessibilityLabel("Import into Voice History")
+          .accessibilityIdentifier("voice_history_import")
           Button {
             Task { await model.load() }
           } label: {
@@ -590,7 +597,7 @@ struct VoiceHistoryView: View {
     Task { await model.exportSelectedSession(to: destination) }
   }
 
-  private func beginImport() {
+  private func beginAudioImport() {
     let panel = NSOpenPanel()
     panel.title = "Import Audio Recording"
     panel.allowedContentTypes = [.audio]
@@ -600,6 +607,18 @@ struct VoiceHistoryView: View {
       return
     }
     Task { await model.importAudio(from: sourceURL) }
+  }
+
+  private func beginArchiveImport() {
+    let panel = NSOpenPanel()
+    panel.title = "Import Voice History Archive"
+    panel.allowsMultipleSelection = false
+    panel.canChooseDirectories = true
+    panel.canChooseFiles = false
+    guard panel.runModal() == .OK, let sourceURL = panel.url else {
+      return
+    }
+    Task { await model.importArchive(from: sourceURL) }
   }
 }
 
@@ -733,6 +752,7 @@ extension VoiceHistoryWork {
     case .idle: "Ready"
     case .loading: "Refreshing History…"
     case .importing: "Importing and transcribing locally…"
+    case .restoringArchive: "Restoring Voice History…"
     case .correcting: "Saving correction…"
     case .retranscribing: "Retranscribing locally…"
     case .reformatting: "Formatting locally…"

@@ -72,6 +72,27 @@ struct VoiceHistoryModelTest {
   }
 
   @Test
+  func importingArchiveRestoresAndSelectsItsSession() async throws {
+    let fixture = try HistoryModelFixture()
+    defer { fixture.remove() }
+    try await fixture.storeSession(withAudio: true)
+    let item = try #require(
+      try await fixture.history.session(id: fixture.sessionID)
+    )
+    let archive = fixture.root.appending(path: "saved.voice_history")
+    try await VoiceHistoryExporter().export(item, to: archive)
+    try await fixture.history.deleteSession(id: fixture.sessionID)
+    let model = fixture.model()
+    await model.load()
+
+    await model.importArchive(from: archive)
+
+    #expect(model.selectedSessionID == fixture.sessionID)
+    #expect(model.selectedSession?.document == item.document)
+    #expect(model.notice == "Voice session restored from its local archive.")
+  }
+
+  @Test
   func newerSearchCannotBeReplacedByAnOlderSlowResult() async {
     let history = RacingHistoryRepository()
     let model = VoiceHistoryModel(
@@ -348,6 +369,7 @@ private final class HistoryModelFixture: @unchecked Sendable {
         transcriber: HistoryModelTranscriber(),
         reformatter: HistoryModelReformatter()
       ),
+      archiveImporter: VoiceHistoryArchiveImporter(history: history),
       retentionManager: history,
       exporter: HistoryModelExporter(),
       player: player

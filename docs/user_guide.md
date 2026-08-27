@@ -258,7 +258,7 @@ creates a new result, including when the attempt fails.
 
 ## Use Voice History
 
-1. Open **History** from the sidebar or menu-bar item. Choose **Import Audio
+1. Open **History** from the sidebar or menu-bar item. Choose **Import → Audio
    Recording** to select a supported local file. Hardware Controller runs
    on-device transcription and the selected local Style, copies the audio into
    app-owned storage, and leaves the original untouched. It never inserts an
@@ -282,10 +282,14 @@ creates a new result, including when the attempt fails.
    **Insert in 3 Seconds**, focus a nonsecure empty caret in the destination,
    and wait. The app captures that fresh target after the delay and records the
    success or typed failure as a new Delivered result.
-8. Choose **Export** to write a `.voice_history` package containing versioned
-   `session.json`, streaming SHA-256 `checksums.json`, and, when retained, one
-   `audio.caf`. Manifest revision 4 includes input, audio-expiration, and
-   Recovery provenance. Export does not mutate the stored session.
+8. Choose **Export** to write a portable V1 `.voice_history` directory
+   containing `manifest.json`, streaming SHA-256 `checksums.json`, and, when
+   retained, one `audio.caf`. Export does not mutate the stored session. Choose
+   **Import → Voice History Archive** to restore it locally without inserting
+   text. Identical evidence is a no-op; a conflicting session identifier,
+   changed checksum, undeclared file, unsupported version, or exceeded limit is
+   rejected before History changes. The final revision 4 `session.json` export
+   remains importable.
 9. Pin important audio against future automatic quota eviction. **Delete**
    transactionally removes the selected session and its owned local audio;
    storage-level deletion is not a promise of secure SSD erasure.

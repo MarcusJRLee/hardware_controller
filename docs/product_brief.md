@@ -283,8 +283,11 @@ portable retention policy and C ABI without changing the shipped Swift runtime.
 M12 imports bounded user-selected audio into app-owned History and runs the same
 local ASR and formatting boundaries without automatic delivery. M13 admits
 only bounded, digest-complete portable Model packages and distinguishes
-catalog-authenticated downloads from explicit manual imports. Remaining
-portable engine work and iOS remain pending. See
+catalog-authenticated downloads from explicit manual imports.
+M14 exports and restores one bounded, checksum-complete portable History
+archive without changing evidence or delivering text; Swift, Rust, and the C
+ABI share its V1 fixture. Remaining model-runtime work, hardening, and iOS
+remain pending. See
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 [`voice_platform_design.md`](voice_platform_design.md), and
 [`voice_cujs.md`](voice_cujs.md).

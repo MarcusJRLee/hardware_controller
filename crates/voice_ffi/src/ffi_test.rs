@@ -1,14 +1,51 @@
 use std::{mem::size_of, path::PathBuf, ptr};
 
 use crate::{
-    VOICE_STATUS_BUFFER_TOO_SMALL, VOICE_STATUS_INVALID_ARGUMENT,
-    VOICE_STATUS_INVALID_RECLAIM_REQUEST, VOICE_STATUS_INVALID_UTF8_PATH,
-    VOICE_STATUS_MODEL_PACKAGE_DIGEST_MISMATCH, VOICE_STATUS_NULL_POINTER, VOICE_STATUS_OK,
-    VoiceModelPackageInfoV1, VoiceModelPackageRequestV1, VoiceRetentionCandidateV1,
-    VoiceRetentionDecisionV1, VoiceRetentionPlanV1, VoiceRetentionRequestV1,
-    VoiceRetentionSettingsV1, VoiceSessionIdV1, VoiceUtf8BufferV1, voice_model_package_validate_v1,
-    voice_retention_plan_v1,
+    VOICE_STATUS_BUFFER_TOO_SMALL, VOICE_STATUS_HISTORY_ARCHIVE_LIMIT_EXCEEDED,
+    VOICE_STATUS_INVALID_ARGUMENT, VOICE_STATUS_INVALID_RECLAIM_REQUEST,
+    VOICE_STATUS_INVALID_UTF8_PATH, VOICE_STATUS_MODEL_PACKAGE_DIGEST_MISMATCH,
+    VOICE_STATUS_NULL_POINTER, VOICE_STATUS_OK, VoiceHistoryArchiveInfoV1,
+    VoiceHistoryArchiveRequestV1, VoiceModelPackageInfoV1, VoiceModelPackageRequestV1,
+    VoiceRetentionCandidateV1, VoiceRetentionDecisionV1, VoiceRetentionPlanV1,
+    VoiceRetentionRequestV1, VoiceRetentionSettingsV1, VoiceSessionIdV1, VoiceUtf8BufferV1,
+    voice_history_archive_validate_v1, voice_model_package_validate_v1, voice_retention_plan_v1,
 };
+
+#[test]
+fn history_archive_validation_returns_verified_portable_metadata() {
+    let root = archive_fixture_path();
+    let root = root.to_string_lossy();
+    let request = archive_request(root.as_bytes());
+    let mut output = empty_archive_output();
+
+    // Safety: Every pointer references live, aligned, nonoverlapping storage.
+    let status = unsafe { voice_history_archive_validate_v1(&raw const request, &raw mut output) };
+
+    assert_eq!(status, VOICE_STATUS_OK);
+    assert_eq!(
+        output.session_id,
+        [0, 0, 0, 0, 0, 0, 64, 0, 128, 0, 0, 0, 0, 0, 0, 1]
+    );
+    assert_eq!(output.result_count, 4);
+    assert_eq!(output.has_audio, 0);
+    assert_ne!(output.verified_bytes, 0);
+    assert_ne!(output.manifest_sha256, [0; 32]);
+}
+
+#[test]
+fn history_archive_limits_remain_typed_across_the_abi() {
+    let root = archive_fixture_path();
+    let root = root.to_string_lossy();
+    let mut request = archive_request(root.as_bytes());
+    request.maximum_manifest_bytes = 1;
+    let mut output = empty_archive_output();
+
+    // Safety: Every pointer references live, aligned, nonoverlapping storage.
+    let status = unsafe { voice_history_archive_validate_v1(&raw const request, &raw mut output) };
+
+    assert_eq!(status, VOICE_STATUS_HISTORY_ARCHIVE_LIMIT_EXCEEDED);
+    assert_eq!(output, empty_archive_output());
+}
 
 #[test]
 fn model_package_validation_returns_verified_portable_metadata() {
@@ -210,10 +247,39 @@ fn version_one_layout_is_fixed() {
     assert_eq!(size_of::<VoiceUtf8BufferV1>(), 24);
     assert_eq!(size_of::<VoiceModelPackageRequestV1>(), 72);
     assert_eq!(size_of::<VoiceModelPackageInfoV1>(), 224);
+    assert_eq!(size_of::<VoiceHistoryArchiveRequestV1>(), 48);
+    assert_eq!(size_of::<VoiceHistoryArchiveInfoV1>(), 64);
 }
 
 fn fixture_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../Tests/cuj/voice_model_package_v1/valid")
+}
+
+fn archive_fixture_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../Tests/cuj/voice_history_archive_v1/valid")
+}
+
+fn archive_request(path: &[u8]) -> VoiceHistoryArchiveRequestV1 {
+    VoiceHistoryArchiveRequestV1 {
+        root_path_utf8: path.as_ptr(),
+        root_path_length: path.len(),
+        maximum_manifest_bytes: 16 * 1_024 * 1_024,
+        maximum_checksum_bytes: 256 * 1_024,
+        maximum_audio_bytes: 2 * 1_024 * 1_024 * 1_024,
+        maximum_result_count: 10_000,
+        reserved: [0; 4],
+    }
+}
+
+fn empty_archive_output() -> VoiceHistoryArchiveInfoV1 {
+    VoiceHistoryArchiveInfoV1 {
+        session_id: [0; 16],
+        result_count: 0,
+        has_audio: 0,
+        reserved: [0; 3],
+        verified_bytes: 0,
+        manifest_sha256: [0; 32],
+    }
 }
 
 fn temporary_package() -> PathBuf {

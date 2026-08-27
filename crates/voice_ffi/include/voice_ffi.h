@@ -29,6 +29,13 @@ extern "C" {
 #define VOICE_STATUS_MODEL_PACKAGE_INVENTORY_INVALID UINT32_C(18)
 #define VOICE_STATUS_MODEL_PACKAGE_DIGEST_MISMATCH UINT32_C(19)
 #define VOICE_STATUS_MODEL_PACKAGE_IO_FAILURE UINT32_C(20)
+#define VOICE_STATUS_INVALID_HISTORY_ARCHIVE_ROOT UINT32_C(21)
+#define VOICE_STATUS_INVALID_HISTORY_ARCHIVE_MANIFEST UINT32_C(22)
+#define VOICE_STATUS_HISTORY_ARCHIVE_LIMIT_EXCEEDED UINT32_C(23)
+#define VOICE_STATUS_HISTORY_ARCHIVE_INVENTORY_INVALID UINT32_C(24)
+#define VOICE_STATUS_HISTORY_ARCHIVE_INTEGRITY_MISMATCH UINT32_C(25)
+#define VOICE_STATUS_HISTORY_ARCHIVE_IDENTITY_INVALID UINT32_C(26)
+#define VOICE_STATUS_HISTORY_ARCHIVE_IO_FAILURE UINT32_C(27)
 
 #define VOICE_EXPIRATION_AGE_LIMIT UINT32_C(1)
 #define VOICE_EXPIRATION_ARTIFACT_LIMIT UINT32_C(2)
@@ -86,6 +93,25 @@ typedef struct VoiceModelPackageInfoV1 {
   uint8_t manifest_sha256[32];
   uint8_t reserved[8];
 } VoiceModelPackageInfoV1;
+
+typedef struct VoiceHistoryArchiveRequestV1 {
+  const uint8_t *root_path_utf8;
+  size_t root_path_length;
+  uint64_t maximum_manifest_bytes;
+  uint64_t maximum_checksum_bytes;
+  uint64_t maximum_audio_bytes;
+  uint32_t maximum_result_count;
+  uint8_t reserved[4];
+} VoiceHistoryArchiveRequestV1;
+
+typedef struct VoiceHistoryArchiveInfoV1 {
+  uint8_t session_id[16];
+  uint32_t result_count;
+  uint8_t has_audio;
+  uint8_t reserved[3];
+  uint64_t verified_bytes;
+  uint8_t manifest_sha256[32];
+} VoiceHistoryArchiveInfoV1;
 
 typedef struct VoiceSessionIdV1 {
   uint8_t bytes[16];
@@ -162,6 +188,15 @@ VoiceStatusV1 voice_retention_plan_v1(const VoiceRetentionRequestV1 *request,
 VoiceStatusV1
 voice_model_package_validate_v1(const VoiceModelPackageRequestV1 *request,
                                 VoiceModelPackageInfoV1 *output);
+
+/*
+ * The archive-root path is UTF-8 and pointers are never retained. Keep the
+ * source directory private from concurrent mutation during validation.
+ * Reserved bytes must be zero. The request and output must not overlap.
+ */
+VoiceStatusV1
+voice_history_archive_validate_v1(const VoiceHistoryArchiveRequestV1 *request,
+                                  VoiceHistoryArchiveInfoV1 *output);
 
 #ifdef __cplusplus
 }

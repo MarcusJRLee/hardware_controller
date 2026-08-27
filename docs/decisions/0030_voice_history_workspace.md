@@ -44,6 +44,10 @@ Decision [0036](0036_imported_voice_audio.md) adds typed imported-audio input
 provenance and advances the export manifest to revision 4. Older documents and
 database rows decode as microphone capture.
 
+Decision [0038](0038_portable_voice_history_archives.md) supersedes only this
+record's export-format choice with portable V1 `manifest.json` plus bounded
+restore while retaining revision 4 import compatibility.
+
 ## Consequences
 
 - Decision [0013](0013_application_navigation.md) remains the historical source

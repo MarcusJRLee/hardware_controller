@@ -19,9 +19,13 @@ _Static_assert(sizeof(VoiceModelPackageRequestV1) == 72,
                "VoiceModelPackageRequestV1 layout");
 _Static_assert(sizeof(VoiceModelPackageInfoV1) == 224,
                "VoiceModelPackageInfoV1 layout");
+_Static_assert(sizeof(VoiceHistoryArchiveRequestV1) == 48,
+               "VoiceHistoryArchiveRequestV1 layout");
+_Static_assert(sizeof(VoiceHistoryArchiveInfoV1) == 64,
+               "VoiceHistoryArchiveInfoV1 layout");
 
 int main(int argc, char **argv) {
-  assert(argc == 2);
+  assert(argc == 3);
   VoiceRetentionCandidateV1 candidates[2] = {0};
   memset(candidates[0].session_id.bytes, 1, 16);
   candidates[0].ended_at_unix_milliseconds = 1000;
@@ -89,5 +93,21 @@ int main(int argc, char **argv) {
   assert(model_output.verified_bytes == 73);
   uint8_t zero_digest[32] = {0};
   assert(memcmp(model_output.manifest_sha256, zero_digest, 32) != 0);
+
+  VoiceHistoryArchiveRequestV1 archive_request = {0};
+  archive_request.root_path_utf8 = (const uint8_t *)argv[2];
+  archive_request.root_path_length = strlen(argv[2]);
+  archive_request.maximum_manifest_bytes = 16 * 1024 * 1024;
+  archive_request.maximum_checksum_bytes = 256 * 1024;
+  archive_request.maximum_audio_bytes = (uint64_t)2 * 1024 * 1024 * 1024;
+  archive_request.maximum_result_count = 10000;
+  VoiceHistoryArchiveInfoV1 archive_output = {0};
+  assert(voice_history_archive_validate_v1(&archive_request, &archive_output) ==
+         VOICE_STATUS_OK);
+  assert(archive_output.session_id[15] == 1);
+  assert(archive_output.result_count == 4);
+  assert(archive_output.has_audio == 0);
+  assert(archive_output.verified_bytes != 0);
+  assert(memcmp(archive_output.manifest_sha256, zero_digest, 32) != 0);
   return 0;
 }
