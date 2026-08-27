@@ -51,7 +51,7 @@ diagnostics observe that path but cannot block it.
 | Persistence         | Versioned Codable JSON for configuration; system SQLite plus atomic CAF artifacts for Voice History. |
 | Logging and timing  | Unified Logging, `OSSignposter`, and a monotonic clock.                       |
 | Tests               | Swift Testing, Rust/C conformance, and scripted packaged-UI and Accessibility inspection. |
-| Dependencies        | Apple frameworks only in the app; portable retention has no production crate dependency; Ollama is an optional separately installed local service. |
+| Dependencies        | Apple frameworks only in the app; portable retention has no production dependency; the unlinked Model-package verifier uses serde and RustCrypto SHA-2; Ollama is an optional separately installed local service. |
 | Distribution        | Apache License 2.0 source; Apple Development-signed personal iterations; gated Developer ID, notarization, and free-DMG workflow for a future approved public release. |
 
 [`decisions/0001_native_macos_stack.md`](decisions/0001_native_macos_stack.md)
@@ -102,13 +102,22 @@ Apple type and denies unsafe Rust. `Tests/cuj/voice_retention_v1.json` is read b
 both Rust and Swift, proving policy parity while the shipped macOS app still
 uses the Swift baseline.
 
-`voice_ffi` exposes that policy through one synchronous `V1` C ABI. The caller
-owns candidate and decision memory; a capacity-probe call reports the required
-decision count. No callback, allocator, thread, runtime handle, or pointer
-survives return. Reserved bytes and Boolean encodings fail closed. Rust layout
-tests plus a real C17 consumer protect the source-controlled header. Swift and
-Kotlin wrappers remain typed platform adapters and may not add retention policy.
-See [decision 0035](decisions/0035_portable_voice_c_abi.md).
+`voice_ffi` exposes synchronous `V1` retention and Model-package functions. The
+caller owns every input and output buffer; capacity-probe calls report required
+storage without partial output. No callback, allocator, thread, runtime handle,
+file, or pointer survives return. Reserved bytes and Boolean encodings fail
+closed. Rust layout tests plus a real C17 consumer protect the source-controlled
+header. Swift and Kotlin wrappers remain typed platform adapters and may not add
+portable policy. See [decision 0035](decisions/0035_portable_voice_c_abi.md).
+
+`voice_models` owns bounded Model-package admission before any runtime sees
+weights. It strictly decodes V1 manifests, rejects symbolic links and
+undeclared or nonportable paths, streams SHA-256 over exact declared bytes, and
+optionally compares an authenticated catalog manifest digest. License evidence,
+capabilities, languages, runtime family, memory claims, and installed bytes
+cross `voice_ffi` through caller-owned UTF-8 buffers and fixed scalar fields.
+The verifier retains no pointer or file and links no inference runtime. See
+[decision 0037](decisions/0037_portable_model_package_validation.md).
 
 ### HID transport
 

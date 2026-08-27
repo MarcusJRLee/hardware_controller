@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "package_id": "com.longdevity.fixture.streaming_asr",
+  "version": "1.0.0",
+  "display_name": "Fixture Streaming ASR",
+  "runtime": "sherpa_onnx",
+  "stage": "asr",
+  "capabilities": ["streaming_asr", "file_asr"],
+  "languages": ["en-US"],
+  "license": {
+    "spdx_expression": "Apache-2.0",
+    "notice_file": "NOTICE.txt",
+    "source_url": "https://example.invalid/voice-model-fixture"
+  },
+  "resources": {
+    "minimum_memory_bytes": 1,
+    "recommended_memory_bytes": 2
+  },
+  "files": [
+    {
+      "path": "model.bin",
+      "role": "model",
+      "bytes": 23,
+      "sha256": "74bf05e43882d7e6927225973333f3cdd0acbb27d9bfed3f64a2a14512825904"
+    },
+    {
+      "path": "NOTICE.txt",
+      "role": "notice",
+      "bytes": 50,
+      "sha256": "43b54bbe033d54414dd313366ba7ca52c836d2a9f73fb5ce3d7452c77f250160"
+    }
+  ]
+}

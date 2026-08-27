@@ -220,8 +220,8 @@ but preserves a model that another local Ollama client already had running.
   browser, and validated terminal targets.
 - Apple Foundation Models and optional local Ollama refinement behind one typed
   provider contract.
-- A dependency-free Rust retention policy and versioned caller-owned C ABI,
-  checked against the current Swift policy through one shared CUJ fixture.
+- A dependency-free Rust retention policy plus a bounded, digest-verifying
+  Model-package validator behind one versioned caller-owned C ABI.
 - Atomic, schema-versioned local Profiles and application preferences with
   explicit migration, corruption recovery, and forward-schema protection.
 - A native Controller, History, Profiles, and General shell with Dock and

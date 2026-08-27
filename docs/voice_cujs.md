@@ -1,6 +1,6 @@
 # Voice critical user journeys
 
-**Status:** Accepted behavior contract; macOS M1–M12 are implemented. The
+**Status:** Accepted behavior contract; macOS M1–M13 are implemented. The
 authority is
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md).
 
@@ -290,6 +290,29 @@ search selection, source/duration/decoded-size rejection, cancellation,
 formatting fallback, ASR fallback, legacy JSON/database defaults, and export
 schema revision 4. The complete host corpus passes 496 tests in 74 suites.
 Decision [`0036`](decisions/0036_imported_voice_audio.md) owns the boundary.
+
+### M13 — Admit only verifiable Model packages
+
+**Given** a Model package in a private staging directory and configurable
+manifest-byte, installed-byte, and file-count limits.
+
+**When** a platform adapter asks the portable engine to validate it.
+
+**Then** V1 accepts only typed, stage-compatible metadata; mandatory license
+evidence; portable canonical paths; a complete link-free declared inventory;
+exact file sizes and SHA-256 digests; and, for an approved download, the
+out-of-band expected manifest digest. It returns the exact verified identity,
+capabilities, resource metadata, byte count, and manifest digest without
+retaining caller memory or files. A manual package without an expected digest
+is internally verified but not publisher-authenticated.
+
+**Current evidence:** one shared package fixture passes the Rust verifier and a
+linked optimized C17 consumer. Rust and ABI tests cover buffer negotiation,
+layout, malformed UTF-8, optional manifest pinning, payload tampering,
+undeclared files, traversal/nonportable paths, duplicates, stage mismatch,
+case-insensitive language aliases, independent limits, empty payloads, and
+symbolic links. Decision
+[`0037`](decisions/0037_portable_model_package_validation.md) owns the boundary.
 
 ## iOS journeys
 

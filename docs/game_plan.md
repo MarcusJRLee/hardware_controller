@@ -26,6 +26,7 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 | Voice M10 trigger convergence | Physical Controls, Hold/latch Voice chords, and the menu-bar record action submit typed commands to one Local AI session workflow without changing History or delivery meaning. | [`decisions/0034_voice_trigger_convergence.md`](decisions/0034_voice_trigger_convergence.md) |
 | Voice M11 portable tracer | The Swift baseline and dependency-free Rust retention planner pass one CUJ fixture; a versioned caller-owned C ABI passes layout and real-consumer checks. | [`decisions/0035_portable_voice_c_abi.md`](decisions/0035_portable_voice_c_abi.md) |
 | Voice M12 audio import | History streams a user-selected recording into one bounded app-owned CAF, runs local ASR and Style formatting, preserves typed provenance, and retains honest transcript-only or audio-only fallbacks. | [`decisions/0036_imported_voice_audio.md`](decisions/0036_imported_voice_audio.md) |
+| Voice M13 Model-package admission | Portable Rust verifies bounded V1 manifests, license evidence, canonical inventory, exact bytes, per-file SHA-256, and optional catalog-pinned manifest SHA-256 through the C ABI. | [`decisions/0037_portable_model_package_validation.md`](decisions/0037_portable_model_package_validation.md) |
 | Model recommendation | Qwen 3.5 4B is digest-pinned from the fixed evaluation corpus. | [`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md) |
 | Profiles | Transactional named Profiles with independent per-Device setups and active-Action cleanup. | [`decisions/0014_multi_profile_device_configuration.md`](decisions/0014_multi_profile_device_configuration.md) |
 | Application | Controller, History, Profiles, and General in one native foreground window with Dock and menu-bar presence. | [`ux_spec.md`](ux_spec.md) |
@@ -34,7 +35,7 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 
 ## Approved next program
 
-The local Voice expansion is accepted; macOS M1–M12 are implemented across the
+The local Voice expansion is accepted; macOS M1–M13 are implemented across the
 current stacked branches. macOS and iOS are the active roadmap; Android,
 Windows, and Linux remain architectural line-of-sight platforms; web and mobile
 web are deferred. The acceptance and execution authorities are:
@@ -61,7 +62,7 @@ promotion.
 | Local AI refinement | Warm raw-final-to-refined p95 ≤ 1 s on the reference Mac. | Prompt-5 Qwen 3.5 4B p95 0.908 s. |
 | Local AI end to end | Warm release-to-insertion p95 ≤ 1.5 s on the reference Mac. | Prompt-5 prewarmed M4 production-controller p95 1.004 s. |
 | Local AI deadline | Preparation plus generation must fall back within three seconds after final speech text. | Deterministic deadline and late-output tests. |
-| Voice History | Warm 5,000-session search p95 ≤ 250 ms; startup recovery precedes retention without delaying the input runtime. | M8 current-source p95 2.639 ms; M12 passes 496 Swift tests in 74 suites plus 10 Rust domain/ABI tests and one linked C consumer. |
+| Voice History | Warm 5,000-session search p95 ≤ 250 ms; startup recovery precedes retention without delaying the input runtime. | M8 current-source p95 2.639 ms; M13 passes 496 Swift tests in 74 suites plus 19 Rust domain/model/ABI tests and one linked C consumer. |
 | Privacy | Voice artifacts remain app-owned and local; no speech content is logged; no remote-capable provider receives a call; Ollama cannot reach a nonloopback endpoint. | Deterministic provider-boundary, SQLite/CAF, fallback, static-scan, and fixed-endpoint transport tests. |
 | Documentation | Canonical docs describe current behavior and all links resolve. | All local links resolve. |
 

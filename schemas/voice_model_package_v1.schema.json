@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MarcusJRLee/hardware_controller/schemas/voice_model_package_v1.schema.json",
+  "title": "Voice Model Package Manifest V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "package_id",
+    "version",
+    "display_name",
+    "runtime",
+    "stage",
+    "capabilities",
+    "languages",
+    "license",
+    "resources",
+    "files"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "package_id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9._+-]+$"
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "runtime": {
+      "enum": ["sherpa_onnx", "whisper_cpp", "mistral_rs", "llama_cpp"]
+    },
+    "stage": {
+      "enum": ["asr", "formatting", "vad"]
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["streaming_asr", "file_asr", "formatting", "vad"]
+      }
+    },
+    "languages": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 35,
+        "pattern": "^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$"
+      }
+    },
+    "license": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spdx_expression", "notice_file", "source_url"],
+      "properties": {
+        "spdx_expression": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "notice_file": {
+          "$ref": "#/$defs/relative_path"
+        },
+        "source_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://",
+          "maxLength": 2048
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum_memory_bytes", "recommended_memory_bytes"],
+      "properties": {
+        "minimum_memory_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "recommended_memory_bytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 4096,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "role", "bytes", "sha256"],
+        "properties": {
+          "path": {
+            "$ref": "#/$defs/relative_path"
+          },
+          "role": {
+            "enum": ["model", "tokenizer", "configuration", "vocabulary", "notice"]
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "relative_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^[^\\\\/:\\u0000-\\u001f]+(/[^\\\\/:\\u0000-\\u001f]+)*$",
+      "not": {
+        "enum": ["manifest.json", ".", ".."]
+      }
+    }
+  }
+}

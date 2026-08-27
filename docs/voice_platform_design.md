@@ -432,6 +432,10 @@ Local-only is a product invariant:
 - iOS uses the strongest Data Protection class compatible with intentional
   background capture. The keyboard shares only the minimum App Group state.
 - Model packages carry identity, digest, license, capability, and size metadata.
+- M13 validates the V1 package schema in portable Rust before installation or
+  inference: strict typed metadata, configurable manifest/file/byte limits,
+  portable paths, no links or undeclared payloads, exact sizes and SHA-256,
+  mandatory notice evidence, and optional out-of-band manifest pinning.
 - Explicit Model-package downloads are allowed before capture from approved
   sources, contain no Voice content, and require digest/license verification.
 - Mark owned Voice stores and artifacts as excluded from OS backup where the
@@ -534,6 +538,9 @@ test first or batch the entire implementation behind mocked internals.
 - M6–M12 now pass for History, retention, crash recovery, imported files,
   offline enforcement, trigger convergence, portable retention, and model
   fallback.
+- M13 now passes one shared Model-package fixture through bounded Rust
+  verification and the versioned caller-owned C ABI; no inference runtime or
+  default package is selected by that admission contract.
 - Design separate streaming ownership before exporting ASR or formatting; do
   not assume the synchronous retention ABI fits an async model boundary.
 

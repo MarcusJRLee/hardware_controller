@@ -22,6 +22,13 @@ extern "C" {
 #define VOICE_STATUS_DUPLICATE_SESSION_ID UINT32_C(11)
 #define VOICE_STATUS_INVALID_TIMESTAMP UINT32_C(12)
 #define VOICE_STATUS_TOO_MANY_CANDIDATES UINT32_C(13)
+#define VOICE_STATUS_INVALID_UTF8_PATH UINT32_C(14)
+#define VOICE_STATUS_INVALID_MODEL_PACKAGE_ROOT UINT32_C(15)
+#define VOICE_STATUS_INVALID_MODEL_PACKAGE_MANIFEST UINT32_C(16)
+#define VOICE_STATUS_MODEL_PACKAGE_LIMIT_EXCEEDED UINT32_C(17)
+#define VOICE_STATUS_MODEL_PACKAGE_INVENTORY_INVALID UINT32_C(18)
+#define VOICE_STATUS_MODEL_PACKAGE_DIGEST_MISMATCH UINT32_C(19)
+#define VOICE_STATUS_MODEL_PACKAGE_IO_FAILURE UINT32_C(20)
 
 #define VOICE_EXPIRATION_AGE_LIMIT UINT32_C(1)
 #define VOICE_EXPIRATION_ARTIFACT_LIMIT UINT32_C(2)
@@ -29,7 +36,56 @@ extern "C" {
 #define VOICE_EXPIRATION_LOW_DISK UINT32_C(4)
 #define VOICE_EXPIRATION_RECOVERY_LIMIT UINT32_C(5)
 
+#define VOICE_MODEL_RUNTIME_SHERPA_ONNX UINT32_C(1)
+#define VOICE_MODEL_RUNTIME_WHISPER_CPP UINT32_C(2)
+#define VOICE_MODEL_RUNTIME_MISTRAL_RS UINT32_C(3)
+#define VOICE_MODEL_RUNTIME_LLAMA_CPP UINT32_C(4)
+
+#define VOICE_MODEL_STAGE_ASR UINT32_C(1)
+#define VOICE_MODEL_STAGE_FORMATTING UINT32_C(2)
+#define VOICE_MODEL_STAGE_VAD UINT32_C(3)
+
+#define VOICE_MODEL_CAPABILITY_STREAMING_ASR UINT32_C(1)
+#define VOICE_MODEL_CAPABILITY_FILE_ASR UINT32_C(2)
+#define VOICE_MODEL_CAPABILITY_FORMATTING UINT32_C(4)
+#define VOICE_MODEL_CAPABILITY_VAD UINT32_C(8)
+
 typedef uint32_t VoiceStatusV1;
+
+typedef struct VoiceUtf8BufferV1 {
+  uint8_t *bytes;
+  size_t capacity;
+  size_t length;
+} VoiceUtf8BufferV1;
+
+typedef struct VoiceModelPackageRequestV1 {
+  const uint8_t *root_path_utf8;
+  size_t root_path_length;
+  uint64_t maximum_manifest_bytes;
+  uint64_t maximum_installed_bytes;
+  uint32_t maximum_file_count;
+  uint8_t has_expected_manifest_sha256;
+  uint8_t reserved[3];
+  uint8_t expected_manifest_sha256[32];
+} VoiceModelPackageRequestV1;
+
+typedef struct VoiceModelPackageInfoV1 {
+  VoiceUtf8BufferV1 package_id;
+  VoiceUtf8BufferV1 version;
+  VoiceUtf8BufferV1 display_name;
+  VoiceUtf8BufferV1 spdx_expression;
+  VoiceUtf8BufferV1 notice_file;
+  VoiceUtf8BufferV1 source_url;
+  uint32_t runtime;
+  uint32_t stage;
+  uint32_t capability_mask;
+  uint32_t file_count;
+  uint64_t verified_bytes;
+  uint64_t minimum_memory_bytes;
+  uint64_t recommended_memory_bytes;
+  uint8_t manifest_sha256[32];
+  uint8_t reserved[8];
+} VoiceModelPackageInfoV1;
 
 typedef struct VoiceSessionIdV1 {
   uint8_t bytes[16];
@@ -94,6 +150,18 @@ typedef struct VoiceRetentionPlanV1 {
  */
 VoiceStatusV1 voice_retention_plan_v1(const VoiceRetentionRequestV1 *request,
                                       VoiceRetentionPlanV1 *output);
+
+/*
+ * The path is UTF-8 and pointers are never retained. Keep the staging package
+ * private from concurrent mutation during validation. A present expected
+ * manifest digest authenticates exact manifest bytes against an external
+ * catalog. Output text is not null terminated. Reserved bytes must be zero. On
+ * BUFFER_TOO_SMALL, each text length reports its required capacity and no text
+ * buffer changes.
+ */
+VoiceStatusV1
+voice_model_package_validate_v1(const VoiceModelPackageRequestV1 *request,
+                                VoiceModelPackageInfoV1 *output);
 
 #ifdef __cplusplus
 }
