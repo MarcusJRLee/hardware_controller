@@ -35,6 +35,7 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 | iOS I2/I6 Style-qualified delivery | App and keyboard defaults remain separate; an exact schema-V2 stop carries one Style into commit-before-publish formatting, and insertion deduplicates by session identity. | [`decisions/0044_ios_style_qualified_keyboard_delivery.md`](decisions/0044_ios_style_qualified_keyboard_delivery.md) |
 | iOS I5/I9 target-safe delivery | Voice is disabled for constrained, sensitive, or unverified traits while QWERTY remains available; one ephemeral session/document/revision tuple gates delivery and target changes recover through History. | [`decisions/0045_ios_host_field_and_delivery_target_safety.md`](decisions/0045_ios_host_field_and_delivery_target_safety.md) |
 | iOS I7 lifecycle recovery | Live Activity ownership gates background recording; typed interruption, route, power, thermal, and background-finalization decisions preserve exact partial audio in 24-hour Recovery History without automatic resume. | [`decisions/0046_ios_capture_lifecycle_and_recovery.md`](decisions/0046_ios_capture_lifecycle_and_recovery.md) |
+| iOS I8 stale-service recovery | Recording and Transcribing publish bounded heartbeats; stale or replayed state stops keyboard polling, exposes one honest restart path, and cannot revive completed delivery. | [`decisions/0047_ios_stale_service_recovery.md`](decisions/0047_ios_stale_service_recovery.md) |
 | Model recommendation | Qwen 3.5 4B is digest-pinned from the fixed evaluation corpus. | [`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md) |
 | Profiles | Transactional named Profiles with independent per-Device setups and active-Action cleanup. | [`decisions/0014_multi_profile_device_configuration.md`](decisions/0014_multi_profile_device_configuration.md) |
 | Application | Controller, History, Profiles, and General in one native foreground window with Dock and menu-bar presence. | [`ux_spec.md`](ux_spec.md) |
@@ -45,10 +46,11 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 
 The local Voice expansion is accepted; macOS M1–M15, iOS Gate K0, I1 local
 onboarding and Model admission, and I2 through Style-qualified local formatting,
-History, warm keyboard delivery, target-safe field handling, and I7 lifecycle
-recovery are implemented across the current stacked branches. macOS and iOS are the active
-roadmap; Android, Windows, and Linux remain architectural line-of-sight
-platforms; web and mobile web are deferred.
+History, warm keyboard delivery, target-safe field handling, I7 lifecycle
+recovery, and I8 stale-service recovery are implemented across the current
+stacked branches. macOS and iOS are the active roadmap; Android, Windows, and
+Linux remain architectural line-of-sight platforms; web and mobile web are
+deferred.
 The acceptance and execution authorities are:
 
 | Authority | Purpose |
@@ -78,6 +80,7 @@ promotion.
 | iOS local ASR | File-ASR RTF ≤ 0.75 on the pinned native integration corpus; selected bytes are revalidated immediately before load. | `HC_RUN_IOS_ASR_PERFORMANCE=1` enforces the named-hardware gate; whisper.cpp `b4938` + `tiny.en` reference warm CPU RTF 0.0111. Every check runs real transcription correctness; Rust digest/runtime/capability/tamper and timed C/Swift result tests pass. |
 | iOS local History | Final output is unavailable until Raw/Edited/Formatted plus audio evidence commit; 90-day/1-GiB/2,000-artifact defaults retain transcripts after audio expiry. | Real SQLite/filesystem tests cover reload, escaped search, playback state, SHA-256 evidence, cap expiry, transcript preservation, partial cleanup, and orphan cleanup. |
 | iOS keyboard delivery | One exact session and Style stop command produces at most one insertion; stale or malformed state cannot revive delivery. | Stable-Style, exhaustive-mapping, schema-migration, durable-Keychain-claim, real-Keychain warm-journey, re-published-ready, and app-stop tests. |
+| iOS stale service | A killed, suspended, or upgraded capture service becomes non-active within three seconds and cannot leave an unbounded wait or revive delivery. | Active-phase heartbeat expiry, future/missing/unknown-schema state, strictly newer result sequence, same-session receipt dominance, and blocked-finalization actor tests. Physical kill/suspension/upgrade evidence remains open. |
 | iOS field safety | Unsupported traits never read capture state or receive Voice; a late result cannot cross document or session identity. | Normalized-trait, UIKit-mapping, unknown-custom-field, unsupported-policy, and exact-target tests. |
 | iOS lifecycle recovery | Capture ownership and system indication agree; interruptions never resume implicitly; a failed finalization preserves exact local audio without blocking History. | Pure lifecycle/notification tests, actor-owned interruption and background-expiration tests, and real SQLite/filesystem exact-artifact reconciliation, migration, isolation, and 24-hour expiry tests. Physical system-event evidence remains open. |
 | Documentation | Canonical docs describe current behavior and all links resolve. | All local links resolve. |

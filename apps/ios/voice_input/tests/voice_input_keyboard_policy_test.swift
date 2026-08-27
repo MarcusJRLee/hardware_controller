@@ -73,6 +73,24 @@ final class VoiceInputKeyboardPolicyTest: XCTestCase {
     XCTAssertEqual(decision, .serviceStale)
   }
 
+  func testUnknownSnapshotRevisionRequiresServiceRestart() {
+    let decision = VoiceInputKeyboardPolicy().microphoneDecision(
+      snapshot: VoiceInputSnapshot(
+        schemaRevision: VoiceInputSnapshot.schemaRevision + 1,
+        phase: .recording,
+        sessionID: UUID(),
+        sequence: 2,
+        heartbeatAt: Date(timeIntervalSince1970: 10),
+        text: nil
+      ),
+      hasFullAccess: true,
+      lastInsertionReceipt: nil,
+      now: Date(timeIntervalSince1970: 10)
+    )
+
+    XCTAssertEqual(decision, .serviceStale)
+  }
+
   func testReadyTextIsInsertedAtMostOnce() {
     let sessionID = UUID()
     let snapshot = VoiceInputSnapshot.ready(
@@ -206,6 +224,69 @@ final class VoiceInputKeyboardPolicyTest: XCTestCase {
     )
 
     XCTAssertEqual(decision, .serviceStale)
+  }
+
+  func testTranscribingRequiresACurrentHeartbeat() {
+    let sessionID = UUID()
+    let policy = VoiceInputKeyboardPolicy(staleAfter: 3)
+    let now = Date(timeIntervalSince1970: 10)
+
+    XCTAssertEqual(
+      policy.microphoneDecision(
+        snapshot: VoiceInputSnapshot(
+          phase: .transcribing,
+          sessionID: sessionID,
+          sequence: 4,
+          heartbeatAt: now.addingTimeInterval(-3),
+          text: nil
+        ),
+        hasFullAccess: true,
+        lastInsertionReceipt: nil,
+        now: now
+      ),
+      .waitingForResult
+    )
+    for heartbeatAt in [nil, now.addingTimeInterval(-3.001), now.addingTimeInterval(0.001)] {
+      XCTAssertEqual(
+        policy.microphoneDecision(
+          snapshot: VoiceInputSnapshot(
+            phase: .transcribing,
+            sessionID: sessionID,
+            sequence: 4,
+            heartbeatAt: heartbeatAt,
+            text: nil
+          ),
+          hasFullAccess: true,
+          lastInsertionReceipt: nil,
+          now: now
+        ),
+        .serviceStale
+      )
+    }
+  }
+
+  func testCompletedSessionCannotBeRevivedByALateActiveSnapshot() {
+    let sessionID = UUID()
+    let now = Date(timeIntervalSince1970: 10)
+    let receipt = VoiceInputInsertionReceipt(sessionID: sessionID, sequence: 8)
+
+    for phase in [VoiceInputSnapshot.Phase.recording, .transcribing] {
+      XCTAssertEqual(
+        VoiceInputKeyboardPolicy().microphoneDecision(
+          snapshot: VoiceInputSnapshot(
+            phase: phase,
+            sessionID: sessionID,
+            sequence: 7,
+            heartbeatAt: now,
+            text: nil
+          ),
+          hasFullAccess: true,
+          lastInsertionReceipt: receipt,
+          now: now
+        ),
+        .alreadyInserted
+      )
+    }
   }
 
   func testCommandPolicyAcceptsOnlyCurrentCommands() {

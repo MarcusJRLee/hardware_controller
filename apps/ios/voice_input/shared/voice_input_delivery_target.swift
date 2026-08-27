@@ -4,15 +4,18 @@ public struct VoiceInputDeliveryTarget: Equatable, Sendable {
   public let sessionID: UUID
   public let documentIdentifier: UUID
   public let hostChangeRevision: UInt64
+  public let stopRequestedAfterSequence: UInt64
 
   public init(
     sessionID: UUID,
     documentIdentifier: UUID,
-    hostChangeRevision: UInt64
+    hostChangeRevision: UInt64,
+    stopRequestedAfterSequence: UInt64
   ) {
     self.sessionID = sessionID
     self.documentIdentifier = documentIdentifier
     self.hostChangeRevision = hostChangeRevision
+    self.stopRequestedAfterSequence = stopRequestedAfterSequence
   }
 }
 
@@ -26,6 +29,7 @@ public struct VoiceInputDeliveryTargetPolicy: Equatable, Sendable {
 
   public func decision(
     sessionID: UUID,
+    resultSequence: UInt64,
     documentIdentifier: UUID,
     hostChangeRevision: UInt64,
     target: VoiceInputDeliveryTarget?
@@ -33,6 +37,7 @@ public struct VoiceInputDeliveryTargetPolicy: Equatable, Sendable {
     guard
       let target,
       target.sessionID == sessionID,
+      resultSequence > target.stopRequestedAfterSequence,
       target.documentIdentifier == documentIdentifier,
       target.hostChangeRevision == hostChangeRevision
     else {

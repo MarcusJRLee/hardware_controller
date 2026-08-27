@@ -491,6 +491,19 @@ heartbeat, the keyboard stops showing active state, never queues unbounded audio
 commands, and offers one restart action. Duplicate or late shared-Keychain messages
 cannot insert text twice or revive a completed session.
 
+**Current evidence:** Recording and Transcribing publish 500-millisecond
+heartbeats, and the keyboard expires active state after three seconds. It polls
+only after one exact stop, then clears its ephemeral target, stops polling, and
+shows one `Restart…` action with the approved app/Control Center instructions.
+Missing, future, expired, and unknown-schema heartbeats fail closed. Ready must
+carry a strictly newer sequence than the stop-triggering snapshot, while a
+durable same-session insertion receipt dominates every replayed phase. The
+app alone consumes the single command slot and rejects commands older than 30
+seconds. Pure
+policy, blocked-finalization actor, and real-Keychain tests cover the journey;
+physical kill/suspension/upgrade evidence remains open. Decision
+[`0047`](decisions/0047_ios_stale_service_recovery.md) owns the boundary.
+
 ### I9 — Recover failed insertion
 
 If the host field disappears, rejects insertion, or changes during finalization,

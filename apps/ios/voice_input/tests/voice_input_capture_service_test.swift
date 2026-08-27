@@ -160,6 +160,38 @@ final class VoiceInputCaptureServiceTest: XCTestCase {
     XCTAssertEqual(activeBackgroundTaskCount, 0)
   }
 
+  func testTranscribingPublishesHeartbeatsUntilFinalizationEnds() async throws {
+    let entered = AsyncStream<Void>.makeStream()
+    let release = AsyncStream<Void>.makeStream()
+    let fixture = try CaptureFixture(
+      liveActivityID: "activity",
+      transcriber: BlockingFinalizationTranscriber(
+        entered: entered.continuation,
+        release: release.stream
+      ),
+      heartbeatInterval: .milliseconds(10)
+    )
+    addTeardownBlock { try fixture.remove() }
+    try await fixture.service.start(sessionID: UUID())
+    let recordingSequence = try fixture.store.readSnapshot().sequence
+    let stopping = Task { try await fixture.service.stop(styleKind: .natural) }
+    for await _ in entered.stream.prefix(1) {}
+    let deadline = ContinuousClock.now.advanced(by: .seconds(1))
+    var transcribing = try fixture.store.readSnapshot()
+    while transcribing.sequence <= recordingSequence + 1,
+      ContinuousClock.now < deadline
+    {
+      try await Task.sleep(for: .milliseconds(10))
+      transcribing = try fixture.store.readSnapshot()
+    }
+    release.continuation.finish()
+    _ = try? await stopping.value
+
+    XCTAssertEqual(transcribing.phase, .transcribing)
+    XCTAssertNotNil(transcribing.heartbeatAt)
+    XCTAssertGreaterThan(transcribing.sequence, recordingSequence + 1)
+  }
+
   func testInterruptionWhileLiveActivityStartsCannotReviveCapture() async throws {
     let entered = AsyncStream<Void>.makeStream()
     let release = AsyncStream<Void>.makeStream()
@@ -317,7 +349,8 @@ private struct CaptureFixture {
     liveActivityID: String?,
     transcriber: any VoiceInputTranscribing = PrewarmingTranscriber(),
     backgroundTaskManager: any VoiceInputBackgroundTaskManaging =
-      RecordingBackgroundTaskManager()
+      RecordingBackgroundTaskManager(),
+    heartbeatInterval: Duration = .seconds(60)
   ) throws {
     root = FileManager.default.temporaryDirectory.appendingPathComponent(
       UUID().uuidString,
@@ -344,7 +377,7 @@ private struct CaptureFixture {
       recorderFactory: recorderFactory,
       activityManager: activityManager,
       backgroundTaskManager: backgroundTaskManager,
-      heartbeatInterval: .seconds(60)
+      heartbeatInterval: heartbeatInterval
     )
   }
 

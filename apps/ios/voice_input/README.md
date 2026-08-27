@@ -67,6 +67,12 @@ insertion claim precedes the host-field change; after a crash, History is the
 recovery source for a claimed result that did not reach the field. Physical
 iPhone keyboard evidence remains required.
 
+Recording and Transcribing publish local heartbeats. If the app stops responding
+for three seconds, the keyboard clears its pending target, stops polling, and
+shows one `Restart…` action with the app/Control Center restart steps. It never
+launches the app. Delivery also requires a result sequence newer than the stop
+request; the durable session receipt defeats every replay after insertion.
+
 Voice is available only in recognized general-text fields. Constrained,
 sensitive, and unverified traits keep the keyboard usable but disable its mic.
 The keyboard retains only an ephemeral session/document/change identity while
