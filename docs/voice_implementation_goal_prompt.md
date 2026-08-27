@@ -87,7 +87,7 @@ Implementation method:
 Testing strategy—strong but adaptable:
 - Make fast CUJ contract tests the primary regression spine. They may use a
   deterministic ASR/formatting provider so model variance cannot make CI flaky.
-- Use adapter integration tests for SQLite/files, App Group messaging, audio
+- Use adapter integration tests for SQLite/files, shared-Keychain handoff, audio
   conversion, Accessibility delivery, lifecycle, model packages, and FFI.
 - Maintain a deliberately small E2E suite for the highest-risk complete paths:
   macOS hold-to-insert-and-store, latch, focus-change recovery, retention/crash
@@ -117,7 +117,7 @@ Program sequence:
    and conformance tests without speculative non-Apple applications.
 5. Complete the signed-device iOS Gate K0 probe and record its evidence.
 6. Deliver the iOS containing app, custom keyboard, local models, History,
-   onboarding, warm/cold session UX, App Group coordination, insertion,
+   onboarding, warm/cold session UX, shared-Keychain coordination, insertion,
    background/Live Activity behavior, interruption recovery, retention,
    accessibility, performance, and polish.
 7. Run final cross-platform regression, privacy, migration, corruption,

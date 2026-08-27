@@ -1,7 +1,7 @@
 # Local-first voice platform design
 
-**Status:** Accepted roadmap; macOS M1–M14 are implemented on the current
-stacked branches. Current evidence is called out explicitly. The durable decision is
+**Status:** Accepted roadmap; macOS M1–M15 and iOS Gate K0 are implemented on
+the current stacked branches. Current evidence is called out explicitly. The durable decision is
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 and [`voice_cujs.md`](voice_cujs.md) is the acceptance contract.
 
@@ -153,30 +153,26 @@ the extension boundary:
 - The keyboard owns QWERTY input, globe/next-keyboard behavior, mic/status/stop,
   Style selection, recovery actions, and final insertion through
   `textDocumentProxy`.
-- An App Group carries bounded commands, session state, and final output. The
-  exact wake/activation signal must use documented APIs accepted by App Review.
-- Full Access enables shared-container coordination. Without it, the keyboard
+- A same-team Keychain access group carries bounded commands, session state, and
+  final output with this-device-only protection and cloud synchronization off.
+  No audio, model, History database, or target context enters that channel.
+- Full Access enables the local Keychain handoff. Without it, the keyboard
   remains a functional QWERTY keyboard and explains why voice input is disabled.
 - The main app requests microphone permission, installs or imports models,
   manages History, and starts any background-capable Voice session. The
   extension never attempts to request microphone permission.
 
-The intended warm CUJ is: tap the keyboard mic, the containing app becomes the
-Capture owner, speak while the keyboard reflects live state, stop, run local
-ASR/formatting, and insert once at the current cursor.
+The supported warm CUJ begins after the containing app has confirmed Capture
+ownership. The keyboard mic requests stop, waits for the same session to become
+ready, and inserts it once at the current cursor. Tapping mic while idle provides
+concise instructions instead of displaying false recording state.
 
-Cold or suspended state is a Gate K0 feasibility item. Current Wispr Flow
-guidance says tapping its keyboard mic can transfer the user to Flow on iOS
-26.4+, after which the user manually swipes back while dictation continues.
-Apple's keyboard guidance and App Review rules constrain arbitrary containing-
-app launches. We therefore require a signed-device and App Review policy spike:
-
-1. prove a documented, reviewable start path;
-2. make any app switch and manual return explicit in the CUJ;
-3. never display recording state before the containing app confirms capture;
-4. present a precise recovery action when the service is unavailable; and
-5. keep in-app, Action button, Control Center, Siri, and Live Activity capture
-   useful even if keyboard cold-start activation is restricted.
+Gate K0 confirms that a keyboard cannot access the microphone or launch its
+containing app under documented App Review rules. Cold capture starts through
+the containing app, Control Center, Siri, Action button, or another approved
+`AudioRecordingIntent`. Intent-started recording publishes the required Live
+Activity; the user then returns to the target app manually. Proprietary behavior
+is UX evidence, not authorization for an undocumented activation mechanism.
 
 The keyboard cannot reliably identify the host application. Styles therefore
 resolve from explicit keyboard selection and device/surface defaults, not an
@@ -435,7 +431,8 @@ Local-only is a product invariant:
 - Secure targets are rejected. Target context is bounded and absent from
   terminals, browser URLs, screenshots, pasteboard history, and whole documents.
 - iOS uses the strongest Data Protection class compatible with intentional
-  background capture. The keyboard shares only the minimum App Group state.
+  background capture. The keyboard shares only bounded, this-device-only
+  Keychain state and no audio or target context.
 - Model packages carry identity, digest, license, capability, and size metadata.
 - M13 validates the V1 package schema in portable Rust before installation or
   inference: strict typed metadata, configurable manifest/file/byte limits,
@@ -497,7 +494,7 @@ Testing uses four complementary levels:
 | Level | Purpose | Rigidity policy |
 | --- | --- | --- |
 | CUJ contract | Fast regression spine through public Voice behavior | Stable outcomes; deterministic providers; no internal call/layout assertions. |
-| Adapter integration | Real SQLite/files, audio conversion, FFI, App Group, lifecycle, and delivery seams | Assert boundary contracts, not third-party implementation details. |
+| Adapter integration | Real SQLite/files, audio conversion, FFI, shared Keychain, lifecycle, and delivery seams | Assert boundary contracts, not third-party implementation details. |
 | E2E/system | A small set of highest-risk complete macOS and iOS paths | Use accessibility identifiers and user outcomes; do not multiply tests across every combination. |
 | Model/performance | Production model quality, latency, memory, energy, and provenance | Use semantic invariants and bounded metrics, not brittle exact prose. |
 
@@ -569,16 +566,20 @@ test first or batch the entire implementation behind mocked internals.
 
 ### K0 — iOS keyboard feasibility gate
 
-- Build a throwaway signed-device probe for keyboard-to-containing-app session
-  activation, App Group state, background capture, Live Activity, interruption,
-  stale-service detection, and manual return on current iOS.
-- Validate documented APIs and App Review guideline 4.4.1 before selecting the
-  activation design. Treat proprietary Wispr behavior as UX evidence, not API
-  authorization.
-- Benchmark the chosen ASR and formatter on the lowest intended iPhone; select
-  the deployment floor from evidence.
-- Do not begin production keyboard code until I2 and I3 have honest, approved
-  warm- and cold-start contracts.
+- **Implemented:** the containing app owns local PCM capture and its CAF; a full
+  QWERTY keyboard remains usable without Full Access; and app, keyboard, and
+  Control Center extension exchange only bounded local Keychain state.
+- **Implemented:** `AudioRecordingIntent`, Live Activity, heartbeat, single-slot
+  commands, stale-session policy, one-time insertion, and honest cold-start
+  guidance use documented public APIs. The keyboard never opens the app.
+- **Evidence:** 14 unit tests, two containing-app UI tests, a real 51,188-byte
+  simulator capture, Messages typing/insertion/manual de-duplication, and a
+  strictly verified generic-device build signed by the configured Team. The
+  100-round-trip Keychain handoff measured p50 0.819 ms, p95 1.047 ms, and max
+  2.990 ms on the reference Mac/simulator pair.
+- **Open evidence:** install and exercise the same build on the available
+  physical iPhone after it is unlocked; benchmark production ASR/formatting on
+  the lowest intended iPhone during C4. Neither blocks independent C4 work.
 
 ### C4 — iOS containing app and keyboard
 
@@ -603,6 +604,7 @@ test first or batch the entire implementation behind mocked internals.
 - [Apple custom keyboard open-access capabilities](https://developer.apple.com/documentation/uikit/configuring-open-access-for-a-custom-keyboard)
 - [Apple App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)
 - [Apple Audio Recording Intent](https://developer.apple.com/documentation/appintents/audiorecordingintent)
+- [Apple Keychain Sharing](https://developer.apple.com/documentation/security/sharing-access-to-keychain-items-among-a-collection-of-apps)
 - [Wispr Flow iPhone keyboard setup](https://docs.wisprflow.ai/articles/7453988911-set-up-the-flow-keyboard-on-iphone)
 - [Wispr Flow iOS 26.4 behavior](https://docs.wisprflow.ai/articles/6269634092-adapting-to-ios-26-4)
 - [Wispr Flow microphone-session behavior](https://docs.wisprflow.ai/articles/3634682593-why-the-orange-dot-or-mic-indicator-stays-on-after-dictating-ios)

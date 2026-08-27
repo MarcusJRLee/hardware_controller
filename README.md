@@ -30,6 +30,8 @@ identity, or privacy permission.
 | Explore the app | `scripts/run_demo.sh` | rustup |
 | Contribute | `scripts/check.sh` | Xcode 26 or compatible Swift 6 toolchain |
 | Verify only the portable core | `scripts/check_rust.sh` | rustup and a C17 compiler |
+| Verify the iOS Gate K0 probe | `scripts/check_ios_probe.sh` | Xcode 26, XcodeGen, and an iOS simulator |
+| Build the iOS Gate K0 probe | `scripts/build_ios_probe_device.sh` | Apple Development identity and private Team ID |
 | Use real hardware | [Signed hardware build](#signed-hardware-build) | Apple Development identity and supported Device |
 | Install as a nondeveloper | [Public distribution](docs/public_distribution.md) | Notarized public release; not yet available |
 

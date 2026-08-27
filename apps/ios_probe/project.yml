@@ -1,0 +1,161 @@
+name: VoiceProbe
+
+options:
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "18.0"
+
+settings:
+  base:
+    CLANG_ENABLE_MODULES: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_VERSION: 6.0
+
+targets:
+  VoiceProbe:
+    type: application
+    platform: iOS
+    sources:
+      - app
+    dependencies:
+      - target: VoiceProbeShared
+      - target: VoiceProbeKeyboard
+        embed: true
+      - target: VoiceProbeWidgets
+        embed: true
+    entitlements:
+      path: config/app.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.longdevity.hardwarecontroller.voiceprobe.shared
+    info:
+      path: config/app_info.plist
+      properties:
+        CFBundleDisplayName: Voice Probe
+        NSMicrophoneUsageDescription: Voice Probe records audio locally for transcription.
+        NSSupportsLiveActivities: true
+        UIBackgroundModes:
+          - audio
+        UILaunchScreen: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceprobe
+        TARGETED_DEVICE_FAMILY: 1
+
+  VoiceProbeShared:
+    type: framework.static
+    platform: iOS
+    sources:
+      - shared
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceprobe.shared
+
+  VoiceProbeKeyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - keyboard
+    dependencies:
+      - target: VoiceProbeShared
+    entitlements:
+      path: config/keyboard.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.longdevity.hardwarecontroller.voiceprobe.shared
+    info:
+      path: config/keyboard_info.plist
+      properties:
+        CFBundleDisplayName: Voice Keyboard
+        NSExtension:
+          NSExtensionAttributes:
+            IsASCIICapable: true
+            PrefersRightToLeft: false
+            PrimaryLanguage: en-US
+            RequestsOpenAccess: true
+          NSExtensionPointIdentifier: com.apple.keyboard-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceprobe.keyboard
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: 1
+
+  VoiceProbeWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - widgets
+    dependencies:
+      - target: VoiceProbeShared
+    entitlements:
+      path: config/widgets.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.longdevity.hardwarecontroller.voiceprobe.shared
+    info:
+      path: config/widgets_info.plist
+      properties:
+        CFBundleDisplayName: Voice Probe Controls
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceprobe.widgets
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: 1
+
+  VoiceProbeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - tests
+    dependencies:
+      - target: VoiceProbeShared
+      - target: VoiceProbe
+    entitlements:
+      path: config/tests.entitlements
+      properties:
+        application-identifier: $(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.longdevity.hardwarecontroller.voiceprobe.shared
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceprobe.tests
+
+  VoiceProbeUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - ui_tests
+    dependencies:
+      - target: VoiceProbe
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceprobe.uitests
+        TEST_TARGET_NAME: VoiceProbe
+
+schemes:
+  VoiceProbe:
+    build:
+      targets:
+        VoiceProbe: all
+        VoiceProbeTests: [test]
+        VoiceProbeUITests: [test]
+    test:
+      targets:
+        - VoiceProbeTests
+        - VoiceProbeUITests
+
+  VoiceProbeShared:
+    build:
+      targets:
+        VoiceProbeShared: all
+        VoiceProbeTests: [test]
+    test:
+      targets:
+        - VoiceProbeTests
