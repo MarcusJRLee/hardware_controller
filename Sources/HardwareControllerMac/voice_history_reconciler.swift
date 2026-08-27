@@ -16,13 +16,17 @@ actor VoiceHistoryReconciler {
     self.audioDirectory = audioDirectory
   }
 
-  func reconcileIfNeeded() async throws -> VoiceHistoryRecoveryReport? {
+  func reconcileIfNeeded(
+    excludingSessionIDs: Set<UUID> = []
+  ) async throws -> VoiceHistoryRecoveryReport? {
     guard !didReconcile else {
       return nil
     }
     let completedAt = Date()
     let descriptors = try await store.recoveryDescriptors()
-    let artifacts = try artifactDescriptors()
+    let artifacts = try artifactDescriptors(
+      excludingSessionIDs: excludingSessionIDs
+    )
     let plan = VoiceHistoryRecoveryPlanner.plan(
       sessions: descriptors.map {
         VoiceHistoryRecoverySessionDescriptor(
@@ -65,7 +69,9 @@ actor VoiceHistoryReconciler {
     )
   }
 
-  private func artifactDescriptors() throws
+  private func artifactDescriptors(
+    excludingSessionIDs: Set<UUID>
+  ) throws
     -> [VoiceHistoryRecoveryArtifactDescriptor]
   {
     let keys: Set<URLResourceKey> = [
@@ -77,7 +83,18 @@ actor VoiceHistoryReconciler {
       includingPropertiesForKeys: Array(keys),
       options: []
     )
+    let excludedFilenames = Set(
+      excludingSessionIDs.flatMap { sessionID in
+        [
+          "\(sessionID.uuidString).caf",
+          "\(sessionID.uuidString).partial",
+        ]
+      }
+    )
     return contents.compactMap { url in
+      guard !excludedFilenames.contains(url.lastPathComponent) else {
+        return nil
+      }
       guard
         let values = try? url.resourceValues(forKeys: keys),
         values.isRegularFile == true

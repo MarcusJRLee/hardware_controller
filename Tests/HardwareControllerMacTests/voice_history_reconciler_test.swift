@@ -8,6 +8,43 @@ import Testing
 
 struct VoiceHistoryReconcilerTest {
   @Test
+  func reconciliationIgnoresTheSessionCurrentlyFinalizing() async throws {
+    let root = temporaryRoot("active_finalization")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let activeID = UUID()
+    var initialized: SQLiteVoiceSessionHistory? = try SQLiteVoiceSessionHistory(
+      rootDirectory: root
+    )
+    #expect(initialized != nil)
+    initialized = nil
+    let audioDirectory = root.appending(path: "audio")
+    let finalURL = try await recordFixture(
+      sessionID: activeID,
+      audioDirectory: audioDirectory
+    )
+    let partialURL = finalURL.deletingPathExtension().appendingPathExtension(
+      "partial"
+    )
+    try FileManager.default.moveItem(at: finalURL, to: partialURL)
+    let store = try SQLiteVoiceSessionStore(
+      databaseURL: root.appending(path: "history.sqlite3"),
+      audioDirectory: audioDirectory
+    )
+    let reconciler = VoiceHistoryReconciler(
+      store: store,
+      audioDirectory: audioDirectory
+    )
+
+    let report = try await reconciler.reconcileIfNeeded(
+      excludingSessionIDs: [activeID]
+    )
+
+    #expect(report?.completedActions.isEmpty == true)
+    #expect(FileManager.default.fileExists(atPath: partialURL.path))
+    #expect(try await store.recentSessions(limit: 10).isEmpty)
+  }
+
+  @Test
   func startupRecoversAnInterruptedCaptureWithoutInventingText() async throws {
     let root = temporaryRoot("partial")
     defer { try? FileManager.default.removeItem(at: root) }

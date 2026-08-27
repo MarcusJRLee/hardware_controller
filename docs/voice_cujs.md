@@ -213,6 +213,9 @@ loss, and model cancellation do not block app launch or lose unrelated sessions.
 
 **Current evidence:** one pure planner and one startup actor reconcile exact
 app-owned partial, orphan, and expiration-quarantine names before retention.
+Finalization, audio import, and archive restore complete that one-time
+reconciliation before creating a new finalized artifact, so concurrent
+maintenance cannot recover an in-flight session.
 Readable audio becomes a typed Recovery session with empty immutable evidence,
 whole-file playback, and retranscription; unpinned recovered audio expires after
 24 hours while its session remains. Recent unreadable audio is preserved and

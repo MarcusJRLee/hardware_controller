@@ -725,7 +725,6 @@ public actor LocalAIDictationController {
         deliveredText: "",
         targetApplicationName: state.targetApplicationName,
         deliveryOutcome: .notAttempted,
-        deliveryFailure: reason.localizedDescription,
         spokenEdits: spokenEdits
       )
       publishFailure(
@@ -800,7 +799,6 @@ public actor LocalAIDictationController {
       deliveredText: "",
       targetApplicationName: state.targetApplicationName,
       deliveryOutcome: .notAttempted,
-      deliveryFailure: failure.localizedDescription,
       formattedDocument: activeFormattedDocument
     )
     publishFailure(

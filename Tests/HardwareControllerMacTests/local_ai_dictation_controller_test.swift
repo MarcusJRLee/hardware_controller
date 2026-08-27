@@ -122,6 +122,7 @@ struct LocalAIDictationControllerTest {
     #expect(session.formattedText.isEmpty)
     #expect(session.deliveredText.isEmpty)
     #expect(session.deliveryOutcome == .notAttempted)
+    #expect(session.document.deliveryFailure == nil)
     #expect(fixture.writer.inserted.isEmpty)
     #expect(await fixture.refiner.requests.isEmpty)
     let audioURL = try #require(session.audioArtifactURL)
