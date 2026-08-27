@@ -138,7 +138,7 @@ Rust consume the same fixture; the C ABI retains no archive path or file. The
 archive hashes establish internal integrity, not external authenticity. See
 [decision 0038](decisions/0038_portable_voice_history_archives.md).
 
-### iOS Gate K0 boundary
+### iOS app and keyboard boundary
 
 ```mermaid
 flowchart LR
@@ -166,10 +166,12 @@ stale, duplicate, and late results. The
 keyboard polls Keychain only while awaiting a matching result. Audio, models,
 History, logs, host identity, and target context stay outside the handoff.
 
-Gate K0 uses a standalone generated Xcode project so it can establish signing,
-extension, and lifecycle feasibility without pretending to be the production
-iOS app. C4 replaces the explicit placeholder result with portable local ASR,
-formatting, and History behind the same state-store protocol. See
+Gate K0 established signing, extension, and lifecycle feasibility. The same
+generated project now lives at `apps/ios/voice_input/` as the production iOS
+target. Its onboarding policy distinguishes undetermined, denied, authorized,
+keyboard-unobserved, and ready states without requesting permission at launch.
+C4 replaces the explicit placeholder result with portable local ASR, formatting,
+and History behind the same state-store protocol. See
 [decision 0040](decisions/0040_ios_keyboard_activation_and_handoff.md).
 
 ### HID transport
