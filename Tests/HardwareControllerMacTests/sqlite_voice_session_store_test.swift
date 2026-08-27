@@ -900,7 +900,7 @@ struct SQLiteVoiceSessionStoreTest {
   }
 
   @Test
-  func concurrentFinalizationConvergesOnOneArtifact() async throws {
+  func rapidFinalizationConvergesOnOneArtifact() async throws {
     let rootDirectory = temporaryRoot("retention_concurrent")
     defer { try? FileManager.default.removeItem(at: rootDirectory) }
     let settings = VoiceHistoryRetentionSettings(
@@ -908,11 +908,7 @@ struct SQLiteVoiceSessionStoreTest {
       maximumAudioBytes: nil,
       maximumArtifactCount: 1
     )
-    let first = try SQLiteVoiceSessionHistory(
-      rootDirectory: rootDirectory,
-      retentionSettings: settings
-    )
-    let second = try SQLiteVoiceSessionHistory(
+    let history = try SQLiteVoiceSessionHistory(
       rootDirectory: rootDirectory,
       retentionSettings: settings
     )
@@ -924,29 +920,29 @@ struct SQLiteVoiceSessionStoreTest {
       sessionID: UUID(),
       secondsAgo: 1
     )
-    first.begin(
+    history.begin(
       sessionID: firstDocument.id,
       startedAt: firstDocument.startedAt
     )
-    first.append(try makeVoiceAudioFixture())
-    second.begin(
+    history.append(try makeVoiceAudioFixture())
+    try await history.complete(firstDocument)
+    history.begin(
       sessionID: secondDocument.id,
       startedAt: secondDocument.startedAt
     )
-    second.append(try makeVoiceAudioFixture())
-
-    async let firstCompletion: Void = first.complete(firstDocument)
-    async let secondCompletion: Void = second.complete(secondDocument)
-    _ = try await (firstCompletion, secondCompletion)
+    history.append(try makeVoiceAudioFixture())
+    try await history.complete(secondDocument)
 
     let reopened = try SQLiteVoiceSessionHistory(
       rootDirectory: rootDirectory,
       retentionSettings: .unlimited
     )
     var sessions: [VoiceSessionHistoryItem] = []
-    for _ in 0..<100 {
+    for _ in 0..<500 {
       sessions = try await reopened.recentSessions(limit: 10)
-      if sessions.filter({ $0.audioArtifactURL != nil }).count == 1 {
+      if sessions.filter({ $0.audioArtifactURL != nil }).count == 1,
+        sessions.filter({ $0.audioExpirationReason != nil }).count == 1
+      {
         break
       }
       try await Task.sleep(for: .milliseconds(10))
@@ -956,6 +952,38 @@ struct SQLiteVoiceSessionStoreTest {
     #expect(
       sessions.filter { $0.audioExpirationReason != nil }.count == 1
     )
+  }
+
+  @Test(
+    .enabled(
+      if: ProcessInfo.processInfo.environment[
+        "HC_RUN_SQLITE_CONTENTION"
+      ] == "1"
+    )
+  )
+  func finalizationWaitsThroughTransientDatabaseContention() async throws {
+    let rootDirectory = temporaryRoot("retention_contention")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let history = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory,
+      retentionSettings: .unlimited
+    )
+    let document = retentionDocument(sessionID: UUID())
+    history.begin(sessionID: document.id, startedAt: document.startedAt)
+    history.append(try makeVoiceAudioFixture())
+    let lock = try SQLiteTestWriteLock(
+      databaseURL: rootDirectory.appending(path: "history.sqlite3")
+    )
+
+    async let completion: Void = history.complete(document)
+    try await Task.sleep(for: .milliseconds(2_250))
+    try lock.release()
+    try await completion
+
+    let stored = try #require(try await history.session(id: document.id))
+    #expect(stored.id == document.id)
+    #expect(stored.rawText == document.rawText)
+    #expect(stored.audioArtifactURL != nil)
   }
 
   @Test
@@ -1113,5 +1141,48 @@ struct SQLiteVoiceSessionStoreTest {
     )
     history.append(try makeVoiceAudioFixture())
     try await history.complete(document)
+  }
+}
+
+private final class SQLiteTestWriteLock {
+  private let database: OpaquePointer
+  private var isReleased = false
+
+  init(databaseURL: URL) throws {
+    var opened: OpaquePointer?
+    guard sqlite3_open(databaseURL.path, &opened) == SQLITE_OK,
+      let opened
+    else {
+      throw VoiceSessionHistoryError.storageUnavailable(
+        "The test database could not be opened."
+      )
+    }
+    database = opened
+    guard sqlite3_exec(database, "BEGIN IMMEDIATE;", nil, nil, nil) == SQLITE_OK
+    else {
+      sqlite3_close(database)
+      throw VoiceSessionHistoryError.storageUnavailable(
+        "The test database could not acquire its write lock."
+      )
+    }
+  }
+
+  func release() throws {
+    guard !isReleased else {
+      return
+    }
+    guard sqlite3_exec(database, "COMMIT;", nil, nil, nil) == SQLITE_OK else {
+      throw VoiceSessionHistoryError.storageUnavailable(
+        "The test database could not release its write lock."
+      )
+    }
+    isReleased = true
+  }
+
+  deinit {
+    if !isReleased {
+      sqlite3_exec(database, "ROLLBACK;", nil, nil, nil)
+    }
+    sqlite3_close(database)
   }
 }

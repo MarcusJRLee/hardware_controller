@@ -39,6 +39,9 @@ only recovery artifact for a failed or incomplete delivery.
   maintenance. Run policy and SQLite/file work on actors after finalization and
   at first startup access, outside hardware callbacks, target validation, and
   text insertion.
+- Give session and retention connections one five-second SQLite coordination
+  bound. Transient writer contention waits outside the input-to-action hot path;
+  exhaustion remains an explicit storage failure.
 - Request OS-backup exclusion for the owned Voice History root on supported
   volumes. Manual copies, filesystem snapshots, and external backup tools remain
   outside app control.
@@ -57,9 +60,10 @@ only recovery artifact for a failed or incomplete delivery.
 Pure-policy tests cover defaults, `Unlimited`, zero, protected artifacts,
 stable ordering, the byte low-water mark, low disk, invalid sizes, and invalid
 configuration. SQLite tests cover startup and post-finalization enforcement,
-concurrent finalization, corrupt or missing sizes, recovery protection,
+rapid shared-service finalization, corrupt or missing sizes, recovery protection,
 expiration provenance, stale maintenance ordering, capacity inspection failure,
-wall-clock rollback, concurrent pin protection, search preservation, and export
-without audio. The complete 451-test/69-suite corpus passes. Measured
+wall-clock rollback, concurrent pin protection, search preservation, export
+without audio, and release after a deterministic 2.25-second writer lock. The
+complete 451-test/69-suite M7 corpus passed. Measured
 5,000-session warm-search p95 is 2.615 ms against the 250 ms requirement;
 packaged-UI evidence is recorded in the game plan.
