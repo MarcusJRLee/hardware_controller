@@ -69,8 +69,10 @@ limit; no installed app is removed automatically.
 
 I7 is implemented in source without changing the keyboard's cold-start or
 delivery contract. Recovery can preserve playable audio but cannot promise a
-transcript or automatic reuse. Broader startup quarantine, low-disk pressure,
-and retranscription controls remain later I10 work.
+transcript or automatic reuse. Decision
+[0049](0049_ios_offline_storage_enforcement.md) later implements pinning and
+low-disk pressure for I10. Broader quarantine and retranscription controls
+remain later work.
 
 ## Sources
 

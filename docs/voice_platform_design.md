@@ -1,8 +1,8 @@
 # Local-first voice platform design
 
-**Status:** Accepted roadmap; macOS M1–M15, iOS Gate K0, I1 onboarding and Model
-admission, and I2 through local formatting and History are implemented on the
-current stacked branches. Current evidence is called out explicitly. The
+**Status:** Accepted roadmap; macOS M1–M15 and iOS Gate K0 through I10 are
+implemented in source across the current stacked branches. Current evidence is
+called out explicitly. The
 durable decision is
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 and [`voice_cujs.md`](voice_cujs.md) is the acceptance contract.
@@ -416,7 +416,7 @@ per transcript revision.
 | Successful-session audio on iOS      | 90 days, 1 GiB, and 2,000 artifacts; first limit reached | Oldest unpinned audio first.                  |
 | Transcript/session metadata          | Retain until explicit deletion                           | Not automatically removed when audio expires. |
 | Derived waveform/decoded/model cache | 256 MiB per device                                       | Least recently used; always rebuildable.      |
-| Installed model packages             | User-visible separate budget                             | Never evict the active model automatically.   |
+| Installed model packages             | 12 GiB and eight versions on iOS; separate from History  | Never evict implicitly; explicit removal only. |
 | Partial/recovery artifacts           | 24 hours after reconciliation                            | Remove only after a typed recovery decision.  |
 
 Age, byte, and artifact-count limits are independently configurable; `Unlimited`
@@ -430,6 +430,13 @@ never on the capture or delivery path. Evict to 90% of the configured byte limit
 to prevent deletion churn. Low-disk handling may temporarily override normal
 cleanup timing but must use the same deterministic order and disclose every
 removal.
+
+On iOS, a versioned local preference exposes restrained age, byte, and count
+presets. Future or invalid preference bytes are preserved and become read-only.
+The repository requests basic volume capacity and restores a 1 GiB reserve; it
+never calls the important-usage capacity key. Maintenance runs after durable
+commit, on History access, and after a settings change. Failure leaves committed
+evidence usable, displays one retryable status, and never blocks delivery.
 
 Write audio to a session-scoped partial file, finalize and sync it, atomically
 move it to its permanent name, then commit the SQLite transaction. Startup
@@ -494,6 +501,9 @@ Local-only is a product invariant:
   the app's secure-erasure guarantee.
 - A provider declaring remote capability is rejected before it receives audio,
   text, context, or history in local-only mode.
+- Every iOS check rejects network clients, Network.framework linkage,
+  transport-security configuration, push, associated-domain, iCloud, and
+  networking capabilities in product sources and configuration.
 
 API-powered providers are a separately approved milestone. They must be
 explicitly enabled and visible per session, minimize payloads, define retention,
@@ -687,13 +697,21 @@ test first or batch the entire implementation behind mocked internals.
   build; host-specific callback and rejection behavior remains physical-iPhone
   evidence. Decision
   [`0048`](decisions/0048_ios_bounded_insertion_recovery.md) owns I9.
+- **Current offline-storage evidence:** History revision 3 persists pin state;
+  local versioned presets apply age/count/byte and 1-GiB-reserve cleanup after
+  durable commit without turning maintenance failure into delivery failure.
+  Real repository tests cover migration, protected Recovery audio, low disk,
+  Data Protection where CoreSimulator exposes it, and backup exclusion. Model
+  admission regressions prove byte/version rejection leaves installed packages
+  unchanged. A static local-only check runs before every iOS build. Decision
+  [`0049`](decisions/0049_ios_offline_storage_enforcement.md) owns I10;
+  physical airplane-mode evidence remains final signed-device work.
 - Every repository check runs the real pinned native transcription and output
   safety assertions. `HC_RUN_IOS_ASR_PERFORMANCE=1` additionally enforces the
   RTF ≤ 0.75 gate only on named hardware; shared virtual CI is not performance
   evidence.
-- Implement I1–I11 one failing CUJ at a time: keyboard typing fallback, mic
-  control, app switching where required, insertion, Styles, interruption,
-  recovery, storage caps, secure fields, and airplane mode.
+- Implement I11 one failing CUJ at a time: approved system-surface capture,
+  visible ownership, lock/background finalization, and explicit recovery.
 - Run signed-device UI tests for behaviors extension simulators cannot prove.
 
 ### C5 — preserve later portability

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted and implemented for macOS M7.
+Accepted and implemented for macOS M7 and iOS I10.
 
 ## Context
 
@@ -69,3 +69,7 @@ without audio, and release after a deterministic 2.25-second writer lock. The
 complete 451-test/69-suite M7 corpus passed. Measured
 5,000-session warm-search p95 is 2.615 ms against the 250 ms requirement;
 packaged-UI evidence is recorded in the game plan.
+
+Decision [0049](0049_ios_offline_storage_enforcement.md) later applies the
+reserved iOS defaults, persisted pinning, basic-capacity low-disk enforcement,
+and best-effort post-commit maintenance in the containing app.

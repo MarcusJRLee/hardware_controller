@@ -1,8 +1,8 @@
 # Voice critical user journeys
 
-**Status:** Accepted behavior contract; macOS M1–M15, iOS Gate K0, I1 local
-onboarding and Model-package admission, and I2 through local formatting and
-History are implemented. The authority is
+**Status:** Accepted behavior contract; macOS M1–M15 and iOS Gate K0 through
+I10 are implemented in source across the current stacked branches. The
+authority is
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md).
 
 ## Purpose
@@ -533,6 +533,17 @@ applies its age/byte quota, pinning, partial recovery, Data Protection, and low-
 disk rules without blocking capture. Installed active models are not silently
 evicted as History cache. The Model library separately rejects admission at its
 configured byte or installed-version cap and permits explicit package removal.
+
+**Current evidence:** schema-revision-3 History persists pin state and migrates
+older rows unpinned. Versioned local preferences expose age, byte, and recording
+presets; invalid or future state is preserved read-only. Real SQLite/filesystem
+tests cover protected Recovery audio, low-disk expiry, transcript preservation,
+post-commit inspection failure, Data Protection where CoreSimulator exposes it,
+and backup exclusion. Model tests prove rejected admission does not evict an
+installed package. `scripts/check_ios_local_only.sh` rejects network clients,
+linkage, and cloud/network capabilities. Physical airplane-mode evidence remains
+part of final signed-iPhone verification. Decision
+[`0049`](decisions/0049_ios_offline_storage_enforcement.md) owns I10.
 
 ### I11 — Capture without an active keyboard
 

@@ -1,5 +1,6 @@
 import Foundation
 import HardwareControllerVoiceCore
+import SQLite3
 import XCTest
 
 @testable import VoiceInput
@@ -72,6 +73,225 @@ final class VoiceInputHistoryRepositoryTest: XCTestCase {
     XCTAssertNil(first.audioArtifact)
     XCTAssertEqual(first.audioExpiredReason, .artifactLimit)
     XCTAssertNotNil(first.audioExpiredAt)
+  }
+
+  func testPinnedAudioIsSkippedWhenTheArtifactCapIsEnforced() async throws {
+    let fixture = try Fixture(
+      retentionSettings: VoiceHistoryRetentionSettings(
+        maximumAgeDays: nil,
+        maximumAudioBytes: nil,
+        maximumArtifactCount: 1
+      )
+    )
+    addTeardownBlock { try await fixture.remove() }
+    let pinnedID = UUID()
+    _ = try await fixture.repository.save(
+      sessionID: pinnedID,
+      startedAt: Date(timeIntervalSince1970: 10),
+      endedAt: Date(timeIntervalSince1970: 20),
+      transcript: try fixture.process("Keep pinned audio."),
+      sourceAudioURL: fixture.audioURL
+    )
+    _ = try await fixture.repository.setPinned(
+      sessionID: pinnedID,
+      isPinned: true
+    )
+    let unpinnedID = UUID()
+    _ = try await fixture.repository.save(
+      sessionID: unpinnedID,
+      startedAt: Date(timeIntervalSince1970: 30),
+      endedAt: Date(timeIntervalSince1970: 40),
+      transcript: try fixture.process("Expire unpinned audio."),
+      sourceAudioURL: fixture.audioURL
+    )
+
+    let pinned = try await fixture.repository.session(id: pinnedID)
+    let unpinned = try await fixture.repository.session(id: unpinnedID)
+
+    XCTAssertEqual(pinned?.isPinned, true)
+    XCTAssertNotNil(pinned?.audioArtifact)
+    XCTAssertNil(unpinned?.audioArtifact)
+    XCTAssertEqual(unpinned?.audioExpiredReason, .artifactLimit)
+  }
+
+  func testPinnedRecoveryAudioSurvivesItsAutomaticExpiry() async throws {
+    let fixture = try Fixture(retentionSettings: .unlimited)
+    addTeardownBlock { try await fixture.remove() }
+    let sessionID = UUID()
+    let endedAt = Date(timeIntervalSince1970: 20)
+    _ = try await fixture.repository.saveRecovery(
+      sessionID: sessionID,
+      startedAt: Date(timeIntervalSince1970: 10),
+      endedAt: endedAt,
+      reason: .audioInterruption,
+      sourceAudioURL: fixture.audioURL
+    )
+    _ = try await fixture.repository.setPinned(
+      sessionID: sessionID,
+      isPinned: true
+    )
+
+    _ = try await fixture.repository.enforceRetention(
+      now: endedAt.addingTimeInterval(86_400)
+    )
+    let recovered = try await fixture.repository.session(id: sessionID)
+
+    XCTAssertEqual(recovered?.isPinned, true)
+    XCTAssertNotNil(recovered?.audioArtifact)
+    XCTAssertNil(recovered?.audioExpiredReason)
+  }
+
+  func testPinUpdateAdvancesTheStoredSchemaRevision() async throws {
+    let fixture = try Fixture(retentionSettings: .unlimited)
+    addTeardownBlock { try await fixture.remove() }
+    let saved = try await fixture.repository.save(
+      sessionID: UUID(),
+      startedAt: Date(timeIntervalSince1970: 10),
+      endedAt: Date(timeIntervalSince1970: 20),
+      transcript: try fixture.process("Persist pin schema."),
+      sourceAudioURL: fixture.audioURL
+    )
+    try await fixture.repository.close()
+    let databaseURL = fixture.historyRoot.appendingPathComponent("history.sqlite3")
+    try setStoredSchemaRevision(2, databaseURL: databaseURL)
+    let reloaded = try VoiceInputHistoryRepository(
+      rootURL: fixture.historyRoot,
+      retentionSettings: .unlimited,
+      availableCapacity: { _ in VoiceInputHistoryRepository.lowDiskReserveBytes }
+    )
+    addTeardownBlock { try await reloaded.close() }
+
+    _ = try await reloaded.setPinned(sessionID: saved.id, isPinned: true)
+    try await reloaded.close()
+
+    XCTAssertEqual(
+      try storedSchemaRevision(databaseURL: databaseURL),
+      VoiceInputHistorySession.currentSchemaRevision
+    )
+  }
+
+  func testLowDiskReserveExpiresEligibleAudioWithoutDeletingTranscript() async throws {
+    let fixture = try Fixture(
+      retentionSettings: .unlimited,
+      availableCapacity: { _ in
+        VoiceInputHistoryRepository.lowDiskReserveBytes - 4
+      }
+    )
+    addTeardownBlock { try await fixture.remove() }
+
+    let saved = try await fixture.repository.save(
+      sessionID: UUID(),
+      startedAt: Date(timeIntervalSince1970: 10),
+      endedAt: Date(timeIntervalSince1970: 20),
+      transcript: try fixture.process("Keep text under disk pressure."),
+      sourceAudioURL: fixture.audioURL
+    )
+
+    XCTAssertEqual(saved.formattedText, "Keep text under disk pressure.")
+    XCTAssertNil(saved.audioArtifact)
+    XCTAssertEqual(saved.audioExpiredReason, .lowDisk)
+  }
+
+  func testRetentionInspectionFailureDoesNotFailCommittedCapture() async throws {
+    let fixture = try Fixture(
+      retentionSettings: .unlimited,
+      availableCapacity: { _ in throw CocoaError(.fileReadUnknown) }
+    )
+    addTeardownBlock { try await fixture.remove() }
+
+    let saved = try await fixture.repository.save(
+      sessionID: UUID(),
+      startedAt: Date(timeIntervalSince1970: 10),
+      endedAt: Date(timeIntervalSince1970: 20),
+      transcript: try fixture.process("Committed before maintenance."),
+      sourceAudioURL: fixture.audioURL
+    )
+
+    XCTAssertEqual(saved.formattedText, "Committed before maintenance.")
+    XCTAssertNotNil(saved.audioArtifact)
+  }
+
+  func testUnavailableCapacityDoesNotFailCommitAndSurfacesMaintenance() async throws {
+    let fixture = try Fixture(
+      retentionSettings: .unlimited,
+      availableCapacity: { _ in nil }
+    )
+    addTeardownBlock { try await fixture.remove() }
+
+    let saved = try await fixture.repository.save(
+      sessionID: UUID(),
+      startedAt: Date(timeIntervalSince1970: 10),
+      endedAt: Date(timeIntervalSince1970: 20),
+      transcript: try fixture.process("Capacity unavailable after commit."),
+      sourceAudioURL: fixture.audioURL
+    )
+
+    XCTAssertNotNil(saved.audioArtifact)
+    let maintenanceMessage =
+      await fixture.repository.retentionMaintenanceMessage()
+    XCTAssertEqual(
+      maintenanceMessage,
+      "History storage maintenance could not finish and will retry."
+    )
+  }
+
+  func testFailedAudioDeletionRestoresTheArtifactForMaintenanceRetry() async throws {
+    let fixture = try Fixture(
+      retentionSettings: VoiceHistoryRetentionSettings(
+        maximumAgeDays: nil,
+        maximumAudioBytes: nil,
+        maximumArtifactCount: 0
+      ),
+      removeRetainedAudio: { _ in throw CocoaError(.fileWriteUnknown) }
+    )
+    addTeardownBlock { try await fixture.remove() }
+
+    let saved = try await fixture.repository.save(
+      sessionID: UUID(),
+      startedAt: Date(timeIntervalSince1970: 10),
+      endedAt: Date(timeIntervalSince1970: 20),
+      transcript: try fixture.process("Retry failed cleanup."),
+      sourceAudioURL: fixture.audioURL
+    )
+
+    XCTAssertNotNil(saved.audioArtifact)
+    XCTAssertTrue(
+      FileManager.default.fileExists(
+        atPath: try XCTUnwrap(saved.audioArtifact?.url.path)
+      )
+    )
+    do {
+      _ = try await fixture.repository.enforceRetention(now: .now)
+      XCTFail("Expected cleanup to remain retryable.")
+    } catch {
+      XCTAssertEqual(error as? VoiceInputHistoryError, .storageUnavailable)
+    }
+    let retained = try await fixture.repository.session(id: saved.id)
+    XCTAssertNotNil(retained?.audioArtifact)
+  }
+
+  func testOwnedHistoryAudioUsesDataProtectionAndIsExcludedFromBackup() async throws {
+    let fixture = try Fixture(retentionSettings: .unlimited)
+    addTeardownBlock { try await fixture.remove() }
+
+    let saved = try await fixture.repository.save(
+      sessionID: UUID(),
+      startedAt: Date(timeIntervalSince1970: 10),
+      endedAt: Date(timeIntervalSince1970: 20),
+      transcript: try fixture.process("Protected local audio."),
+      sourceAudioURL: fixture.audioURL
+    )
+    let audioURL = try XCTUnwrap(saved.audioArtifact?.url)
+    let attributes = try FileManager.default.attributesOfItem(
+      atPath: audioURL.path
+    )
+    let values = try audioURL.resourceValues(forKeys: [.isExcludedFromBackupKey])
+
+    // CoreSimulator omits this attribute even when the protection write succeeds.
+    if let protection = attributes[.protectionKey] as? FileProtectionType {
+      XCTAssertEqual(protection, .completeUntilFirstUserAuthentication)
+    }
+    XCTAssertEqual(values.isExcludedFromBackup, true)
   }
 
   func testReloadPreservesUnknownFilesOutsideTheCanonicalRecoveryContract() async throws {
@@ -364,6 +584,67 @@ final class VoiceInputHistoryRepositoryTest: XCTestCase {
   }
 }
 
+private func setStoredSchemaRevision(
+  _ revision: Int,
+  databaseURL: URL
+) throws {
+  let database = try openDatabase(databaseURL)
+  defer { sqlite3_close(database) }
+  guard
+    sqlite3_exec(
+      database,
+      "UPDATE voice_input_history SET schema_revision = \(revision);",
+      nil,
+      nil,
+      nil
+    ) == SQLITE_OK
+  else {
+    throw VoiceInputHistoryError.storageUnavailable
+  }
+}
+
+private func storedSchemaRevision(databaseURL: URL) throws -> Int {
+  let database = try openDatabase(databaseURL)
+  defer { sqlite3_close(database) }
+  var statement: OpaquePointer?
+  guard
+    sqlite3_prepare_v2(
+      database,
+      "SELECT schema_revision FROM voice_input_history LIMIT 1;",
+      -1,
+      &statement,
+      nil
+    ) == SQLITE_OK,
+    let statement
+  else {
+    throw VoiceInputHistoryError.storageUnavailable
+  }
+  defer { sqlite3_finalize(statement) }
+  guard sqlite3_step(statement) == SQLITE_ROW else {
+    throw VoiceInputHistoryError.storageUnavailable
+  }
+  return Int(sqlite3_column_int(statement, 0))
+}
+
+private func openDatabase(_ databaseURL: URL) throws -> OpaquePointer {
+  var database: OpaquePointer?
+  guard
+    sqlite3_open_v2(
+      databaseURL.path,
+      &database,
+      SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX,
+      nil
+    ) == SQLITE_OK,
+    let database
+  else {
+    if let database {
+      sqlite3_close(database)
+    }
+    throw VoiceInputHistoryError.storageUnavailable
+  }
+  return database
+}
+
 private struct Fixture {
   let root: URL
   let historyRoot: URL
@@ -371,7 +652,13 @@ private struct Fixture {
   let repository: VoiceInputHistoryRepository
 
   init(
-    retentionSettings: VoiceHistoryRetentionSettings = .iOSDefault
+    retentionSettings: VoiceHistoryRetentionSettings = .iOSDefault,
+    availableCapacity: @escaping @Sendable (URL) throws -> Int64? = {
+      _ in VoiceInputHistoryRepository.lowDiskReserveBytes
+    },
+    removeRetainedAudio: @escaping @Sendable (URL) throws -> Void = {
+      try FileManager.default.removeItem(at: $0)
+    }
   ) throws {
     root = FileManager.default.temporaryDirectory.appendingPathComponent(
       UUID().uuidString,
@@ -386,7 +673,9 @@ private struct Fixture {
     try Data("audio-1".utf8).write(to: audioURL)
     repository = try VoiceInputHistoryRepository(
       rootURL: historyRoot,
-      retentionSettings: retentionSettings
+      retentionSettings: retentionSettings,
+      availableCapacity: availableCapacity,
+      removeRetainedAudio: removeRetainedAudio
     )
   }
 
