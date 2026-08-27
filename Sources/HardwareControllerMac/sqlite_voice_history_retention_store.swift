@@ -79,7 +79,12 @@ actor SQLiteVoiceHistoryRetentionStore {
     self.audioDirectory = audioDirectory
     self.artifactSize = artifactSize
     self.availableCapacity = availableCapacity
-    guard sqlite3_busy_timeout(opened, 2_000) == SQLITE_OK else {
+    guard
+      sqlite3_busy_timeout(
+        opened,
+        sqliteVoiceHistoryCoordinationTimeoutMilliseconds
+      ) == SQLITE_OK
+    else {
       throw VoiceSessionHistoryError.storageUnavailable(
         "Voice History could not coordinate retention storage."
       )

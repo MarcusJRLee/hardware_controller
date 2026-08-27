@@ -420,6 +420,9 @@ the quarantine; a failed database commit restores the file. A separate
 retention actor reads the same SQLite database and owns quota selection,
 expiration transactions, and file lifecycle. One shared History service applies
 versioned preference schema 6 after finalization and on first startup access.
+Both actor-owned connections share a five-second SQLite coordination bound, so
+transient writer contention converges without entering the input-to-action hot
+path; exhaustion remains a typed storage failure.
 Age, count, byte-to-90%-low-water, and 1 GiB basic-volume-reserve rules select the
 oldest eligible audio deterministically while excluding active, pinned, and sole
 recovery artifacts. Expiration stores a typed reason and time, removes only the

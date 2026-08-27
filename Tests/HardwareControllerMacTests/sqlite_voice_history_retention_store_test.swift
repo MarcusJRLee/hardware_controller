@@ -88,19 +88,8 @@ struct SQLiteVoiceHistoryRetentionStoreTest {
     )
     defer { try? FileManager.default.removeItem(at: root) }
     let sessionID = UUID()
-    var history: SQLiteVoiceSessionHistory? = try SQLiteVoiceSessionHistory(
-      rootDirectory: root,
-      retentionSettings: .unlimited
-    )
-    let activeHistory = try #require(history)
     let document = retentionDocument(sessionID: sessionID)
-    activeHistory.begin(
-      sessionID: sessionID,
-      startedAt: document.startedAt
-    )
-    activeHistory.append(try retentionAudioFixture())
-    try await activeHistory.complete(document)
-    history = nil
+    _ = try await seedAudio(document, in: root)
     let store = try SQLiteVoiceHistoryRetentionStore(
       databaseURL: root.appending(path: "history.sqlite3"),
       audioDirectory: root.appending(path: "audio"),
@@ -137,10 +126,6 @@ struct SQLiteVoiceHistoryRetentionStoreTest {
     )
     defer { try? FileManager.default.removeItem(at: root) }
     let sessionID = UUID()
-    var history: SQLiteVoiceSessionHistory? = try SQLiteVoiceSessionHistory(
-      rootDirectory: root,
-      retentionSettings: .unlimited
-    )
     let document = VoiceSessionDocument(
       id: sessionID,
       startedAt: Date().addingTimeInterval(-1),
@@ -152,18 +137,8 @@ struct SQLiteVoiceHistoryRetentionStoreTest {
       targetApplicationName: "Notes",
       deliveryOutcome: .inserted
     )
-    let activeHistory = try #require(history)
-    activeHistory.begin(
-      sessionID: sessionID,
-      startedAt: document.startedAt
-    )
-    activeHistory.append(try retentionAudioFixture())
-    try await activeHistory.complete(document)
-    let audioURL = try #require(
-      try await activeHistory.session(id: sessionID)?.audioArtifactURL
-    )
+    let audioURL = try await seedAudio(document, in: root)
     try FileManager.default.removeItem(at: audioURL)
-    history = nil
     let store = try SQLiteVoiceHistoryRetentionStore(
       databaseURL: root.appending(path: "history.sqlite3"),
       audioDirectory: root.appending(path: "audio")
@@ -205,6 +180,35 @@ struct SQLiteVoiceHistoryRetentionStoreTest {
     }
     buffer.frameLength = 1_600
     return try CapturedAudioBuffer(copying: buffer)
+  }
+
+  private func seedAudio(
+    _ document: VoiceSessionDocument,
+    in root: URL
+  ) async throws -> URL {
+    let fileManager = FileManager.default
+    let audioDirectory = root.appending(
+      path: "audio",
+      directoryHint: .isDirectory
+    )
+    try fileManager.createDirectory(
+      at: audioDirectory,
+      withIntermediateDirectories: true
+    )
+    let recorder = VoiceAudioArtifactRecorder(
+      sessionID: document.id,
+      audioDirectory: audioDirectory
+    )
+    recorder.append(try retentionAudioFixture())
+    let audioURL = try #require(
+      try await recorder.finishRetainingAudio()
+    )
+    let store = try SQLiteVoiceSessionStore(
+      databaseURL: root.appending(path: "history.sqlite3"),
+      audioDirectory: audioDirectory
+    )
+    try await store.insert(document, audioURL: audioURL)
+    return audioURL
   }
 
   private func retentionDocument(sessionID: UUID) -> VoiceSessionDocument {
