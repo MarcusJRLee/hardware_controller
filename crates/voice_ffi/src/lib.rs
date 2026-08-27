@@ -2,6 +2,7 @@
 
 use std::{panic::AssertUnwindSafe, path::Path, slice};
 
+use voice_archive::{HistoryArchiveError, HistoryArchiveLimits, validate_history_archive};
 use voice_core::{
     AudioExpirationReason, RetentionCandidate, RetentionError, RetentionSettings, SessionId,
     plan_retention,
@@ -53,6 +54,151 @@ pub const VOICE_STATUS_MODEL_PACKAGE_INVENTORY_INVALID: u32 = 18;
 pub const VOICE_STATUS_MODEL_PACKAGE_DIGEST_MISMATCH: u32 = 19;
 /// Package verification could not read the complete input.
 pub const VOICE_STATUS_MODEL_PACKAGE_IO_FAILURE: u32 = 20;
+/// A Voice History archive root is absent, linked, or not a directory.
+pub const VOICE_STATUS_INVALID_HISTORY_ARCHIVE_ROOT: u32 = 21;
+/// A Voice History archive manifest or checksum contract is invalid.
+pub const VOICE_STATUS_INVALID_HISTORY_ARCHIVE_MANIFEST: u32 = 22;
+/// A Voice History archive exceeds a configured resource limit.
+pub const VOICE_STATUS_HISTORY_ARCHIVE_LIMIT_EXCEEDED: u32 = 23;
+/// A Voice History archive inventory is incomplete, linked, or undeclared.
+pub const VOICE_STATUS_HISTORY_ARCHIVE_INVENTORY_INVALID: u32 = 24;
+/// A Voice History archive digest does not match its bytes.
+pub const VOICE_STATUS_HISTORY_ARCHIVE_INTEGRITY_MISMATCH: u32 = 25;
+/// A Voice History archive contains contradictory session identities.
+pub const VOICE_STATUS_HISTORY_ARCHIVE_IDENTITY_INVALID: u32 = 26;
+/// Voice History archive verification could not read the complete input.
+pub const VOICE_STATUS_HISTORY_ARCHIVE_IO_FAILURE: u32 = 27;
+
+/// Versioned Voice History archive validation request.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct VoiceHistoryArchiveRequestV1 {
+    /// UTF-8 archive-root path bytes.
+    pub root_path_utf8: *const u8,
+    /// Number of readable path bytes.
+    pub root_path_length: usize,
+    /// Maximum readable manifest bytes.
+    pub maximum_manifest_bytes: u64,
+    /// Maximum readable checksum-file bytes.
+    pub maximum_checksum_bytes: u64,
+    /// Maximum optional audio-artifact bytes.
+    pub maximum_audio_bytes: u64,
+    /// Maximum immutable History results.
+    pub maximum_result_count: u32,
+    /// Must contain only zeroes.
+    pub reserved: [u8; 4],
+}
+
+/// Verified Voice History archive metadata.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct VoiceHistoryArchiveInfoV1 {
+    /// Voice session UUID bytes in network order.
+    pub session_id: [u8; 16],
+    /// Number of verified immutable results.
+    pub result_count: u32,
+    /// Whether a verified audio artifact is present.
+    pub has_audio: u8,
+    /// Written as zeroes.
+    pub reserved: [u8; 3],
+    /// Total verified manifest and optional audio bytes.
+    pub verified_bytes: u64,
+    /// SHA-256 of the exact verified manifest bytes.
+    pub manifest_sha256: [u8; 32],
+}
+
+/// Validates a Voice History archive without retaining pointers or files.
+///
+/// Keep the source directory private from concurrent mutation for the call.
+///
+/// # Safety
+///
+/// Every non-null pointer must be aligned and valid for its declared readable
+/// or writable byte count for the duration of this call. Input and output must
+/// not overlap.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn voice_history_archive_validate_v1(
+    request: *const VoiceHistoryArchiveRequestV1,
+    output: *mut VoiceHistoryArchiveInfoV1,
+) -> u32 {
+    std::panic::catch_unwind(AssertUnwindSafe(|| {
+        // Safety: Pointer validity and alignment are the documented C precondition.
+        unsafe { validate_archive(request, output) }
+    }))
+    .unwrap_or(VOICE_STATUS_INTERNAL_FAILURE)
+}
+
+unsafe fn validate_archive(
+    request: *const VoiceHistoryArchiveRequestV1,
+    output: *mut VoiceHistoryArchiveInfoV1,
+) -> u32 {
+    if request.is_null() || output.is_null() {
+        return VOICE_STATUS_NULL_POINTER;
+    }
+    // Safety: Null pointers were rejected and validity is the caller contract.
+    let request = unsafe { &*request };
+    // Safety: Null pointers were rejected and exclusive output is the caller contract.
+    let output = unsafe { &mut *output };
+    *output = VoiceHistoryArchiveInfoV1 {
+        session_id: [0; 16],
+        result_count: 0,
+        has_audio: 0,
+        reserved: [0; 3],
+        verified_bytes: 0,
+        manifest_sha256: [0; 32],
+    };
+    if request.root_path_utf8.is_null() {
+        return VOICE_STATUS_NULL_POINTER;
+    }
+    if request.reserved != [0; 4]
+        || request.maximum_manifest_bytes == 0
+        || request.maximum_checksum_bytes == 0
+        || request.maximum_result_count == 0
+    {
+        return VOICE_STATUS_INVALID_ARGUMENT;
+    }
+    // Safety: The caller promises this many readable path bytes.
+    let path_bytes =
+        unsafe { slice::from_raw_parts(request.root_path_utf8, request.root_path_length) };
+    let Ok(path) = std::str::from_utf8(path_bytes) else {
+        return VOICE_STATUS_INVALID_UTF8_PATH;
+    };
+    if path.is_empty() {
+        return VOICE_STATUS_INVALID_ARGUMENT;
+    }
+    let archive = match validate_history_archive(
+        Path::new(path),
+        HistoryArchiveLimits {
+            maximum_manifest_bytes: request.maximum_manifest_bytes,
+            maximum_checksum_bytes: request.maximum_checksum_bytes,
+            maximum_audio_bytes: request.maximum_audio_bytes,
+            maximum_result_count: request.maximum_result_count,
+        },
+    ) {
+        Ok(value) => value,
+        Err(error) => return archive_status(&error),
+    };
+    output.session_id = archive.session_id;
+    output.result_count = archive.result_count;
+    output.has_audio = u8::from(archive.has_audio);
+    output.verified_bytes = archive.verified_bytes;
+    output.manifest_sha256 = archive.manifest_sha256;
+    VOICE_STATUS_OK
+}
+
+fn archive_status(error: &HistoryArchiveError) -> u32 {
+    match error {
+        HistoryArchiveError::InvalidRoot => VOICE_STATUS_INVALID_HISTORY_ARCHIVE_ROOT,
+        HistoryArchiveError::InvalidInventory => VOICE_STATUS_HISTORY_ARCHIVE_INVENTORY_INVALID,
+        HistoryArchiveError::InvalidManifest | HistoryArchiveError::UnsupportedSchema => {
+            VOICE_STATUS_INVALID_HISTORY_ARCHIVE_MANIFEST
+        }
+        HistoryArchiveError::LimitExceeded => VOICE_STATUS_HISTORY_ARCHIVE_LIMIT_EXCEEDED,
+        HistoryArchiveError::IntegrityMismatch => VOICE_STATUS_HISTORY_ARCHIVE_INTEGRITY_MISMATCH,
+        HistoryArchiveError::InvalidIdentity => VOICE_STATUS_HISTORY_ARCHIVE_IDENTITY_INVALID,
+        HistoryArchiveError::Io => VOICE_STATUS_HISTORY_ARCHIVE_IO_FAILURE,
+    }
+}
 
 /// One caller-owned UTF-8 output buffer.
 #[repr(C)]

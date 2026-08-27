@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signalbridge.dev/schemas/voice_history_archive_checksums_v1.schema.json",
+  "title": "Voice History archive V1 checksums",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaRevision", "algorithm", "files"],
+  "properties": {
+    "schemaRevision": { "const": 1 },
+    "algorithm": { "const": "SHA-256" },
+    "files": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 2,
+      "additionalProperties": false,
+      "required": ["manifest.json"],
+      "properties": {
+        "manifest.json": { "$ref": "#/$defs/sha256" },
+        "audio.caf": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

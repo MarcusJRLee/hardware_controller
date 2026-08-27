@@ -1,0 +1,60 @@
+{
+  "document": {
+    "deliveredText": "Fixture transcript.",
+    "deliveryOutcome": "inserted",
+    "editedText": "fixture transcript",
+    "endedAt": "1970-01-01T00:16:41Z",
+    "formattedText": "Fixture transcript.",
+    "id": "00000000-0000-4000-8000-000000000001",
+    "inputKind": "microphoneCapture",
+    "rawText": "fixture transcript",
+    "startedAt": "1970-01-01T00:16:40Z",
+    "targetApplicationName": "Notes"
+  },
+  "exportedAt": "1970-01-01T00:33:20Z",
+  "format": "voice_history",
+  "isPinned": false,
+  "results": [
+    {
+      "createdAt": "1970-01-01T00:16:41Z",
+      "id": "00000000-0000-4000-8000-000000000011",
+      "origin": "capture",
+      "sessionID": "00000000-0000-4000-8000-000000000001",
+      "stage": "raw",
+      "text": "fixture transcript",
+      "timedSpans": []
+    },
+    {
+      "createdAt": "1970-01-01T00:16:41Z",
+      "id": "00000000-0000-4000-8000-000000000012",
+      "origin": "spokenEdits",
+      "sessionID": "00000000-0000-4000-8000-000000000001",
+      "sourceResultID": "00000000-0000-4000-8000-000000000011",
+      "stage": "edited",
+      "text": "fixture transcript",
+      "timedSpans": []
+    },
+    {
+      "createdAt": "1970-01-01T00:16:41Z",
+      "id": "00000000-0000-4000-8000-000000000013",
+      "origin": "formatting",
+      "sessionID": "00000000-0000-4000-8000-000000000001",
+      "sourceResultID": "00000000-0000-4000-8000-000000000012",
+      "stage": "formatted",
+      "text": "Fixture transcript.",
+      "timedSpans": []
+    },
+    {
+      "createdAt": "1970-01-01T00:16:41Z",
+      "deliveryOutcome": "inserted",
+      "id": "00000000-0000-4000-8000-000000000014",
+      "origin": "delivery",
+      "sessionID": "00000000-0000-4000-8000-000000000001",
+      "sourceResultID": "00000000-0000-4000-8000-000000000013",
+      "stage": "delivered",
+      "text": "Fixture transcript.",
+      "timedSpans": []
+    }
+  ],
+  "schemaRevision": 1
+}

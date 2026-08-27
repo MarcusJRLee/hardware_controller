@@ -2,8 +2,26 @@ import CryptoKit
 import Foundation
 import HardwareControllerCore
 
-struct VoiceHistoryExportSession: Codable, Equatable, Sendable {
-  static let currentSchemaRevision = 4
+struct VoiceHistoryArchiveManifest: Codable, Equatable, Sendable {
+  static let currentSchemaRevision = 1
+
+  let format: String
+  let schemaRevision: Int
+  let exportedAt: Date
+  let document: VoiceSessionDocument
+  let results: [VoiceHistoryResult]
+  let audioFilename: String?
+  let audioDurationMilliseconds: Int64?
+  let audioExpiredAt: Date?
+  let audioExpirationReason: VoiceHistoryAudioExpirationReason?
+  let recoveryKind: VoiceHistoryRecoveryKind?
+  let recoveredAt: Date?
+  let isPinned: Bool
+}
+
+/// Reads the final pre-portable export revision for one-way archive migration.
+struct LegacyVoiceHistoryArchiveManifest: Codable, Equatable, Sendable {
+  static let supportedSchemaRevision = 4
 
   let schemaRevision: Int
   let exportedAt: Date
@@ -16,6 +34,23 @@ struct VoiceHistoryExportSession: Codable, Equatable, Sendable {
   let recoveryKind: VoiceHistoryRecoveryKind?
   let recoveredAt: Date?
   let isPinned: Bool
+
+  var portableManifest: VoiceHistoryArchiveManifest {
+    VoiceHistoryArchiveManifest(
+      format: "voice_history",
+      schemaRevision: VoiceHistoryArchiveManifest.currentSchemaRevision,
+      exportedAt: exportedAt,
+      document: document,
+      results: results,
+      audioFilename: audioFilename,
+      audioDurationMilliseconds: audioDurationMilliseconds,
+      audioExpiredAt: audioExpiredAt,
+      audioExpirationReason: audioExpirationReason,
+      recoveryKind: recoveryKind,
+      recoveredAt: recoveredAt,
+      isPinned: isPinned
+    )
+  }
 }
 
 struct VoiceHistoryExportChecksums: Codable, Equatable, Sendable {
@@ -59,8 +94,9 @@ public actor VoiceHistoryExporter: VoiceHistoryExporting {
       withIntermediateDirectories: false
     )
     let audioFilename = session.audioArtifactURL.map { _ in "audio.caf" }
-    let manifest = VoiceHistoryExportSession(
-      schemaRevision: VoiceHistoryExportSession.currentSchemaRevision,
+    let manifest = VoiceHistoryArchiveManifest(
+      format: "voice_history",
+      schemaRevision: VoiceHistoryArchiveManifest.currentSchemaRevision,
       exportedAt: now(),
       document: session.document,
       results: session.results,
@@ -75,12 +111,12 @@ public actor VoiceHistoryExporter: VoiceHistoryExporting {
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .iso8601
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    let sessionURL = partial.appending(path: "session.json")
+    let sessionURL = partial.appending(path: "manifest.json")
     try encoder.encode(manifest).write(
       to: sessionURL,
       options: [.atomic]
     )
-    var exportedFiles = ["session.json": sessionURL]
+    var exportedFiles = ["manifest.json": sessionURL]
     if let audioURL = session.audioArtifactURL {
       let exportedAudioURL = partial.appending(path: "audio.caf")
       try fileManager.copyItem(

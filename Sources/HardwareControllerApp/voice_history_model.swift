@@ -7,6 +7,7 @@ enum VoiceHistoryWork: Equatable {
   case idle
   case loading
   case importing
+  case restoringArchive
   case correcting
   case retranscribing
   case reformatting
@@ -44,6 +45,7 @@ final class VoiceHistoryModel {
   @ObservationIgnored private let recoveryManager: (any VoiceSessionHistoryRecoveryManaging)?
   @ObservationIgnored private let service: any VoiceHistoryServicing
   @ObservationIgnored private let importer: (any VoiceAudioImporting)?
+  @ObservationIgnored private let archiveImporter: (any VoiceHistoryArchiveImporting)?
   @ObservationIgnored private let exporter: any VoiceHistoryExporting
   @ObservationIgnored private let player: any VoiceHistoryAudioPlaying
   @ObservationIgnored private let playbackState: VoiceHistoryPlaybackState
@@ -53,6 +55,7 @@ final class VoiceHistoryModel {
     history: any VoiceSessionHistoryAccessing,
     service: any VoiceHistoryServicing,
     importer: (any VoiceAudioImporting)? = nil,
+    archiveImporter: (any VoiceHistoryArchiveImporting)? = nil,
     retentionManager: (any VoiceSessionHistoryRetentionManaging)? = nil,
     recoveryManager: (any VoiceSessionHistoryRecoveryManaging)? = nil,
     exporter: any VoiceHistoryExporting = VoiceHistoryExporter(),
@@ -63,6 +66,7 @@ final class VoiceHistoryModel {
     self.recoveryManager = recoveryManager
     self.service = service
     self.importer = importer
+    self.archiveImporter = archiveImporter
     self.exporter = exporter
     let playbackState = VoiceHistoryPlaybackState()
     self.playbackState = playbackState
@@ -185,6 +189,22 @@ final class VoiceHistoryModel {
         notice = "Recording imported and transcribed. Local formatting was unavailable."
       case .audioOnly:
         notice = "Recording imported. Local transcription was unavailable; retry from History."
+      }
+    }
+  }
+
+  func importArchive(from sourceURL: URL) async {
+    guard let archiveImporter else {
+      return
+    }
+    await perform(.restoringArchive) {
+      let outcome = try await archiveImporter.importArchive(from: sourceURL)
+      selectedSessionID = outcome.sessionID
+      switch outcome.disposition {
+      case .imported:
+        notice = "Voice session restored from its local archive."
+      case .alreadyPresent:
+        notice = "This Voice session is already in History."
       }
     }
   }
@@ -515,6 +535,7 @@ struct VoiceHistoryPresentation {
         transcriber: AppleVoiceHistoryAudioTranscriber(),
         reformatter: reformatter
       ),
+      archiveImporter: VoiceHistoryArchiveImporter(history: history),
       retentionManager: history,
       recoveryManager: history
     )
@@ -668,6 +689,14 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryManaging {
   ) async throws {
     throw VoiceSessionHistoryError.storageUnavailable(
       "Audio import is unavailable in demo mode."
+    )
+  }
+
+  func restoreArchive(
+    _ session: VoiceSessionHistoryItem
+  ) async throws {
+    throw VoiceSessionHistoryError.storageUnavailable(
+      "Voice History archive import is unavailable in demo mode."
     )
   }
 

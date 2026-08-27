@@ -1,7 +1,7 @@
 # Local-first voice platform design
 
-**Status:** Accepted roadmap; implementation not started. This document does not
-describe current product behavior. The durable decision is
+**Status:** Accepted roadmap; macOS M1–M14 are implemented on the current
+stacked branches. Current evidence is called out explicitly. The durable decision is
 [`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
 and [`voice_cujs.md`](voice_cujs.md) is the acceptance contract.
 
@@ -35,6 +35,7 @@ apps/
     voice_input/
     keyboard_extension/
 crates/
+  voice_archive/
   voice_core/
   voice_models/
   voice_ffi/
@@ -56,6 +57,7 @@ history with `git mv`, and keep one buildable state after every move.
 | macOS presentation, Accessibility delivery, keyboard events, hardware Drivers                | Swift in `apps/macos/`                                                  | Native frameworks and existing implementation.                 |
 | iOS app, custom keyboard, App Intents, Live Activity, AVAudioSession                         | Swift in `apps/ios/`                                                    | Apple lifecycle, permission, and extension APIs.               |
 | Session state, spoken edits, formatting schema, validation, retention, provider capabilities | Rust in `crates/voice_core/`                                            | One safe, testable implementation for Apple, Android, and desktop platforms. |
+| Portable History inventory, identity, and digest verification                                | Rust in `crates/voice_archive/`                                         | Keep database and filesystem layouts outside the interchange contract.      |
 | Portable ASR and text inference adapters                                                     | Rust in `crates/voice_models/`                                          | Optimize once and hide third-party kernels.                    |
 | Typed platform bindings                                                                      | Rust plus generated or handwritten thin wrappers in `crates/voice_ffi/` | Prevent platform-specific behavior drift.                      |
 | Versioned archives and conformance fixtures                                                  | `schemas/` and `tests/cuj/`                                             | Language-neutral contracts.                                    |
@@ -389,13 +391,16 @@ removal.
 
 Write audio to a session-scoped partial file, finalize and sync it, atomically
 move it to its permanent name, then commit the SQLite transaction. Startup
-reconciles partial and orphaned files. The open export format contains a
-versioned `session.json`, optional audio, transcript stages, and checksums.
+reconciles partial and orphaned files. Portable V1 export contains a versioned
+`manifest.json`, `checksums.json`, and optional `audio.caf`. Import snapshots the
+package privately, enforces configurable byte/result caps, verifies the exact
+inventory and digests, and restores the immutable result graph without delivery.
+The final pre-portable revision 4 `session.json` remains importable on macOS.
 
 Deletion removes the owned record and files. Product copy must not promise
 secure erasure from SSD wear-leveling, filesystem snapshots, or device backups.
 
-The current M12 macOS baseline stores linked immutable results in SQLite,
+The current M14 macOS baseline stores linked immutable results in SQLite,
 searches every text stage, plays bounded timed CAF spans, and supports explicit
 correction, retranscription, reformatting, re-delivery, export, pinning, and
 transactional deletion. A portable policy plus dedicated SQLite retention actor
@@ -436,6 +441,9 @@ Local-only is a product invariant:
   inference: strict typed metadata, configurable manifest/file/byte limits,
   portable paths, no links or undeclared payloads, exact sizes and SHA-256,
   mandatory notice evidence, and optional out-of-band manifest pinning.
+- M14 validates bounded V1 History archives in Swift and portable Rust, checks
+  the same source-controlled fixture through the C ABI, and treats self-declared
+  checksums as integrity rather than external authenticity.
 - Explicit Model-package downloads are allowed before capture from approved
   sources, contain no Voice content, and require digest/license verification.
 - Mark owned Voice stores and artifacts as excluded from OS backup where the
@@ -541,6 +549,9 @@ test first or batch the entire implementation behind mocked internals.
 - M13 now passes one shared Model-package fixture through bounded Rust
   verification and the versioned caller-owned C ABI; no inference runtime or
   default package is selected by that admission contract.
+- M14 now passes one shared History archive fixture through Swift, Rust, and the
+  caller-owned C ABI. macOS V1 export/restore is transactional, idempotent for
+  identical evidence, conflict-safe for reused UUIDs, and migrates revision 4.
 - Design separate streaming ownership before exporting ASR or formatting; do
   not assume the synchronous retention ABI fits an async model boundary.
 

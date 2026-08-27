@@ -102,7 +102,8 @@ Apple type and denies unsafe Rust. `Tests/cuj/voice_retention_v1.json` is read b
 both Rust and Swift, proving policy parity while the shipped macOS app still
 uses the Swift baseline.
 
-`voice_ffi` exposes synchronous `V1` retention and Model-package functions. The
+`voice_ffi` exposes synchronous `V1` retention, Model-package, and History-
+archive functions. The
 caller owns every input and output buffer; capacity-probe calls report required
 storage without partial output. No callback, allocator, thread, runtime handle,
 file, or pointer survives return. Reserved bytes and Boolean encodings fail
@@ -118,6 +119,14 @@ capabilities, languages, runtime family, memory claims, and installed bytes
 cross `voice_ffi` through caller-owned UTF-8 buffers and fixed scalar fields.
 The verifier retains no pointer or file and links no inference runtime. See
 [decision 0037](decisions/0037_portable_model_package_validation.md).
+
+`voice_archive` owns the portable History container boundary. It admits only
+the exact link-free V1 inventory, enforces configurable manifest/checksum/audio
+and result limits, parses canonical session/result UUIDs, streams SHA-256 over
+the manifest and optional CAF, and returns fixed verified metadata. Swift and
+Rust consume the same fixture; the C ABI retains no archive path or file. The
+archive hashes establish internal integrity, not external authenticity. See
+[decision 0038](decisions/0038_portable_voice_history_archives.md).
 
 ### HID transport
 
@@ -452,9 +461,14 @@ Search joins all result stages and escapes wildcard input. Result reads reject
 invalid stage/origin pairs, contradictory formatting or delivery provenance,
 broken source links, and spans outside measured audio duration by isolating the
 malformed session row while returning unrelated valid rows. Appending a
-derived result validates its source against the same session. Export copies
-evidence into one atomic open package with streaming SHA-256 file checksums
-without modifying the database.
+derived result validates its source against the same session. Export writes an
+atomic portable V1 directory containing `manifest.json`, `checksums.json`, and
+optional `audio.caf` without modifying the database. Import snapshots that
+exact bounded inventory in a private temporary directory, verifies every
+declared digest, migrates the final revision 4 `session.json` shape when needed,
+and validates the complete baseline/result graph before transactionally copying
+audio and inserting metadata. Identical UUID/evidence is idempotent; different
+evidence with the same UUID fails without mutation or delivery.
 
 The History presentation composes a separate import actor with the same Apple
 on-device ASR and local formatting boundaries used for retained-audio reuse.
@@ -465,7 +479,7 @@ CAF before SQLite commit; database failure removes that artifact. It never
 mutates or retains a path to the selected source. ASR failure commits audio-only
 evidence; formatting failure commits Raw text as the deterministic Formatted
 fallback; import never performs delivery. Existing rows migrate to
-`microphoneCapture`, and export revision 4 carries the input kind. Decision
+`microphoneCapture`, and portable archive V1 carries the input kind. Decision
 [`0036`](decisions/0036_imported_voice_audio.md) owns this flow.
 
 Deletion first quarantines owned audio, commits metadata removal, then removes

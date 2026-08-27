@@ -173,6 +173,11 @@ public protocol VoiceSessionHistoryImporting: Sendable {
   ) async throws
 }
 
+public protocol VoiceSessionHistoryArchiveRestoring: Sendable {
+  /// Restores one previously validated archive without attempting delivery.
+  func restoreArchive(_ session: VoiceSessionHistoryItem) async throws
+}
+
 public protocol VoiceSessionHistoryRetentionManaging: Sendable {
   /// Applies validated caps immediately and to future completed sessions.
   func setRetentionSettings(
@@ -195,6 +200,7 @@ public protocol VoiceSessionHistoryRecoveryManaging: Sendable {
 public protocol VoiceSessionHistoryManaging:
   VoiceSessionHistoryRecording,
   VoiceSessionHistoryImporting,
+  VoiceSessionHistoryArchiveRestoring,
   VoiceSessionHistoryAccessing,
   VoiceSessionHistoryRetentionManaging,
   VoiceSessionHistoryRecoveryManaging
@@ -233,6 +239,12 @@ public struct UnavailableVoiceSessionHistory:
     _ document: VoiceSessionDocument,
     from sourceURL: URL,
     limits: VoiceAudioImportLimits
+  ) async throws {
+    throw failure
+  }
+
+  public func restoreArchive(
+    _ session: VoiceSessionHistoryItem
   ) async throws {
     throw failure
   }
@@ -517,6 +529,54 @@ public final class SQLiteVoiceSessionHistory:
       try await store.insert(document, audioURL: audioURL)
     } catch {
       try? FileManager.default.removeItem(at: audioURL)
+      throw error
+    }
+    invalidateRetention()
+    scheduleRetention()
+  }
+
+  public func restoreArchive(
+    _ session: VoiceSessionHistoryItem
+  ) async throws {
+    let finalAudioURL = session.audioArtifactURL.map { _ in
+      audioDirectory.appending(path: "\(session.id.uuidString).caf")
+    }
+    let partialAudioURL = finalAudioURL.map { _ in
+      audioDirectory.appending(
+        path: ".restoring_\(session.id.uuidString).caf"
+      )
+    }
+    if let sourceURL = session.audioArtifactURL,
+      let partialAudioURL,
+      let finalAudioURL
+    {
+      guard
+        !FileManager.default.fileExists(atPath: partialAudioURL.path),
+        !FileManager.default.fileExists(atPath: finalAudioURL.path)
+      else {
+        throw VoiceSessionHistoryError.storageUnavailable(
+          "Voice History already contains audio for this session."
+        )
+      }
+      do {
+        try FileManager.default.copyItem(at: sourceURL, to: partialAudioURL)
+        try FileManager.default.moveItem(
+          at: partialAudioURL,
+          to: finalAudioURL
+        )
+      } catch {
+        try? FileManager.default.removeItem(at: partialAudioURL)
+        throw VoiceSessionHistoryError.storageUnavailable(
+          "Voice History could not copy the archived audio."
+        )
+      }
+    }
+    do {
+      try await store.insertArchive(session, audioURL: finalAudioURL)
+    } catch {
+      if let finalAudioURL {
+        try? FileManager.default.removeItem(at: finalAudioURL)
+      }
       throw error
     }
     invalidateRetention()

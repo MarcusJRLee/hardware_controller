@@ -27,6 +27,7 @@ unrelated parallel suites.
 | `Sources/HardwareControllerAudioBoundary/` | Narrow Objective-C exception boundary around AVFAudio operations. |
 | `Sources/HardwareControllerApp/` | AppKit application lifecycle, SwiftUI presentation, navigation, and presentation state. |
 | `crates/voice_core/` | Dependency-free portable Voice domain policy; unsafe Rust is denied. |
+| `crates/voice_archive/` | Bounded portable Voice History inventory, identity, and digest verification. |
 | `crates/voice_models/` | Bounded portable Model-package schema, inventory, license, and digest verification. |
 | `crates/voice_ffi/` | Versioned synchronous C ABI and source-controlled public header. |
 | `schemas/` | Language-neutral versioned Model-package and archive contracts. |

@@ -44,12 +44,12 @@ struct VoiceHistoryExporterTest {
     try await exporter.export(session, to: destination)
 
     let data = try Data(
-      contentsOf: destination.appending(path: "session.json")
+      contentsOf: destination.appending(path: "manifest.json")
     )
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
     let manifest = try decoder.decode(
-      VoiceHistoryExportSession.self,
+      VoiceHistoryArchiveManifest.self,
       from: data
     )
     let checksumData = try Data(
@@ -59,7 +59,8 @@ struct VoiceHistoryExporterTest {
       VoiceHistoryExportChecksums.self,
       from: checksumData
     )
-    #expect(manifest.schemaRevision == 4)
+    #expect(manifest.format == "voice_history")
+    #expect(manifest.schemaRevision == 1)
     #expect(manifest.document == document)
     #expect(manifest.results.count == 4)
     #expect(manifest.audioFilename == "audio.caf")
@@ -70,7 +71,7 @@ struct VoiceHistoryExporterTest {
     #expect(manifest.recoveredAt == nil)
     #expect(checksums.algorithm == "SHA-256")
     #expect(
-      checksums.files["session.json"]
+      checksums.files["manifest.json"]
         == SHA256.hash(data: data).map {
           String(format: "%02x", $0)
         }.joined()
@@ -114,10 +115,10 @@ struct VoiceHistoryExporterTest {
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
     let manifest = try decoder.decode(
-      VoiceHistoryExportSession.self,
-      from: Data(contentsOf: root.appending(path: "session.json"))
+      VoiceHistoryArchiveManifest.self,
+      from: Data(contentsOf: root.appending(path: "manifest.json"))
     )
-    #expect(manifest.schemaRevision == 4)
+    #expect(manifest.schemaRevision == 1)
     #expect(manifest.recoveryKind == .interruptedCapture)
     #expect(manifest.recoveredAt == recoveredAt)
   }
@@ -148,10 +149,10 @@ struct VoiceHistoryExporterTest {
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
     let manifest = try decoder.decode(
-      VoiceHistoryExportSession.self,
-      from: Data(contentsOf: root.appending(path: "session.json"))
+      VoiceHistoryArchiveManifest.self,
+      from: Data(contentsOf: root.appending(path: "manifest.json"))
     )
-    #expect(manifest.schemaRevision == 4)
+    #expect(manifest.schemaRevision == 1)
     #expect(manifest.document.inputKind == .importedAudio)
   }
 
@@ -195,9 +196,9 @@ struct VoiceHistoryExporterTest {
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
     let manifest = try decoder.decode(
-      VoiceHistoryExportSession.self,
+      VoiceHistoryArchiveManifest.self,
       from: Data(
-        contentsOf: destination.appending(path: "session.json")
+        contentsOf: destination.appending(path: "manifest.json")
       )
     )
     #expect(manifest.audioFilename == nil)

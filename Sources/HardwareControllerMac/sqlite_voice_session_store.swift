@@ -211,74 +211,16 @@ actor SQLiteVoiceSessionStore {
     )
     try Self.execute(database, sql: "BEGIN IMMEDIATE;")
     do {
-      let sql = """
-        INSERT INTO voice_sessions (
-          id, started_at, ended_at, raw_text, edited_text,
-          formatted_text, delivered_text, target_application_name,
-          delivery_outcome, delivery_failure, audio_filename,
-          formatted_document_json, spoken_edits_json,
-          delivery_failure_reason, audio_duration_ms, is_pinned,
-          recovery_kind, recovered_at, input_kind
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?);
-        """
-      var statement: OpaquePointer?
-      guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
-        let statement
-      else {
-        throw storageFailure()
-      }
-      defer { sqlite3_finalize(statement) }
-
-      try bind(document.id.uuidString, to: 1, in: statement)
-      sqlite3_bind_double(statement, 2, document.startedAt.timeIntervalSince1970)
-      sqlite3_bind_double(statement, 3, document.endedAt.timeIntervalSince1970)
-      try bind(document.rawText, to: 4, in: statement)
-      try bind(document.editedText, to: 5, in: statement)
-      try bind(document.formattedText, to: 6, in: statement)
-      try bind(document.deliveredText, to: 7, in: statement)
-      try bind(document.targetApplicationName, to: 8, in: statement)
-      try bind(document.deliveryOutcome.rawValue, to: 9, in: statement)
-      try bind(document.deliveryFailure, to: 10, in: statement)
-      try bind(audioURL?.lastPathComponent, to: 11, in: statement)
-      let formattedDocumentJSON = try encodedFormattedDocument(
-        document.formattedDocument,
-        expectedRawText: document.rawText,
-        expectedFormattedText: document.formattedText
+      try insertSessionRow(
+        document: document,
+        audioURL: audioURL,
+        audioDurationMilliseconds: audioDurationMilliseconds,
+        audioExpiredAt: nil,
+        audioExpirationReason: nil,
+        recoveryKind: recoveryKind,
+        recoveredAt: recoveredAt,
+        isPinned: false
       )
-      try bind(formattedDocumentJSON, to: 12, in: statement)
-      let spokenEditsJSON = try encodedSpokenEdits(
-        document.spokenEdits
-      )
-      try bind(spokenEditsJSON, to: 13, in: statement)
-      try bind(
-        document.deliveryFailureReason?.rawValue,
-        to: 14,
-        in: statement
-      )
-      if let audioDurationMilliseconds {
-        sqlite3_bind_int64(
-          statement,
-          15,
-          audioDurationMilliseconds
-        )
-      } else {
-        sqlite3_bind_null(statement, 15)
-      }
-      try bind(recoveryKind?.rawValue, to: 16, in: statement)
-      if let recoveredAt {
-        sqlite3_bind_double(statement, 17, recoveredAt.timeIntervalSince1970)
-      } else {
-        sqlite3_bind_null(statement, 17)
-      }
-      guard (recoveryKind == nil) == (recoveredAt == nil) else {
-        throw VoiceSessionHistoryError.storageUnavailable(
-          "Voice History contains incomplete recovery evidence."
-        )
-      }
-      try bind(document.inputKind.rawValue, to: 18, in: statement)
-      guard sqlite3_step(statement) == SQLITE_DONE else {
-        throw storageFailure()
-      }
       for result in baselineResults(
         for: document,
         audioDurationMilliseconds: audioDurationMilliseconds
@@ -289,6 +231,198 @@ actor SQLiteVoiceSessionStore {
     } catch {
       try? Self.execute(database, sql: "ROLLBACK;")
       throw error
+    }
+  }
+
+  func insertArchive(
+    _ session: VoiceSessionHistoryItem,
+    audioURL: URL?
+  ) throws {
+    try ensureResultsBackfilled()
+    try validateArchive(session, audioURL: audioURL)
+    try Self.execute(database, sql: "BEGIN IMMEDIATE;")
+    do {
+      try insertSessionRow(
+        document: session.document,
+        audioURL: audioURL,
+        audioDurationMilliseconds: session.audioDurationMilliseconds,
+        audioExpiredAt: session.audioExpiredAt,
+        audioExpirationReason: session.audioExpirationReason,
+        recoveryKind: session.recoveryKind,
+        recoveredAt: session.recoveredAt,
+        isPinned: session.isPinned
+      )
+      for result in session.results {
+        try insertResult(result)
+      }
+      try Self.execute(database, sql: "COMMIT;")
+    } catch {
+      try? Self.execute(database, sql: "ROLLBACK;")
+      throw error
+    }
+  }
+
+  private func insertSessionRow(
+    document: VoiceSessionDocument,
+    audioURL: URL?,
+    audioDurationMilliseconds: Int64?,
+    audioExpiredAt: Date?,
+    audioExpirationReason: VoiceHistoryAudioExpirationReason?,
+    recoveryKind: VoiceHistoryRecoveryKind?,
+    recoveredAt: Date?,
+    isPinned: Bool
+  ) throws {
+    guard
+      (audioExpiredAt == nil) == (audioExpirationReason == nil),
+      audioURL == nil || audioExpiredAt == nil,
+      (recoveryKind == nil) == (recoveredAt == nil)
+    else {
+      throw VoiceSessionHistoryError.storageUnavailable(
+        "Voice History contains incomplete session metadata."
+      )
+    }
+    let sql = """
+      INSERT INTO voice_sessions (
+        id, started_at, ended_at, raw_text, edited_text,
+        formatted_text, delivered_text, target_application_name,
+        delivery_outcome, delivery_failure, audio_filename,
+        formatted_document_json, spoken_edits_json,
+        delivery_failure_reason, audio_duration_ms, is_pinned,
+        audio_expired_at, audio_expiration_reason, recovery_kind,
+        recovered_at, input_kind
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+      """
+    var statement: OpaquePointer?
+    guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
+      let statement
+    else {
+      throw storageFailure()
+    }
+    defer { sqlite3_finalize(statement) }
+
+    try bind(document.id.uuidString, to: 1, in: statement)
+    sqlite3_bind_double(statement, 2, document.startedAt.timeIntervalSince1970)
+    sqlite3_bind_double(statement, 3, document.endedAt.timeIntervalSince1970)
+    try bind(document.rawText, to: 4, in: statement)
+    try bind(document.editedText, to: 5, in: statement)
+    try bind(document.formattedText, to: 6, in: statement)
+    try bind(document.deliveredText, to: 7, in: statement)
+    try bind(document.targetApplicationName, to: 8, in: statement)
+    try bind(document.deliveryOutcome.rawValue, to: 9, in: statement)
+    try bind(document.deliveryFailure, to: 10, in: statement)
+    try bind(audioURL?.lastPathComponent, to: 11, in: statement)
+    try bind(
+      try encodedFormattedDocument(
+        document.formattedDocument,
+        expectedRawText: document.rawText,
+        expectedFormattedText: document.formattedText
+      ),
+      to: 12,
+      in: statement
+    )
+    try bind(try encodedSpokenEdits(document.spokenEdits), to: 13, in: statement)
+    try bind(document.deliveryFailureReason?.rawValue, to: 14, in: statement)
+    if let audioDurationMilliseconds {
+      sqlite3_bind_int64(statement, 15, audioDurationMilliseconds)
+    } else {
+      sqlite3_bind_null(statement, 15)
+    }
+    sqlite3_bind_int(statement, 16, isPinned ? 1 : 0)
+    bind(audioExpiredAt, to: 17, in: statement)
+    try bind(audioExpirationReason?.rawValue, to: 18, in: statement)
+    try bind(recoveryKind?.rawValue, to: 19, in: statement)
+    bind(recoveredAt, to: 20, in: statement)
+    try bind(document.inputKind.rawValue, to: 21, in: statement)
+    guard sqlite3_step(statement) == SQLITE_DONE else {
+      throw storageFailure()
+    }
+  }
+
+  private func validateArchive(
+    _ session: VoiceSessionHistoryItem,
+    audioURL: URL?
+  ) throws {
+    let document = session.document
+    try validateDeliveryEvidence(document)
+    guard
+      document.startedAt.timeIntervalSince1970.isFinite,
+      document.endedAt.timeIntervalSince1970.isFinite,
+      document.endedAt >= document.startedAt,
+      session.audioDurationMilliseconds.map({ $0 > 0 }) ?? true,
+      (session.audioExpiredAt == nil)
+        == (session.audioExpirationReason == nil),
+      audioURL == nil || session.audioExpiredAt == nil,
+      (session.recoveryKind == nil) == (session.recoveredAt == nil),
+      session.audioExpiredAt.map({ $0 >= document.endedAt }) ?? true,
+      session.recoveredAt.map({ $0 >= document.endedAt }) ?? true
+    else {
+      throw VoiceSessionHistoryError.invalidResult(
+        "The Voice History archive contains invalid session metadata."
+      )
+    }
+    let measuredDuration = try audioDurationMilliseconds(at: audioURL)
+    guard measuredDuration == nil || measuredDuration == session.audioDurationMilliseconds
+    else {
+      throw VoiceSessionHistoryError.invalidResult(
+        "The Voice History archive audio duration does not match its manifest."
+      )
+    }
+    guard session.results.count >= 4 else {
+      throw VoiceSessionHistoryError.invalidResult(
+        "The Voice History archive has incomplete baseline evidence."
+      )
+    }
+    let raw = session.results[0]
+    let edited = session.results[1]
+    let formatted = session.results[2]
+    let delivered = session.results[3]
+    let rawOrigin: VoiceHistoryResultOrigin =
+      document.inputKind == .importedAudio ? .audioImport : .capture
+    guard
+      raw.sessionID == document.id,
+      raw.stage == .raw,
+      raw.origin == rawOrigin,
+      raw.text == document.rawText,
+      raw.sourceResultID == nil,
+      edited.sessionID == document.id,
+      edited.stage == .edited,
+      edited.origin == .spokenEdits,
+      edited.text == document.editedText,
+      edited.sourceResultID == raw.id,
+      formatted.sessionID == document.id,
+      formatted.stage == .formatted,
+      formatted.origin == .formatting,
+      formatted.text == document.formattedText,
+      formatted.sourceResultID == edited.id,
+      formatted.formattedDocument == document.formattedDocument,
+      delivered.sessionID == document.id,
+      delivered.stage == .delivered,
+      delivered.origin == .delivery,
+      delivered.text == document.deliveredText,
+      delivered.sourceResultID == formatted.id,
+      delivered.deliveryOutcome == document.deliveryOutcome,
+      delivered.deliveryFailure == document.deliveryFailure,
+      delivered.deliveryFailureReason == document.deliveryFailureReason
+    else {
+      throw VoiceSessionHistoryError.invalidResult(
+        "The Voice History archive contradicts its baseline document."
+      )
+    }
+    var priorIDs: Set<UUID> = []
+    for result in session.results {
+      guard result.sessionID == document.id, !priorIDs.contains(result.id)
+      else {
+        throw VoiceSessionHistoryError.invalidResult(
+          "The Voice History archive contains a repeated or foreign result."
+        )
+      }
+      try validateStoredResult(result)
+      try validateStoredRelationship(result, priorResultIDs: priorIDs)
+      priorIDs.insert(result.id)
+      try validateTiming(
+        result,
+        audioDurationMilliseconds: session.audioDurationMilliseconds
+      )
     }
   }
 
@@ -1302,6 +1436,18 @@ actor SQLiteVoiceSessionStore {
     }
     guard result == SQLITE_OK else {
       throw storageFailure()
+    }
+  }
+
+  private func bind(
+    _ value: Date?,
+    to index: Int32,
+    in statement: OpaquePointer
+  ) {
+    if let value {
+      sqlite3_bind_double(statement, index, value.timeIntervalSince1970)
+    } else {
+      sqlite3_bind_null(statement, index)
     }
   }
 

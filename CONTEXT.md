@@ -16,13 +16,16 @@ identify deep implementation modules without changing that language.
 | Voice session store | Actor-owned system SQLite connection that serializes local session metadata transactions. |
 | Voice History service | Actor that retranscribes retained audio, reformats reusable text, retries delivery, and appends each outcome as a linked immutable result. |
 | Voice audio importer | Actor that bounds a user-selected recording, runs local ASR/formatting, streams one app-owned CAF, and commits typed imported-audio History without mutating the source. |
+| Voice History archive | Bounded portable directory containing one V1 manifest, one checksum contract, and optional CAF; it preserves immutable evidence without representing a mutable store. |
+| Voice archive importer | Actor that privately snapshots, verifies, and transactionally restores one Voice History archive without delivery. |
 | Reusable result | Newest nonempty result selected deterministically from one session for copy, correction, retranscription, reformatting, export, or explicit re-delivery. |
 | Voice trigger | Input adapter that maps physical, exact-chord, or in-app intent into the shared Voice-session contract. |
 | Voice chord | Optional machine-wide exact shortcut dedicated to Voice capture and independent of Binding keyboard fallbacks. |
 | Latched capture | Voice capture kept active after a valid double press until the next valid double press. |
 | Refinement provider | Typed local text-to-text boundary implemented by Apple Foundation Models or fixed-loopback Ollama. |
 | Portable Voice core | Dependency-free Rust domain policy shared through versioned CUJ fixtures; it contains no platform lifecycle or UI behavior. |
-| Voice FFI | Versioned synchronous C ABI over the Portable Voice core; callers own every buffer and no pointer survives a call. |
+| Portable archive verifier | Safe Rust boundary that verifies the exact Voice History inventory, limits, identities, and digests before a platform decodes and restores typed evidence. |
+| Voice FFI | Versioned synchronous C ABI over portable Voice crates; callers own every buffer and no pointer survives a call. |
 | Target lease | Captured editable element, process, caret/selection, and delivery capability revalidated before mutation. |
 | Nearby context | Optional bounded text around the caret from an approved nonsecure multiline target, held only for one Local AI session. |
 | Personal dictionary | Machine-wide recognition vocabulary plus deterministic spoken-form replacements. |
