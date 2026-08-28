@@ -44,7 +44,7 @@ printf '%s\n' \
   '  output_path="${@[$#]}"' \
   '  cp "$HC_INSTALL_IOS_TEST_DEVICES" "$output_path"' \
   'elif [[ "$*" == "devicectl device install app"* && "${HC_INSTALL_IOS_TEST_INSTALL_FAILURE:-0}" == "1" ]]; then' \
-  '  print -u2 "ApplicationVerificationFailed: The maximum number of apps for free development profiles has been reached."' \
+  '  print -u2 "ApplicationVerificationFailed: This device has reached the maximum number of installed apps using a free developer profile."' \
   '  exit 1' \
   'fi' > "$fake_bin/xcrun"
 chmod +x "$fake_bin/xcrun"
@@ -99,8 +99,15 @@ if grep -Fq "STALE-ID" "$command_log"; then
 fi
 
 : > "$command_log"
+set +e
 failure_output="$(HC_INSTALL_IOS_TEST_INSTALL_FAILURE=1 \
-  "$repo_root/scripts/install_ios.sh" --device AVAILABLE-ID --config development 2>&1 || true)"
+  "$repo_root/scripts/install_ios.sh" --device AVAILABLE-ID --config development 2>&1)"
+failure_status=$?
+set -e
+(( failure_status != 0 )) || {
+  print -u2 "A failed device installation must return a failure status."
+  exit 1
+}
 [[ "$failure_output" == *"free development profile"* ]]
 if grep -Fq "uninstall" "$command_log"; then
   print -u2 "The installer must never remove an existing app."

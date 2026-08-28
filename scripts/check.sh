@@ -18,6 +18,7 @@ xcrun clang-format --dry-run --Werror \
   Tests/voice_ffi/retention_smoke.c \
   Tests/voice_whisper_bridge_tests/voice_whisper_bridge_test.c
 zsh -n scripts/*.sh
+scripts/install_ios_test.sh
 scripts/check_rust.sh
 scripts/check_voice_whisper_bridge.sh
 scripts/prepare_ios_whisper_model_package_test.sh

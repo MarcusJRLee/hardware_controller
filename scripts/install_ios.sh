@@ -186,8 +186,9 @@ print -u2 "Installing on ${device_names[$selected_index]}..."
 if ! install_output="$(xcrun devicectl device install app \
   --device "$selected_device" "$app_bundle" 2>&1)"; then
   print -u2 "$install_output"
-  if [[ "${install_output:l}" == *"free development profile"* \
-    || "${install_output:l}" == *"maximum number of apps"* ]]; then
+  if [[ "${install_output:l}" == *"free developer profile"* \
+    || "${install_output:l}" == *"free development profile"* \
+    || "${install_output:l}" == *"maximum number of installed apps"* ]]; then
     print -u2 "The iPhone's free development profile app limit is full. Remove an unneeded development app manually, then retry; this script never removes apps."
   fi
   exit 1
