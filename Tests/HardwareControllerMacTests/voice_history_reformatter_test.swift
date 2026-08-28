@@ -114,7 +114,7 @@ private actor HistoryRefinementRouter: LocalAIRefinementRouting {
   ) async throws -> LocalAIRefinementResponse {
     requestedStyles.append(request.style)
     return LocalAIRefinementResponse(
-      text: "Send the plan.",
+      output: .paragraph("Send the plan."),
       provider: .appleOnDevice,
       modelIdentifier: "Apple SystemLanguageModel"
     )

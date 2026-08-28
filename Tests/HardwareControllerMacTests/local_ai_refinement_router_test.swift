@@ -210,7 +210,7 @@ private actor RouterRecordingRefiner: TranscriptRefining {
   ) -> LocalAIRefinementResponse {
     state.refinementCount += 1
     return LocalAIRefinementResponse(
-      text: request.transcript,
+      output: .paragraph(request.transcript),
       provider: responseProvider,
       modelIdentifier: "test-model"
     )

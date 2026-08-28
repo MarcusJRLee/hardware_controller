@@ -4,6 +4,62 @@ public struct VoiceFormattedDocumentBuilder: Sendable {
   public init() {}
 
   public func build(
+    output: VoiceFormattingDraft,
+    rawText: String,
+    style: VoiceStyle,
+    provider: LocalAIProviderKind? = nil,
+    modelIdentifier: String? = nil,
+    promptRevision: Int? = nil
+  ) throws -> VoiceFormattedDocument {
+    guard style.revision == VoiceStyle.currentRevision else {
+      throw VoiceFormattingError.unsupportedStyleRevision(style.revision)
+    }
+    guard style.kind != .verbatim, !output.blocks.isEmpty else {
+      throw VoiceFormattingError.invalidBlock
+    }
+    let blocks = try output.blocks.flatMap { block in
+      guard !block.items.isEmpty,
+        block.items.allSatisfy(isSafeNonemptyItem)
+      else {
+        throw VoiceFormattingError.invalidBlock
+      }
+      let items = block.items.map {
+        $0.trimmingCharacters(in: .whitespacesAndNewlines)
+      }
+      if block.kind == .paragraph {
+        return items.map {
+          VoiceFormattedBlock(
+            kind: .paragraph,
+            items: [$0],
+            evidenceIndices: [0]
+          )
+        }
+      }
+      return [
+        VoiceFormattedBlock(
+          kind: formattedKind(block.kind),
+          items: items,
+          evidenceIndices: [0]
+        )
+      ]
+    }
+    return VoiceFormattedDocument(
+      rawText: rawText,
+      style: style,
+      blocks: blocks,
+      evidence: [
+        evidence(
+          rawText: rawText,
+          provider: provider,
+          modelIdentifier: modelIdentifier,
+          promptRevision: promptRevision
+        )
+      ],
+      validationStatus: .validated
+    )
+  }
+
+  public func build(
     formattedText: String,
     rawText: String,
     style: VoiceStyle,
@@ -29,9 +85,8 @@ public struct VoiceFormattedDocumentBuilder: Sendable {
       throw VoiceFormattingError.emptyFormattedText
     }
 
-    let evidence = VoiceFormattingEvidence(
-      rawUTF8StartOffset: 0,
-      rawUTF8EndOffset: rawText.utf8.count,
+    let evidence = evidence(
+      rawText: rawText,
       provider: provider,
       modelIdentifier: modelIdentifier,
       promptRevision: promptRevision
@@ -52,6 +107,42 @@ public struct VoiceFormattedDocumentBuilder: Sendable {
       blocks: blocks,
       evidence: [evidence],
       validationStatus: validationStatus
+    )
+  }
+
+  private func isSafeNonemptyItem(_ item: String) -> Bool {
+    let trimmed = item.trimmingCharacters(in: .whitespacesAndNewlines)
+    return !trimmed.isEmpty
+      && trimmed.unicodeScalars.allSatisfy {
+        !CharacterSet.controlCharacters.contains($0)
+      }
+  }
+
+  private func formattedKind(
+    _ kind: VoiceFormattingDraftBlockKind
+  ) -> VoiceFormattedBlockKind {
+    switch kind {
+    case .paragraph:
+      .paragraph
+    case .unorderedList:
+      .unorderedList
+    case .orderedList:
+      .orderedList
+    }
+  }
+
+  private func evidence(
+    rawText: String,
+    provider: LocalAIProviderKind?,
+    modelIdentifier: String?,
+    promptRevision: Int?
+  ) -> VoiceFormattingEvidence {
+    VoiceFormattingEvidence(
+      rawUTF8StartOffset: 0,
+      rawUTF8EndOffset: rawText.utf8.count,
+      provider: provider,
+      modelIdentifier: modelIdentifier,
+      promptRevision: promptRevision
     )
   }
 

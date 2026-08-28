@@ -30,6 +30,18 @@ struct VoiceCasingPolicyTest {
   }
 
   @Test
+  func strictLowercaseRestoresIntentionalTokenCasingFromSource() {
+    let result = VoiceCasingTransformer().apply(
+      .strictLowercase,
+      to: "Send the parsejson report to ops@example.com.",
+      preserving: "send the parseJSON report to OPS@example.com",
+      dictionary: .empty
+    )
+
+    #expect(result == "send the parseJSON report to OPS@example.com.")
+  }
+
+  @Test
   func lowercaseProsePreservesSourceNamesAndAcronyms() {
     let text = "Meet Sarah from NASA and call parseJSON."
 

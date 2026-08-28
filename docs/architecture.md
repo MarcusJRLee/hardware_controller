@@ -201,7 +201,9 @@ extension sees runtime symbols or model paths. Stop produces real timed Raw text
 or an explicit failure, never the K0 placeholder. The same platform-neutral
 spoken-edit, semantic-document, renderer, Style, and retention sources used by
 macOS compile into a narrow static iOS core target. The containing app applies
-those deterministic stages, copies the stopped CAF into actor-owned History,
+those deterministic stages, including typed casing and confident grocery,
+ordinal, and explicit-marker list normalization, copies the stopped CAF into
+actor-owned History,
 and commits a versioned SQLite payload before it publishes matching Formatted
 text to the Keychain handoff. History stores immutable Raw, Edited, Formatted,
 timed-segment, model, Style, digest, byte-count, and audio-expiry evidence; its
@@ -395,9 +397,9 @@ Current executors:
   selected provider while speech continues, applies typed spoken-edit operations
   to Raw before deterministic Dictionary replacements, sends immutable typed
   context including normalized list intent and casing policy to one local
-  refiner, validates protected content and semantic bounds, parses
-  evidence-backed paragraph and list blocks, then renders target-safe refined
-  or Edited fallback text exactly once. Verbatim Style bypasses provider
+  refiner, canonicalizes typed paragraph and list blocks, restores protected
+  token spelling, validates protected content and semantic bounds, then renders
+  target-safe refined or Edited fallback text exactly once. Verbatim Style bypasses provider
   preparation and generation.
   Preparation plus generation share a three-second
   post-final-transcript deadline. The deadline race returns without awaiting a
@@ -443,24 +445,25 @@ Local AI providers implement `TranscriptRefining`:
   uses greedy typed generation and no Private Cloud Compute path.
 - `OllamaLocalAIRefiner` accepts only `http://127.0.0.1:11434`, disables proxy
   routing, caching, and redirects, verifies the running version and installed
-  model digest, rejects cloud tags, requests one structured text field, and
+  model digest, rejects cloud tags, requests one typed block schema, and
   supports finite or process-lifetime retention. It records whether a
   process-lifetime model was already running, then unloads only a model this app
   started when settings change or the app shuts down. An unload attempt has a
   two-second local deadline; a failed settings-change unload remains owned for
   one shutdown retry.
 
-Prompt revision 5 keeps invariant policy and centralized Style instructions
+Prompt revision 6 keeps invariant policy and centralized Style/casing instructions
 separate from an encoded untrusted payload. The payload bounds transcript,
 locale, Profile, target app identity, role, multiline capability, optional
-nearby text, Dictionary data, Style kind,
-and Style revision. Output validation rejects empty, oversized, control-bearing,
+nearby text, Dictionary data, Style kind, Style revision, casing policy, and
+list intent. Providers return typed paragraph, unordered-list, or ordered-list
+blocks. Confident explicit-marker, delimited-list-cue, and sequential-ordinal
+boundaries are normalized from Edited text before casing and document building.
+Output validation rejects empty, oversized, control-bearing,
 protected-token-changing, additive, destructive, or context-copying results.
-The typed document builder accepts validated newlines, while the deterministic
+The typed document builder canonicalizes paragraph items, while the deterministic
 renderer alone decides whether the captured target receives structure or one
-plain line. When both Raw and validated text retain a consecutive
-first/second sequence, the builder conservatively converts the full sequence
-to an ordered-list block and validation runs again on the canonical rendering.
+plain line. Validation runs on the canonical rendering before delivery.
 The sanitized provider test shares the three-second preparation-plus-generation
 deadline; settings changes and shutdown cancel it and suppress stale results.
 

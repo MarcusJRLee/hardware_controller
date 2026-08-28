@@ -197,7 +197,9 @@ Recognition vocabulary helps Apple's speech backend identify names and
 technical terms. Exact replacements run deterministically after recognition
 and before the model. Additional instructions can express workflow-specific
 preferences, but cannot override the selected Style, accuracy, privacy, or
-prompt-safety rules.
+prompt-safety rules. The exact instruction `only provide text in lowercase`
+normalizes to Strict Lowercase and overrides Style capitalization while still
+protecting operational tokens.
 
 Nearby text is off by default. When enabled, the app reads at most a bounded
 window around the caret from an approved multiline, nonsecure Accessibility
@@ -215,9 +217,10 @@ app:
 2. applies exact spoken-edit commands to Raw text;
 3. applies exact Dictionary replacements without treating replacement output as
    a command;
-4. corrects and formats text through the selected local provider, unless Style
-   is Verbatim;
-5. validates meaning and protected terms and creates paragraph/list blocks;
+4. requests typed paragraph/list blocks from the selected local provider,
+   unless Style is Verbatim;
+5. normalizes confident list cues and casing, then validates meaning and
+   protected terms;
 6. renders those blocks for the captured target and inserts one result.
 
 Spoken commands are deliberately exact:
@@ -228,14 +231,17 @@ Spoken commands are deliberately exact:
 | `delete that sentence` | Remove only the current sentence. |
 | `new paragraph` | Insert a paragraph break, or begin the next item in an active numbered list. |
 | `start a numbered list` | Begin item 1. |
-| `end list` | Finish a nonempty numbered list. |
+| `start a bullet list` | Begin an unordered list. |
+| `bullet` or `next item` | Begin the next item in an active list. |
+| `end list` | Finish a nonempty numbered or unordered list. |
 | `literal scratch that` | Keep `scratch that` as ordinary text. The same escape works for every exact command phrase. |
 
 A near-match or a command that cannot safely act remains literal text. Raw text
 is retained separately from the replayable Edited result. If a command removes
 the entire thought, the session is retained without generation or insertion.
 
-Formatting structure is automatic. Clear lists or steps become validated
+Formatting structure is automatic. Delimited grocery/shopping/list cues,
+explicit markers, and sequential steps become validated
 bullet or numbered-list blocks. Safe multiline targets retain that structure;
 single-line and compatibility targets receive a deterministic plain line.
 There is no Clean/Structured setting.

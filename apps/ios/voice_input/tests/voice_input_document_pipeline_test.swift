@@ -93,4 +93,31 @@ final class VoiceInputDocumentPipelineTest: XCTestCase {
     XCTAssertEqual(result.editedText, "Buy Milk\n\nCall parseJSON")
     XCTAssertEqual(result.formattedText, "buy milk\n\ncall parseJSON")
   }
+
+  func testDelimitedGroceryCueUsesSharedTypedListNormalization() throws {
+    let raw = VoiceInputRawTranscript(
+      text: "Grocery list: Milk, Eggs, and Bread",
+      segments: [],
+      modelPackageID: "model",
+      modelVersion: "1"
+    )
+
+    let result = try VoiceInputDocumentPipeline().process(
+      raw,
+      style: .natural,
+      casingPolicy: .strictLowercase
+    )
+
+    XCTAssertEqual(
+      result.formattedDocument.blocks.map(\.kind),
+      [.paragraph, .unorderedList]
+    )
+    XCTAssertEqual(
+      result.formattedText,
+      "grocery list:\n\n- milk\n- eggs\n- bread"
+    )
+    XCTAssertNil(result.formattedDocument.evidence.first?.provider)
+    XCTAssertNil(result.formattedDocument.evidence.first?.modelIdentifier)
+    XCTAssertNil(result.formattedDocument.evidence.first?.promptRevision)
+  }
 }

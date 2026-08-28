@@ -34,6 +34,50 @@ public struct VoiceStyle: Codable, Equatable, Hashable, Sendable {
   public static let verbatim = VoiceStyle(kind: .verbatim)
 }
 
+public enum VoiceFormattingDraftBlockKind:
+  String,
+  Codable,
+  Equatable,
+  Hashable,
+  Sendable
+{
+  case paragraph
+  case unorderedList
+  case orderedList
+}
+
+public struct VoiceFormattingDraftBlock: Codable, Equatable, Sendable {
+  public let kind: VoiceFormattingDraftBlockKind
+  public let items: [String]
+
+  public init(
+    kind: VoiceFormattingDraftBlockKind,
+    items: [String]
+  ) {
+    self.kind = kind
+    self.items = items
+  }
+}
+
+public struct VoiceFormattingDraft: Codable, Equatable, Sendable {
+  public let blocks: [VoiceFormattingDraftBlock]
+
+  public init(blocks: [VoiceFormattingDraftBlock]) {
+    self.blocks = blocks
+  }
+
+  public static func paragraph(_ text: String) -> VoiceFormattingDraft {
+    VoiceFormattingDraft(
+      blocks: [
+        VoiceFormattingDraftBlock(
+          kind: .paragraph,
+          items: [text]
+        )
+      ]
+    )
+  }
+}
+
 public enum VoiceFormattedBlockKind:
   String,
   Codable,

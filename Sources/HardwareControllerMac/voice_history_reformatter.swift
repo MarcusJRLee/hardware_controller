@@ -7,6 +7,8 @@ public actor LocalAIVoiceHistoryReformatter:
 {
   private let refiner: any LocalAIRefinementRouting
   private let validator = RefinedTranscriptValidator()
+  private let draftPolisher = VoiceFormattingDraftPolisher()
+  private let draftNormalizer = VoiceFormattingDraftNormalizer()
   private let builder = VoiceFormattedDocumentBuilder()
   private let renderer = VoiceFormattedTextRenderer()
   private let casingTransformer = VoiceCasingTransformer()
@@ -58,57 +60,73 @@ public actor LocalAIVoiceHistoryReformatter:
       supportsMultilineText: true,
       nearbyText: nil
     )
-    let response: LocalAIRefinementResponse?
-    let rawCandidate: String
+    let document: VoiceFormattedDocument
     if style.kind == .verbatim {
-      response = nil
-      rawCandidate = text
+      let candidate = casingTransformer.apply(
+        selectedSettings.effectiveCasingPolicy,
+        to: text,
+        preserving: text,
+        dictionary: selectedSettings.dictionary
+      )
+      document = try builder.build(
+        formattedText: candidate,
+        rawText: text,
+        style: style
+      )
     } else {
       try await refiner.prepare(settings: selectedSettings)
+      let request = LocalAIRefinementRequest(
+        sessionID: sessionID,
+        transcript: text,
+        context: context,
+        dictionary: selectedSettings.dictionary,
+        additionalInstructions:
+          selectedSettings.additionalInstructions,
+        style: style,
+        casingPolicy: selectedSettings.effectiveCasingPolicy
+      )
       let generated = try await refiner.refine(
-        LocalAIRefinementRequest(
-          sessionID: sessionID,
-          transcript: text,
-          context: context,
-          dictionary: selectedSettings.dictionary,
-          additionalInstructions:
-            selectedSettings.additionalInstructions,
-          style: style,
-          casingPolicy: selectedSettings.effectiveCasingPolicy
-        ),
+        request,
         settings: selectedSettings
       )
-      response = generated
-      rawCandidate = generated.text
+      let normalized = draftNormalizer.normalize(
+        generated.output,
+        transcript: text,
+        intent: request.listIntent
+      )
+      let polished = draftPolisher.polish(
+        normalized,
+        preserving: text,
+        style: style
+      )
+      let output = casingTransformer.apply(
+        selectedSettings.effectiveCasingPolicy,
+        to: polished,
+        preserving: text,
+        dictionary: selectedSettings.dictionary
+      )
+      document = try builder.build(
+        output: output,
+        rawText: text,
+        style: style,
+        provider: generated.provider,
+        modelIdentifier: generated.modelIdentifier,
+        promptRevision: VersionedLocalAIPromptBuilder.currentRevision
+      )
     }
-    let candidate = casingTransformer.apply(
-      selectedSettings.effectiveCasingPolicy,
-      to: rawCandidate,
-      preserving: text,
-      dictionary: selectedSettings.dictionary
+    let formattedText = try renderer.render(
+      document,
+      supportsMultiline: true
     )
-    let validated = try validator.validate(
-      candidate,
+    _ = try validator.validate(
+      formattedText,
       preserving: text,
       dictionary: selectedSettings.dictionary,
       supportsMultiline: true,
       context: context
     )
-    let document = try builder.build(
-      formattedText: validated,
-      rawText: text,
-      style: style,
-      provider: response?.provider,
-      modelIdentifier: response?.modelIdentifier,
-      promptRevision:
-        response == nil
-        ? nil : VersionedLocalAIPromptBuilder.currentRevision
-    )
     return VoiceHistoryReformat(
-      text: try renderer.render(
-        document,
-        supportsMultiline: true
-      ),
+      text: formattedText,
       document: document
     )
   }

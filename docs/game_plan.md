@@ -74,9 +74,9 @@ gated. See
 | --- | --- | --- |
 | HID dispatch | p50 ≤ 3 ms, p95 ≤ 8 ms, p99 ≤ 15 ms, max ≤ 30 ms across 10,000 transitions; no loss or duplication. | M15 current-source p50 0.011 ms, p95 0.017 ms, p99 0.028 ms, max 0.131 ms; 10,000 ordered dispatches. |
 | Microphone activation | Warm maximum ≤ 250 ms. | p50 48.118 ms, p95/p99/max 87.050 ms across five starts; one-time preparation 149.539 ms. |
-| Local AI semantic safety | No accepted provider output may corrupt protected content; invalid output falls back to Edited text once. | Fixed 17-case corpus plus spoken-edit, replay, Style, structured-block, renderer, controller, and migration tests. |
-| Local AI refinement | Warm raw-final-to-refined p95 ≤ 1 s on the reference Mac. | Prompt-5 Qwen 3.5 4B p95 0.908 s. |
-| Local AI end to end | Warm release-to-insertion p95 ≤ 1.5 s on the reference Mac. | Prompt-5 prewarmed M4 production-controller p95 1.004 s. |
+| Local AI semantic safety | No final candidate may violate requested casing, required list structure, or protected content; invalid output falls back to Edited text once. | Prompt-6 fixed 19-case corpus: Qwen 4B 2 semantic failures, Qwen 9B 0, Apple 1; every provider passes the typed gate. |
+| Local AI refinement | Warm raw-final-to-refined p95 ≤ 1 s on the reference Mac. | Open: prompt-6 Qwen 4B p95 15.739 s includes one provider timeout. |
+| Local AI end to end | Warm release-to-insertion p95 ≤ 1.5 s on the reference Mac. | Historical prompt-5 prewarmed M4 production-controller p95 1.004 s; prompt 6 requires a new run. |
 | Local AI deadline | Preparation plus generation must fall back within three seconds after final speech text. | Deterministic deadline and late-output tests. |
 | Voice History | Warm 5,000-session search p95 ≤ 250 ms; startup recovery precedes retention without delaying the input runtime. | M8 current-source p95 2.639 ms; current source passes 513 Swift tests in 76 suites plus 34 Rust domain/archive/model/ABI tests and two linked/native C consumers. |
 | Privacy | Voice artifacts remain app-owned and local; no speech content is logged; no remote-capable provider receives a call; Ollama cannot reach a nonloopback endpoint. | Deterministic provider-boundary, SQLite/CAF, fallback, fixed-endpoint transport tests, and an iOS source/capability network scan. |

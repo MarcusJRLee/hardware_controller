@@ -12,6 +12,9 @@ struct LocalAIEvaluationCase: Sendable {
   let supportsMultiline: Bool
   let nearbyText: String?
   let dictionary: PersonalDictionary
+  let additionalInstructions: String
+  let casingPolicy: VoiceCasingPolicy
+  let requiredBlockKinds: Set<VoiceFormattingDraftBlockKind>
 
   init(
     id: String,
@@ -22,7 +25,10 @@ struct LocalAIEvaluationCase: Sendable {
     protectedTokens: [String] = [],
     supportsMultiline: Bool = true,
     nearbyText: String? = nil,
-    dictionary: PersonalDictionary = .empty
+    dictionary: PersonalDictionary = .empty,
+    additionalInstructions: String = "",
+    casingPolicy: VoiceCasingPolicy = .styleDefault,
+    requiredBlockKinds: Set<VoiceFormattingDraftBlockKind> = []
   ) {
     self.id = id
     self.category = category
@@ -33,10 +39,69 @@ struct LocalAIEvaluationCase: Sendable {
     self.supportsMultiline = supportsMultiline
     self.nearbyText = nearbyText
     self.dictionary = dictionary
+    self.additionalInstructions = additionalInstructions
+    self.casingPolicy = casingPolicy
+    self.requiredBlockKinds = requiredBlockKinds
   }
 
   var acceptedOutputs: [String] {
     [desiredOutput] + allowedOutputs
+  }
+}
+
+enum LocalAIEvaluationFailureKind: String, Codable, Sendable {
+  case casing
+  case protectedToken
+  case semantic
+  case structure
+}
+
+struct LocalAIEvaluationGateInput: Sendable {
+  let failures: Set<LocalAIEvaluationFailureKind>
+  let providerError: Bool
+}
+
+struct LocalAIEvaluationSemanticGate: Sendable {
+  let maximumSemanticFailureRate: Double
+  let maximumProviderErrorRate: Double
+
+  init(
+    maximumSemanticFailureRate: Double = 0.15,
+    maximumProviderErrorRate: Double = 0.10
+  ) {
+    self.maximumSemanticFailureRate = maximumSemanticFailureRate
+    self.maximumProviderErrorRate = maximumProviderErrorRate
+  }
+
+  func failures(
+    for outcomes: [LocalAIEvaluationGateInput]
+  ) -> [String] {
+    guard !outcomes.isEmpty else {
+      return ["The evaluation produced no outcomes."]
+    }
+    var failures: [String] = []
+    for strictKind in [
+      LocalAIEvaluationFailureKind.casing,
+      .protectedToken,
+      .structure,
+    ] where outcomes.contains(where: { $0.failures.contains(strictKind) }) {
+      failures.append("The corpus has a \(strictKind.rawValue) failure.")
+    }
+    let semanticFailureRate =
+      Double(
+        outcomes.filter { !$0.failures.isEmpty }.count
+      ) / Double(outcomes.count)
+    if semanticFailureRate > maximumSemanticFailureRate {
+      failures.append("The semantic failure rate exceeds the gate.")
+    }
+    let providerErrorRate =
+      Double(
+        outcomes.filter(\.providerError).count
+      ) / Double(outcomes.count)
+    if providerErrorRate > maximumProviderErrorRate {
+      failures.append("The provider error rate exceeds the gate.")
+    }
+    return failures
   }
 }
 
@@ -75,7 +140,8 @@ enum LocalAIEvaluationCorpus {
       transcript:
         "there are three steps first stop the service second copy the backup third restart the service",
       desiredOutput:
-        "There are three steps:\n\n1. Stop the service.\n2. Copy the backup.\n3. Restart the service."
+        "There are three steps:\n\n1. Stop the service.\n2. Copy the backup.\n3. Restart the service.",
+      requiredBlockKinds: [.orderedList]
     ),
     LocalAIEvaluationCase(
       id: "self_correction",
@@ -180,6 +246,22 @@ enum LocalAIEvaluationCorpus {
       desiredOutput: "Buy apples, bananas, and coffee.",
       allowedOutputs: ["Buy apples, bananas and coffee."],
       supportsMultiline: false
+    ),
+    LocalAIEvaluationCase(
+      id: "grocery_list_intent",
+      category: "list",
+      transcript: "grocery list: apples, bananas, and coffee",
+      desiredOutput: "Grocery list:\n\n- Apples\n- Bananas\n- Coffee",
+      requiredBlockKinds: [.unorderedList]
+    ),
+    LocalAIEvaluationCase(
+      id: "strict_lowercase",
+      category: "casing",
+      transcript: "send the parseJSON report to OPS@example.com",
+      desiredOutput: "send the parseJSON report to OPS@example.com.",
+      protectedTokens: ["parseJSON", "OPS@example.com"],
+      additionalInstructions: "only provide text in lowercase",
+      casingPolicy: .strictLowercase
     ),
     LocalAIEvaluationCase(
       id: "nearby_context",

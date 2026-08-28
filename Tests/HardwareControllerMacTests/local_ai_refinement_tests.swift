@@ -6,6 +6,26 @@ import Testing
 
 struct LocalAIRefinementTests {
   @Test
+  func promptCarriesTypedCasingAndListIntent() throws {
+    let request = LocalAIRefinementRequest(
+      sessionID: UUID(),
+      transcript: "grocery list: apples, bananas, and coffee",
+      context: context(),
+      dictionary: .empty,
+      additionalInstructions: "only provide text in lowercase",
+      style: .natural,
+      casingPolicy: .strictLowercase
+    )
+
+    let prompt = try VersionedLocalAIPromptBuilder().build(request)
+
+    #expect(prompt.revision == 6)
+    #expect(prompt.prompt.contains(#""casingPolicy":"strictLowercase""#))
+    #expect(prompt.prompt.contains(#""listIntent":"unordered""#))
+    #expect(prompt.prompt.contains("blocks"))
+  }
+
+  @Test
   func evaluationCorpusDeclaresValidProtectedOutputs() throws {
     let applier = PersonalDictionaryReplacementApplier()
     let validator = RefinedTranscriptValidator()
@@ -28,6 +48,30 @@ struct LocalAIRefinementTests {
         }
       }
     }
+  }
+
+  @Test
+  func semanticGateIgnoresExactWordingButRejectsInvariantDrift() {
+    let gate = LocalAIEvaluationSemanticGate()
+    let flexibleOutputs = Array(
+      repeating: LocalAIEvaluationGateInput(
+        failures: [],
+        providerError: false
+      ),
+      count: 20
+    )
+
+    #expect(gate.failures(for: flexibleOutputs).isEmpty)
+    #expect(
+      gate.failures(
+        for: flexibleOutputs + [
+          LocalAIEvaluationGateInput(
+            failures: [.structure],
+            providerError: false
+          )
+        ]
+      ).contains("The corpus has a structure failure.")
+    )
   }
 
   @Test
@@ -235,6 +279,31 @@ struct LocalAIRefinementTests {
         preserving: "could we move the review"
       ) == "Could we move the review?"
     )
+  }
+
+  @Test
+  func draftPolisherDoesNotTurnListItemsIntoSentences() {
+    let output = VoiceFormattingDraft(
+      blocks: [
+        VoiceFormattingDraftBlock(
+          kind: .paragraph,
+          items: ["grocery list"]
+        ),
+        VoiceFormattingDraftBlock(
+          kind: .unorderedList,
+          items: ["apples", "bananas"]
+        ),
+      ]
+    )
+
+    let polished = VoiceFormattingDraftPolisher().polish(
+      output,
+      preserving: "grocery list apples bananas",
+      style: .natural
+    )
+
+    #expect(polished.blocks[0].items == ["Grocery list."])
+    #expect(polished.blocks[1].items == ["apples", "bananas"])
   }
 
   private func context(

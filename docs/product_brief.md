@@ -121,8 +121,8 @@ failure path.
 - Optionally use a bounded caret window from the current nonsecure multiline
   target. Never read browser URLs, terminal contents, whole documents,
   screenshots, the pasteboard, or secure fields.
-- Treat transcript and context as untrusted data and require one typed text
-  output.
+- Treat transcript and context as untrusted data and require typed paragraph or
+  list blocks.
 - Preserve protected numbers, URLs, email addresses, paths, code-like tokens,
   quotations, and dictionary values.
 - Deliver refined text once, or deterministic Edited text once after provider

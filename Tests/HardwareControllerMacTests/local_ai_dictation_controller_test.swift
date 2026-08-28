@@ -227,6 +227,21 @@ struct LocalAIDictationControllerTest {
   }
 
   @Test
+  func providerTestUsesNaturalFormattingWhenDictationIsVerbatim() async {
+    let fixture = LocalAIControllerFixture(
+      refinement: .output("hardware controller local ai test")
+    )
+    var settings = LocalAISettings.default
+    settings.style = .verbatim
+    let controller = fixture.makeController(settings: settings)
+
+    let failure = await controller.testProvider()
+
+    #expect(failure == nil)
+    #expect(await fixture.refiner.requests.first?.style == .natural)
+  }
+
+  @Test
   func nonemptyCapturedSelectionNeverStartsAudioOrFormatting() async {
     let fixture = LocalAIControllerFixture(
       refinement: .output("Never use this")
@@ -399,8 +414,19 @@ struct LocalAIDictationControllerTest {
     defer { try? FileManager.default.removeItem(at: rootDirectory) }
     let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
     let fixture = LocalAIControllerFixture(
-      refinement: .output(
-        "Plan.\n\n- Keep Bash.\n- Keep https://example.com."
+      refinement: .structuredOutput(
+        VoiceFormattingDraft(
+          blocks: [
+            VoiceFormattingDraftBlock(
+              kind: .paragraph,
+              items: ["Plan."]
+            ),
+            VoiceFormattingDraftBlock(
+              kind: .unorderedList,
+              items: ["Keep Bash.", "Keep https://example.com."]
+            ),
+          ]
+        )
       )
     )
     var settings = LocalAISettings.default
@@ -436,10 +462,25 @@ struct LocalAIDictationControllerTest {
   }
 
   @Test
-  func modelOrdinalProseIsNormalizedBeforeDelivery() async throws {
+  func modelOrderedBlocksAreDeliveredWithoutTextParsing() async throws {
     let fixture = LocalAIControllerFixture(
-      refinement: .output(
-        "There are three steps: first, stop the service; second, copy the backup; third, restart the service."
+      refinement: .structuredOutput(
+        VoiceFormattingDraft(
+          blocks: [
+            VoiceFormattingDraftBlock(
+              kind: .paragraph,
+              items: ["There are three steps:"]
+            ),
+            VoiceFormattingDraftBlock(
+              kind: .orderedList,
+              items: [
+                "stop the service",
+                "copy the backup",
+                "restart the service.",
+              ]
+            ),
+          ]
+        )
       )
     )
     let controller = fixture.makeController()
@@ -456,7 +497,7 @@ struct LocalAIDictationControllerTest {
 
     #expect(
       fixture.writer.inserted == [
-        "There are three steps:\n\n1. stop the service\n2. copy the backup\n3. restart the service."
+        "There are three steps:\n\n1. stop the service\n2. copy the backup\n3. restart the service"
       ])
   }
 
@@ -501,7 +542,24 @@ struct LocalAIDictationControllerTest {
     let editedText =
       "Keep this. Right\n\n1. First\n2. Second\n\nDone."
     let fixture = LocalAIControllerFixture(
-      refinement: .output(editedText)
+      refinement: .structuredOutput(
+        VoiceFormattingDraft(
+          blocks: [
+            VoiceFormattingDraftBlock(
+              kind: .paragraph,
+              items: ["Keep this. Right"]
+            ),
+            VoiceFormattingDraftBlock(
+              kind: .orderedList,
+              items: ["First", "Second"]
+            ),
+            VoiceFormattingDraftBlock(
+              kind: .paragraph,
+              items: ["Done."]
+            ),
+          ]
+        )
+      )
     )
     let controller = fixture.makeController(history: history)
 
@@ -1114,6 +1172,7 @@ private final class LocalAIRecordingWriter:
 private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
   enum Behavior: Sendable {
     case output(String)
+    case structuredOutput(VoiceFormattingDraft)
     case delayedOutput(String, Duration)
     case nonCooperativeBlockedOutput(String)
     case failure(LocalAIRefinementFailure)
@@ -1197,13 +1256,15 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
     settings: LocalAISettings
   ) async throws -> LocalAIRefinementResponse {
     requests.append(request)
-    let output: String
+    let output: VoiceFormattingDraft
     switch behavior {
     case .output(let value):
+      output = .paragraph(value)
+    case .structuredOutput(let value):
       output = value
     case .delayedOutput(let value, let delay):
       try await Task.sleep(for: delay)
-      output = value
+      output = .paragraph(value)
     case .nonCooperativeBlockedOutput(let value):
       await withCheckedContinuation { continuation in
         if releaseBlockedRefinementWhenStarted {
@@ -1213,13 +1274,13 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
           blockedRefinementContinuation = continuation
         }
       }
-      output = value
+      output = .paragraph(value)
     case .failure(let failure):
       throw failure
     }
     refinementCompletionCount += 1
     return LocalAIRefinementResponse(
-      text: output,
+      output: output,
       provider: settings.provider,
       modelIdentifier: "test-model"
     )
@@ -1262,7 +1323,7 @@ private actor RemoteCapableRefinerProbe: TranscriptRefining {
   ) -> LocalAIRefinementResponse {
     invocationCount += 1
     return LocalAIRefinementResponse(
-      text: request.transcript,
+      output: .paragraph(request.transcript),
       provider: .ollama,
       modelIdentifier: "remote-probe"
     )

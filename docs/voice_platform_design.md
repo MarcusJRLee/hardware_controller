@@ -347,7 +347,8 @@ the streaming challenger and must beat the same physical-device corpus.
 Decision [0043](decisions/0043_ios_local_formatting_and_history.md) compiles the
 existing deterministic spoken-edit, semantic-document, renderer, Style, and
 retention sources into the iOS app. The containing app keeps the full Raw stage,
-commits Raw/Edited/Formatted plus copied audio and model evidence to system
+invokes the shared casing, list-intent, and draft-normalization path, and commits
+Raw/Edited/Formatted plus copied audio and model evidence to system
 SQLite before publishing keyboard-ready text, and applies the accepted iOS
 90-day/1-GiB/2,000-artifact limits. A later local text-model adapter may improve
 surface style, but it must preserve these stages and deterministic fallback.
@@ -377,13 +378,16 @@ formatting:
 - `scratch that` removes the current clause since the last stable pause;
 - `delete that sentence` removes the current sentence;
 - `new paragraph` emits a paragraph boundary;
-- `start a numbered list` and `end list` emit structure boundaries; and
+- numbered/bullet list starts, `bullet`, `next item`, and `end list` emit
+  structure boundaries; and
 - `literal …` forces the following command phrase to remain text.
 
 Do not ask a language model to infer destructive edits without evidence. The
 formatter may remove fillers, resolve an immediate restatement, punctuate, and
-choose paragraph/list blocks. Validation rejects semantic additions, protected-
-token changes, invalid structure, and output with no transcript evidence.
+return typed paragraph/list blocks. Shared deterministic policy normalizes
+confident list intent and restores protected token spelling before validation.
+Validation rejects semantic additions, protected-token changes, invalid
+structure, and output with no transcript evidence.
 
 Style resolution order is:
 

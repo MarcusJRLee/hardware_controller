@@ -58,5 +58,7 @@ spoken edits.
 
 Prompt wording is no longer the only enforcement point for casing. Formatting
 providers can use list intent to emit typed blocks, while deterministic
-fallback remains conservative. ASR model selection remains a separate platform
-adapter decision.
+normalization and fallback remain conservative. Protected operational tokens
+are restored from source spelling before validation. ASR model selection
+remains a separate platform adapter decision. See
+[`0054_typed_local_ai_formatting_output.md`](0054_typed_local_ai_formatting_output.md).

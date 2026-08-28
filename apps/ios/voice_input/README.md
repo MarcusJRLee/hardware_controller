@@ -52,9 +52,10 @@ the containing app. The runtime revalidates selected model bytes before load,
 prewarms one actor-owned context, and returns bounded Raw text with timed
 segments. Neither extension links the runtime or can read model bytes.
 
-The app applies the shared deterministic spoken-edit and semantic-formatting
-core, then commits Raw, Edited, Formatted, Style, model provenance, and copied
-audio evidence to searchable local SQLite History before publishing text.
+The app applies the shared deterministic spoken-edit, casing, list-intent,
+typed list-normalization, and semantic-formatting core, then commits Raw,
+Edited, Formatted, Style, model provenance, and copied audio evidence to
+searchable local SQLite History before publishing text.
 History supports retained-audio playback and configurable age, byte, and count
 caps; its default 90-day, 1-GiB, 2,000-artifact policy expires audio without
 deleting transcripts. History storage presets persist in a versioned local

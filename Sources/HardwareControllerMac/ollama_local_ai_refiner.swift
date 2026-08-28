@@ -236,7 +236,7 @@ public actor OllamaLocalAIRefiner: TranscriptRefining {
         system: prompt.instructions,
         stream: false,
         think: false,
-        format: .textObject,
+        format: .voiceBlocks,
         options: Self.deterministicOptions,
         keepAlive: keepAlive(for: settings.modelRetention)
       )
@@ -254,10 +254,10 @@ public actor OllamaLocalAIRefiner: TranscriptRefining {
         "Ollama returned text with an invalid encoding."
       )
     }
-    let content: OllamaStructuredOutput
+    let content: VoiceFormattingDraft
     do {
       content = try JSONDecoder().decode(
-        OllamaStructuredOutput.self,
+        VoiceFormattingDraft.self,
         from: data
       )
     } catch {
@@ -266,7 +266,7 @@ public actor OllamaLocalAIRefiner: TranscriptRefining {
       )
     }
     return LocalAIRefinementResponse(
-      text: content.text,
+      output: content,
       provider: .ollama,
       modelIdentifier: "\(selected.name)@\(selected.digest)",
       modelLoadNanoseconds: response.loadDuration,
@@ -552,20 +552,94 @@ private struct OllamaGenerationOptions: Encodable {
   }
 }
 
-private struct OllamaSchemaProperty: Encodable {
+private struct OllamaStringSchema: Encodable {
   let type: String
+  let allowedValues: [String]?
+
+  enum CodingKeys: String, CodingKey {
+    case type
+    case allowedValues = "enum"
+  }
+}
+
+private struct OllamaStringArraySchema: Encodable {
+  let type: String
+  let items: OllamaStringSchema
+  let minimumItems: Int
+
+  enum CodingKeys: String, CodingKey {
+    case type
+    case items
+    case minimumItems = "minItems"
+  }
+}
+
+private struct OllamaBlockProperties: Encodable {
+  let kind: OllamaStringSchema
+  let items: OllamaStringArraySchema
+}
+
+private struct OllamaBlockSchema: Encodable {
+  let type: String
+  let properties: OllamaBlockProperties
+  let required: [String]
+  let additionalProperties: Bool
+}
+
+private struct OllamaBlockArraySchema: Encodable {
+  let type: String
+  let items: OllamaBlockSchema
+  let minimumItems: Int
+
+  enum CodingKeys: String, CodingKey {
+    case type
+    case items
+    case minimumItems = "minItems"
+  }
+}
+
+private struct OllamaRootProperties: Encodable {
+  let blocks: OllamaBlockArraySchema
 }
 
 private struct OllamaOutputFormat: Encodable {
   let type: String
-  let properties: [String: OllamaSchemaProperty]
+  let properties: OllamaRootProperties
   let required: [String]
   let additionalProperties: Bool
 
-  static let textObject = OllamaOutputFormat(
+  static let voiceBlocks = OllamaOutputFormat(
     type: "object",
-    properties: ["text": OllamaSchemaProperty(type: "string")],
-    required: ["text"],
+    properties: OllamaRootProperties(
+      blocks: OllamaBlockArraySchema(
+        type: "array",
+        items: OllamaBlockSchema(
+          type: "object",
+          properties: OllamaBlockProperties(
+            kind: OllamaStringSchema(
+              type: "string",
+              allowedValues: [
+                "paragraph",
+                "unorderedList",
+                "orderedList",
+              ]
+            ),
+            items: OllamaStringArraySchema(
+              type: "array",
+              items: OllamaStringSchema(
+                type: "string",
+                allowedValues: nil
+              ),
+              minimumItems: 1
+            )
+          ),
+          required: ["kind", "items"],
+          additionalProperties: false
+        ),
+        minimumItems: 1
+      )
+    ),
+    required: ["blocks"],
     additionalProperties: false
   )
 }
@@ -634,8 +708,4 @@ private struct OllamaGenerateResponse: Decodable, Sendable {
     case evaluationCount = "eval_count"
     case evaluationDuration = "eval_duration"
   }
-}
-
-private struct OllamaStructuredOutput: Decodable {
-  let text: String
 }

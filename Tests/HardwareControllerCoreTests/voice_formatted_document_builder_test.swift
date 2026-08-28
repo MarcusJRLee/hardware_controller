@@ -4,6 +4,60 @@ import Testing
 
 struct VoiceFormattedDocumentBuilderTest {
   @Test
+  func typedDraftPreservesParagraphAndListBoundaries() throws {
+    let draft = VoiceFormattingDraft(
+      blocks: [
+        VoiceFormattingDraftBlock(
+          kind: .paragraph,
+          items: ["Groceries"]
+        ),
+        VoiceFormattingDraftBlock(
+          kind: .unorderedList,
+          items: ["apples", "bananas", "coffee"]
+        ),
+      ]
+    )
+
+    let document = try VoiceFormattedDocumentBuilder().build(
+      output: draft,
+      rawText: "grocery list apples bananas coffee",
+      style: .natural,
+      provider: .appleOnDevice,
+      modelIdentifier: "Apple SystemLanguageModel",
+      promptRevision: 6
+    )
+
+    #expect(document.blocks.map(\.kind) == [.paragraph, .unorderedList])
+    #expect(document.blocks[1].items == ["apples", "bananas", "coffee"])
+  }
+
+  @Test
+  func typedParagraphItemsBecomeIndependentParagraphBlocks() throws {
+    let document = try VoiceFormattedDocumentBuilder().build(
+      output: VoiceFormattingDraft(
+        blocks: [
+          VoiceFormattingDraftBlock(
+            kind: .paragraph,
+            items: ["Hi Alex,", "Thanks for the update."]
+          )
+        ]
+      ),
+      rawText: "hi alex thanks for the update",
+      style: .natural,
+      provider: .ollama,
+      modelIdentifier: "qwen3.5:4b",
+      promptRevision: 6
+    )
+
+    #expect(document.blocks.map(\.kind) == [.paragraph, .paragraph])
+    #expect(
+      document.blocks.map(\.items) == [
+        ["Hi Alex,"],
+        ["Thanks for the update."],
+      ])
+  }
+
+  @Test
   func everyInitialStyleKeepsTheSameRawEvidence() throws {
     let raw = "first run Git status second open https://example.com"
     let builder = VoiceFormattedDocumentBuilder()

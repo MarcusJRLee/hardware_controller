@@ -44,7 +44,8 @@ public actor LocalAIDictationController {
   private let contextCapturer: any LocalAIContextCapturing
   private let refiner: any LocalAIRefinementRouting
   private let validator: RefinedTranscriptValidator
-  private let polisher: DeterministicTranscriptPolisher
+  private let draftPolisher: VoiceFormattingDraftPolisher
+  private let draftNormalizer: VoiceFormattingDraftNormalizer
   private let casingTransformer: VoiceCasingTransformer
   private let replacementApplier: PersonalDictionaryReplacementApplier
   private let spokenEditEngine: VoiceSpokenEditEngine
@@ -117,7 +118,8 @@ public actor LocalAIDictationController {
     self.contextCapturer = contextCapturer
     self.refiner = refiner
     validator = RefinedTranscriptValidator()
-    polisher = DeterministicTranscriptPolisher()
+    draftPolisher = VoiceFormattingDraftPolisher()
+    draftNormalizer = VoiceFormattingDraftNormalizer()
     casingTransformer = VoiceCasingTransformer()
     replacementApplier = PersonalDictionaryReplacementApplier()
     spokenEditEngine = VoiceSpokenEditEngine()
@@ -189,8 +191,16 @@ public actor LocalAIDictationController {
   private func performProviderTest(
     settings currentSettings: LocalAISettings
   ) async -> LocalAIRefinementFailure? {
+    let providerTestSettings: LocalAISettings = {
+      guard currentSettings.style.kind == .verbatim else {
+        return currentSettings
+      }
+      var settings = currentSettings
+      settings.style = .natural
+      return settings
+    }()
     let preparationTask = Task { [refiner] in
-      try await refiner.prepare(settings: currentSettings)
+      try await refiner.prepare(settings: providerTestSettings)
     }
     defer {
       preparationTask.cancel()
@@ -212,26 +222,35 @@ public actor LocalAIDictationController {
         ),
         dictionary: .empty,
         additionalInstructions:
-          currentSettings.additionalInstructions,
-        style: currentSettings.style,
-        casingPolicy: currentSettings.effectiveCasingPolicy
+          providerTestSettings.additionalInstructions,
+        style: providerTestSettings.style,
+        casingPolicy: providerTestSettings.effectiveCasingPolicy
       )
       let response = try await responseBeforeTimeout(
         request,
-        settings: currentSettings,
+        settings: providerTestSettings,
         preparationTask: preparationTask
       )
-      let polished = casedText(
-        polishedText(
-          response.text,
-          preserving: transcript,
-          style: currentSettings.style
-        ),
+      let output = casedOutput(
+        response.output,
         preserving: transcript,
-        settings: currentSettings
+        listIntent: request.listIntent,
+        settings: providerTestSettings
+      )
+      let document = try formattedDocumentBuilder.build(
+        output: output,
+        rawText: transcript,
+        style: providerTestSettings.style,
+        provider: response.provider,
+        modelIdentifier: response.modelIdentifier,
+        promptRevision: VersionedLocalAIPromptBuilder.currentRevision
+      )
+      let rendered = try formattedTextRenderer.render(
+        document,
+        supportsMultiline: false
       )
       _ = try validator.validate(
-        polished,
+        rendered,
         preserving: transcript,
         dictionary: .empty,
         supportsMultiline: false,
@@ -527,14 +546,17 @@ public actor LocalAIDictationController {
     let start = MonotonicClock.nowNanoseconds()
 
     do {
-      let response: LocalAIRefinementResponse?
-      let candidate: String
+      let formattedDocument: VoiceFormattedDocument
       if currentSettings.style.kind == .verbatim {
-        response = nil
-        candidate = casedText(
+        let candidate = casedText(
           normalizedTranscript,
           preserving: normalizedTranscript,
           settings: currentSettings
+        )
+        formattedDocument = try formattedDocumentBuilder.build(
+          formattedText: candidate,
+          rawText: rawText,
+          style: currentSettings.style
         )
       } else {
         let modelResponse = try await responseBeforeTimeout(
@@ -542,37 +564,25 @@ public actor LocalAIDictationController {
           settings: currentSettings,
           preparationTask: preparationTask
         )
-        response = modelResponse
-        candidate = casedText(
-          polishedText(
-            modelResponse.text,
-            preserving: normalizedTranscript,
-            style: currentSettings.style
-          ),
+        let output = casedOutput(
+          modelResponse.output,
           preserving: normalizedTranscript,
+          listIntent: request.listIntent,
           settings: currentSettings
+        )
+        formattedDocument = try formattedDocumentBuilder.build(
+          output: output,
+          rawText: rawText,
+          style: currentSettings.style,
+          provider: modelResponse.provider,
+          modelIdentifier: modelResponse.modelIdentifier,
+          promptRevision: VersionedLocalAIPromptBuilder.currentRevision
         )
       }
       guard !Task.isCancelled, state.sessionID == sessionID else {
         return
       }
       replace(phase: .validating)
-      let validated = try validator.validate(
-        candidate,
-        preserving: normalizedTranscript,
-        dictionary: currentSettings.dictionary,
-        supportsMultiline: true,
-        context: targetContext
-      )
-      let formattedDocument = try formattedDocumentBuilder.build(
-        formattedText: validated,
-        rawText: rawText,
-        style: currentSettings.style,
-        provider: response?.provider,
-        modelIdentifier: response?.modelIdentifier,
-        promptRevision: response == nil
-          ? nil : VersionedLocalAIPromptBuilder.currentRevision
-      )
       let canonicalFormattedText = try formattedTextRenderer.render(
         formattedDocument,
         supportsMultiline: true
@@ -999,27 +1009,38 @@ public actor LocalAIDictationController {
     snapshotHandler(state)
   }
 
-  private func polishedText(
-    _ text: String,
-    preserving source: String,
-    style: VoiceStyle
-  ) -> String {
-    switch style.kind {
-    case .casualMessage, .verbatim:
-      text.trimmingCharacters(in: .whitespacesAndNewlines)
-    case .natural, .formal, .technical:
-      polisher.polish(text, preserving: source)
-    }
-  }
-
   private func casedText(
     _ text: String,
     preserving source: String,
     settings: LocalAISettings
   ) -> String {
-    casingTransformer.apply(
+    return casingTransformer.apply(
       settings.effectiveCasingPolicy,
       to: text,
+      preserving: source,
+      dictionary: settings.dictionary
+    )
+  }
+
+  private func casedOutput(
+    _ output: VoiceFormattingDraft,
+    preserving source: String,
+    listIntent: VoiceListIntent,
+    settings: LocalAISettings
+  ) -> VoiceFormattingDraft {
+    let normalized = draftNormalizer.normalize(
+      output,
+      transcript: source,
+      intent: listIntent
+    )
+    let polished = draftPolisher.polish(
+      normalized,
+      preserving: source,
+      style: settings.style
+    )
+    return casingTransformer.apply(
+      settings.effectiveCasingPolicy,
+      to: polished,
       preserving: source,
       dictionary: settings.dictionary
     )

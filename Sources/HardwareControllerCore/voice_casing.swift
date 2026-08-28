@@ -17,6 +17,29 @@ public struct VoiceCasingTransformer: Sendable {
 
   public func apply(
     _ policy: VoiceCasingPolicy,
+    to output: VoiceFormattingDraft,
+    preserving source: String,
+    dictionary: PersonalDictionary
+  ) -> VoiceFormattingDraft {
+    VoiceFormattingDraft(
+      blocks: output.blocks.map { block in
+        VoiceFormattingDraftBlock(
+          kind: block.kind,
+          items: block.items.map {
+            apply(
+              policy,
+              to: $0,
+              preserving: source,
+              dictionary: dictionary
+            )
+          }
+        )
+      }
+    )
+  }
+
+  public func apply(
+    _ policy: VoiceCasingPolicy,
     to text: String,
     preserving source: String,
     dictionary: PersonalDictionary
@@ -36,9 +59,9 @@ public struct VoiceCasingTransformer: Sendable {
     var result = ""
     var cursor = text.startIndex
     for range in ranges {
-      result += text[cursor..<range.lowerBound].lowercased()
-      result += text[range]
-      cursor = range.upperBound
+      result += text[cursor..<range.range.lowerBound].lowercased()
+      result += range.replacement
+      cursor = range.range.upperBound
     }
     result += text[cursor...].lowercased()
     return result
@@ -115,19 +138,29 @@ public struct VoiceCasingTransformer: Sendable {
   private func nonoverlappingRanges(
     of tokens: [String],
     in text: String
-  ) -> [Range<String.Index>] {
+  ) -> [ProtectedRange] {
     let candidates = tokens.flatMap { token in
-      ranges(of: token, in: text)
-    }.sorted {
-      if $0.lowerBound != $1.lowerBound {
-        return $0.lowerBound < $1.lowerBound
+      ranges(of: token, in: text).map {
+        ProtectedRange(range: $0, replacement: token)
       }
-      return text.distance(from: $0.lowerBound, to: $0.upperBound)
-        > text.distance(from: $1.lowerBound, to: $1.upperBound)
+    }.sorted {
+      if $0.range.lowerBound != $1.range.lowerBound {
+        return $0.range.lowerBound < $1.range.lowerBound
+      }
+      return text.distance(
+        from: $0.range.lowerBound,
+        to: $0.range.upperBound
+      )
+        > text.distance(
+          from: $1.range.lowerBound,
+          to: $1.range.upperBound
+        )
     }
-    var selected: [Range<String.Index>] = []
+    var selected: [ProtectedRange] = []
     for candidate in candidates
-    where selected.last?.upperBound ?? text.startIndex <= candidate.lowerBound {
+    where selected.last?.range.upperBound ?? text.startIndex
+      <= candidate.range.lowerBound
+    {
       selected.append(candidate)
     }
     return selected
@@ -142,6 +175,7 @@ public struct VoiceCasingTransformer: Sendable {
     while searchStart < text.endIndex,
       let range = text.range(
         of: token,
+        options: [.caseInsensitive],
         range: searchStart..<text.endIndex
       )
     {
@@ -149,5 +183,10 @@ public struct VoiceCasingTransformer: Sendable {
       searchStart = range.upperBound
     }
     return ranges
+  }
+
+  private struct ProtectedRange {
+    let range: Range<String.Index>
+    let replacement: String
   }
 }
