@@ -595,6 +595,6 @@ The user accepted on 2026-08-25:
 5. Gate K0 and an honest cold-start/app-switch experience; and
 6. benchmark-selected deployment floors and Model packages.
 
-These choices do not approve release promotion or `dev` → `main`. Model,
+These choices do not approve release promotion. Model,
 signed-device, and App Review findings are implementation evidence, not new
 preference questions.

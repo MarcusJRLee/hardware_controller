@@ -47,7 +47,7 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 
 ## Approved next program
 
-The local Voice expansion is accepted and integrated into `dev`: macOS M1–M15,
+The local Voice expansion is accepted and integrated into `main`: macOS M1–M15,
 iOS Gate K0, I1 local onboarding and Model admission, I2 local formatting and
 History, Style-qualified keyboard delivery, target-safe field handling, I7
 lifecycle recovery, I8 stale-service recovery, I9 bounded insertion recovery,
@@ -63,9 +63,10 @@ The acceptance and execution authorities are:
 | [`voice_platform_design.md`](voice_platform_design.md) | Model, runtime, iOS keyboard, storage, performance, and milestone design. |
 | [`voice_implementation_goal_prompt.md`](voice_implementation_goal_prompt.md) | Autonomous worktree/PR execution contract and definition of done. |
 
-Focused vertical PRs are integrated into `dev`. `main`, tags, distribution
-artifacts, and store submission remain unchanged until the user verifies the
-finished `dev` state and separately approves promotion.
+New work uses focused feature branches from `main` and pull requests back into
+`main`. Tags, distribution artifacts, and store submission remain separately
+gated. See
+[`decisions/0052_main_feature_branch_workflow.md`](decisions/0052_main_feature_branch_workflow.md).
 
 ## Quality gates
 

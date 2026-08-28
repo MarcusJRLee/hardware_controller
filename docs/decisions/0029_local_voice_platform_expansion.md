@@ -2,6 +2,8 @@
 
 - **Status:** Accepted; macOS M1–M12 implemented
 - **Date:** 2026-08-25
+- **Branch workflow superseded by:**
+  [`0052_main_feature_branch_workflow.md`](0052_main_feature_branch_workflow.md)
 - **Amends:**
   [`0001_native_macos_stack.md`](0001_native_macos_stack.md),
   [`0005_app_owned_transcription.md`](0005_app_owned_transcription.md), and

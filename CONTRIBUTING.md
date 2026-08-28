@@ -45,10 +45,9 @@ GitHub requests review from the repository owner. Automated verification must
 pass, review threads must be resolved, and accepted changes are squash-merged.
 The `Analyze (swift)` gate performs an extended CodeQL scan when Swift or its
 build inputs change and completes without compiling Swift for unrelated
-changes. During the accepted Voice program, focused pull requests target
-`dev`; `dev` returns to `main` only after the completed program receives final
-user verification. See
-[`0029_local_voice_platform_expansion.md`](docs/decisions/0029_local_voice_platform_expansion.md).
+changes. Create each focused branch from current `main` and target its pull
+request at `main`. See
+[`0052_main_feature_branch_workflow.md`](docs/decisions/0052_main_feature_branch_workflow.md).
 
 ## Privacy and hardware evidence
 
