@@ -151,12 +151,11 @@ The signed current canonical app uses version 1.5.0 build 18 and statically
 contains `voice_history_archive_validate_v1` and the active
 `voice_model_package_validate_v2`; the portable library retains the frozen V1
 Model output for binary compatibility. The installed arm64 executable is byte-
-identical to the verified candidate with SHA-256
-`bdce10264a041ee43df89f99379f64107abcb08d36d39cd94ae7f1a339a053f1` and
-CDHash `8529a579df1cf69c81cd9e1bbdd9ec5f97cd0202`. Strict signature, private
-Team match, hardened runtime, audio-input-only entitlement, and Apple/system-
-only dynamic dependencies pass. The exact Applications bundle launches with
-the connected Device, active Profile, and both Dictation readiness states.
+identical to the verified candidate. Strict signature, private Team match,
+hardened runtime, audio-input-only entitlement, and Apple/system-only dynamic
+dependencies pass. The exact Applications bundle launches with the connected
+Device, active Profile, and both Dictation readiness states. Signature-dependent
+hashes belong to handoff evidence rather than source-controlled current state.
 
 ## Remaining evidence
 
