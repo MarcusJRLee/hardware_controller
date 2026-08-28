@@ -1,7 +1,13 @@
 import Foundation
 
 public struct VoiceSpokenEditEngine: Sendable {
-  private struct OrderedListState {
+  private enum ListKind {
+    case ordered
+    case unordered
+  }
+
+  private struct ListState {
+    let kind: ListKind
     let itemNumber: Int
     let itemContentStartUTF8Offset: Int
   }
@@ -10,7 +16,7 @@ public struct VoiceSpokenEditEngine: Sendable {
     let kind: VoiceSpokenEditOperationKind
     let affectedStart: String.Index
     let replacementText: String
-    let nextListState: OrderedListState?
+    let nextListState: ListState?
     let changesListState: Bool
   }
 
@@ -19,13 +25,25 @@ public struct VoiceSpokenEditEngine: Sendable {
     case deleteThatSentence = "delete that sentence"
     case newParagraph = "new paragraph"
     case startNumberedList = "start a numbered list"
+    case startBulletList = "start a bullet list"
+    case startBulletedList = "start a bulleted list"
+    case bullet = "bullet"
+    case nextItem = "next item"
     case endList = "end list"
   }
 
-  public init() {}
+  private let revision: Int
+
+  public init() {
+    revision = VoiceSpokenEditResult.currentRevision
+  }
+
+  init(revision: Int) {
+    self.revision = revision
+  }
 
   public func apply(to sourceText: String) -> VoiceSpokenEditResult {
-    let matches = Self.commandExpression.matches(
+    let matches = commandExpression.matches(
       in: sourceText,
       range: NSRange(sourceText.startIndex..., in: sourceText)
     )
@@ -33,7 +51,7 @@ public struct VoiceSpokenEditEngine: Sendable {
     var sourceCursorUTF8Offset = 0
     var editedText = ""
     var operations: [VoiceSpokenEditOperation] = []
-    var listState: OrderedListState?
+    var listState: ListState?
 
     for match in matches {
       guard let range = Range(match.range, in: sourceText) else {
@@ -118,6 +136,7 @@ public struct VoiceSpokenEditEngine: Sendable {
       )
     }
     return VoiceSpokenEditResult(
+      revision: revision,
       sourceText: sourceText,
       editedText: editedText,
       operations: operations
@@ -127,7 +146,7 @@ public struct VoiceSpokenEditEngine: Sendable {
   private func edit(
     for command: Command,
     editedText: String,
-    listState: OrderedListState?
+    listState: ListState?
   ) -> Edit? {
     switch command {
     case .scratchThat:
@@ -151,6 +170,42 @@ public struct VoiceSpokenEditEngine: Sendable {
       )
     case .startNumberedList:
       return beginListEdit(
+        kind: .ordered,
+        editedText: editedText,
+        listState: listState
+      )
+    case .startBulletList, .startBulletedList:
+      return beginListEdit(
+        kind: .unordered,
+        editedText: editedText,
+        listState: listState
+      )
+    case .bullet:
+      guard let listState else {
+        guard
+          !hasMeaningfulText(editedText)
+            || hasTrailingListCue(editedText)
+        else {
+          return nil
+        }
+        return beginListEdit(
+          kind: .unordered,
+          editedText: editedText,
+          listState: nil
+        )
+      }
+      guard listState.kind == .unordered else {
+        return nil
+      }
+      return nextListItemEdit(
+        editedText: editedText,
+        listState: listState
+      )
+    case .nextItem:
+      guard let listState else {
+        return nil
+      }
+      return nextListItemEdit(
         editedText: editedText,
         listState: listState
       )
@@ -166,7 +221,7 @@ public struct VoiceSpokenEditEngine: Sendable {
     kind: VoiceSpokenEditOperationKind,
     boundaries: Set<Character>,
     editedText: String,
-    listState: OrderedListState?
+    listState: ListState?
   ) -> Edit? {
     guard
       var start = deletionStart(
@@ -206,7 +261,7 @@ public struct VoiceSpokenEditEngine: Sendable {
 
   private func paragraphEdit(
     editedText: String,
-    listState: OrderedListState?
+    listState: ListState?
   ) -> Edit? {
     let affectedStart = trailingWhitespaceStart(in: editedText)
     if let listState {
@@ -219,19 +274,9 @@ public struct VoiceSpokenEditEngine: Sendable {
       else {
         return nil
       }
-      let nextNumber = listState.itemNumber + 1
-      let replacement = "\n\(nextNumber). "
-      return Edit(
-        kind: .beginOrderedListItem,
-        affectedStart: affectedStart,
-        replacementText: replacement,
-        nextListState: OrderedListState(
-          itemNumber: nextNumber,
-          itemContentStartUTF8Offset:
-            editedText.voiceUTF8Offset(of: affectedStart)
-            + replacement.utf8.count
-        ),
-        changesListState: true
+      return nextListItemEdit(
+        editedText: editedText,
+        listState: listState
       )
     }
     guard
@@ -250,22 +295,58 @@ public struct VoiceSpokenEditEngine: Sendable {
   }
 
   private func beginListEdit(
+    kind: ListKind,
     editedText: String,
-    listState: OrderedListState?
+    listState: ListState?
   ) -> Edit? {
     guard listState == nil else {
       return nil
     }
     let affectedStart = trailingWhitespaceStart(in: editedText)
+    let marker = kind == .ordered ? "1. " : "- "
     let replacement =
       hasMeaningfulText(editedText[..<affectedStart])
-      ? "\n\n1. " : "1. "
+      ? "\n\n\(marker)" : marker
     return Edit(
-      kind: .beginOrderedList,
+      kind: kind == .ordered ? .beginOrderedList : .beginUnorderedList,
       affectedStart: affectedStart,
       replacementText: replacement,
-      nextListState: OrderedListState(
+      nextListState: ListState(
+        kind: kind,
         itemNumber: 1,
+        itemContentStartUTF8Offset:
+          editedText.voiceUTF8Offset(of: affectedStart)
+          + replacement.utf8.count
+      ),
+      changesListState: true
+    )
+  }
+
+  private func nextListItemEdit(
+    editedText: String,
+    listState: ListState
+  ) -> Edit? {
+    let affectedStart = trailingWhitespaceStart(in: editedText)
+    guard
+      let itemStart = editedText.voiceIndex(
+        atUTF8Offset: listState.itemContentStartUTF8Offset
+      ),
+      itemStart <= affectedStart,
+      hasMeaningfulText(editedText[itemStart..<affectedStart])
+    else {
+      return nil
+    }
+    let nextNumber = listState.itemNumber + 1
+    let replacement =
+      listState.kind == .ordered ? "\n\(nextNumber). " : "\n- "
+    return Edit(
+      kind: listState.kind == .ordered
+        ? .beginOrderedListItem : .beginUnorderedListItem,
+      affectedStart: affectedStart,
+      replacementText: replacement,
+      nextListState: ListState(
+        kind: listState.kind,
+        itemNumber: nextNumber,
         itemContentStartUTF8Offset:
           editedText.voiceUTF8Offset(of: affectedStart)
           + replacement.utf8.count
@@ -276,7 +357,7 @@ public struct VoiceSpokenEditEngine: Sendable {
 
   private func endListEdit(
     editedText: String,
-    listState: OrderedListState?
+    listState: ListState?
   ) -> Edit? {
     guard let listState,
       let itemStart = editedText.voiceIndex(
@@ -346,6 +427,14 @@ public struct VoiceSpokenEditEngine: Sendable {
     }
   }
 
+  private func hasTrailingListCue(_ text: String) -> Bool {
+    text.range(
+      of:
+        #"(?i)\b(?:(?:grocery|shopping|packing|task|to-do)\s+)?list\s*[:,-]?\s*$"#,
+      options: .regularExpression
+    ) != nil
+  }
+
   private func literalCommandText(_ text: String) -> String? {
     let components = text.split(
       maxSplits: 1,
@@ -364,7 +453,13 @@ public struct VoiceSpokenEditEngine: Sendable {
     let normalized = text.split(whereSeparator: { $0.isWhitespace })
       .joined(separator: " ")
       .lowercased()
-    return Command(rawValue: normalized)
+    guard let command = Command(rawValue: normalized) else {
+      return nil
+    }
+    guard revision >= 2 || Self.revisionOneCommands.contains(command) else {
+      return nil
+    }
+    return command
   }
 
   private func extendedCommandEnd(
@@ -385,7 +480,12 @@ public struct VoiceSpokenEditEngine: Sendable {
     return cursor
   }
 
-  private static let commandExpression: NSRegularExpression = {
+  private var commandExpression: NSRegularExpression {
+    revision >= 2
+      ? Self.revisionTwoCommandExpression
+      : Self.revisionOneCommandExpression
+  }
+  private static let revisionOneCommandExpression: NSRegularExpression = {
     do {
       return try NSRegularExpression(
         pattern:
@@ -395,6 +495,23 @@ public struct VoiceSpokenEditEngine: Sendable {
       preconditionFailure("The fixed spoken-edit command pattern is invalid: \(error)")
     }
   }()
+  private static let revisionTwoCommandExpression: NSRegularExpression = {
+    do {
+      return try NSRegularExpression(
+        pattern:
+          "(?i)\\b(?:literal[ \\t]+)?(?:scratch[ \\t]+that|delete[ \\t]+that[ \\t]+sentence|new[ \\t]+paragraph|start[ \\t]+a[ \\t]+numbered[ \\t]+list|start[ \\t]+a[ \\t]+bullet(?:ed)?[ \\t]+list|next[ \\t]+item|bullet|end[ \\t]+list)\\b"
+      )
+    } catch {
+      preconditionFailure("The fixed spoken-edit command pattern is invalid: \(error)")
+    }
+  }()
+  private static let revisionOneCommands: Set<Command> = [
+    .scratchThat,
+    .deleteThatSentence,
+    .newParagraph,
+    .startNumberedList,
+    .endList,
+  ]
   private static let clauseBoundaries: Set<Character> = [
     ".", "?", "!", ";", ":", ",", "\n",
   ]

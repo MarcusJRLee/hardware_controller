@@ -42,7 +42,7 @@ struct PreferredMicrophone: Codable, Equatable, Identifiable, Sendable {
 
 /// Stores versioned application presentation preferences.
 struct ApplicationPreferences: Codable, Equatable, Sendable {
-  static let currentSchemaVersion = 6
+  static let currentSchemaVersion = 7
 
   var appearance: ApplicationAppearance
   var sidebarVisibility: SidebarVisibilityPreference
@@ -306,7 +306,7 @@ struct ApplicationPreferencesStore:
     _ preferences: ApplicationPreferences
   ) throws -> ApplicationPreferences {
     switch preferences.schemaVersion {
-    case 1, 2, 3, 4, 5:
+    case 1, 2, 3, 4, 5, 6:
       var migrated = preferences
       migrated.schemaVersion = ApplicationPreferences.currentSchemaVersion
       if preferences.schemaVersion == 1 {

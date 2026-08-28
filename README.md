@@ -201,8 +201,14 @@ supported recognition errors, and applies the selected Natural, Casual
 Message, Formal, Technical, or Verbatim Style. It creates validated paragraph
 and list blocks, then preserves or flattens structure for the target. It
 also applies exact spoken commands such as **scratch that**, **delete that
-sentence**, **new paragraph**, and numbered-list boundaries before formatting;
+sentence**, **new paragraph**, **start a bullet list**, **bullet**, **next
+item**, and numbered-list boundaries before formatting;
 say **literal** immediately before a command phrase to keep the phrase. It
+normalizes conservative grocery, shopping, packing, task, explicit-marker,
+and sequential-ordinal list cues before formatting. Typed casing policy can
+retain the selected Style, lowercase prose while preserving source-signaled
+names, or enforce strict lowercase while protecting operational tokens. The
+same casing and spoken-list rules run on macOS and iOS. It
 validates protected numbers, URLs, email addresses, paths, code-like tokens,
 quotations, and dictionary terms. A provider error, invalid output, or
 three-second deadline delivers the deterministic Edited transcript once when

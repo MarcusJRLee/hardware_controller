@@ -178,6 +178,27 @@ struct ApplicationPreferencesStoreTests {
   }
 
   @Test
+  func schemaSixDefaultsCasingPolicyAndMigrates() throws {
+    let files = PreferenceFileAccess()
+    let encoded = try JSONEncoder().encode(
+      ApplicationPreferences(schemaVersion: 6)
+    )
+    var object = try #require(
+      JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+    )
+    var localAI = try #require(object["localAI"] as? [String: Any])
+    localAI.removeValue(forKey: "casingPolicy")
+    object["localAI"] = localAI
+    files.data = try JSONSerialization.data(withJSONObject: object)
+
+    let result = makeStore(files: files).load()
+
+    #expect(result.issue == nil)
+    #expect(result.preferences.localAI.casingPolicy == .styleDefault)
+    #expect(result.preferences.schemaVersion == 7)
+  }
+
+  @Test
   func invalidVoiceHistoryRetentionIsPreservedForRecovery() throws {
     let files = PreferenceFileAccess()
     let encoded = try JSONEncoder().encode(ApplicationPreferences.default)

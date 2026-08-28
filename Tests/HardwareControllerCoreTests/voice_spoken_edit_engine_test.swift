@@ -55,6 +55,28 @@ struct VoiceSpokenEditEngineTest {
   }
 
   @Test
+  func bulletAndNextItemCommandsProduceAnUnorderedList() throws {
+    let source =
+      "Groceries start a bullet list apples next item bananas bullet coffee end list Done"
+
+    let result = engine.apply(to: source)
+
+    #expect(
+      result.editedText
+        == "Groceries\n\n- apples\n- bananas\n- coffee\n\nDone"
+    )
+    #expect(
+      result.operations.map(\.kind) == [
+        .beginUnorderedList,
+        .beginUnorderedListItem,
+        .beginUnorderedListItem,
+        .endList,
+      ]
+    )
+    #expect(try replayer.replay(result) == result.editedText)
+  }
+
+  @Test
   func literalPreservesOnlyAnExactFollowingCommand() throws {
     let source =
       "Say literal scratch that and literal new paragraph exactly."
@@ -75,6 +97,16 @@ struct VoiceSpokenEditEngineTest {
   func nearMissesAndInapplicableCommandsRemainLiteral() {
     let source =
       "Scratch those notes, delete the sentence, start numbered list, end the list, end list."
+
+    let result = engine.apply(to: source)
+
+    #expect(result.editedText == source)
+    #expect(result.operations.isEmpty)
+  }
+
+  @Test
+  func bulletUsedAsAnOrdinaryNounRemainsLiteral() {
+    let source = "The bullet reached the target."
 
     let result = engine.apply(to: source)
 

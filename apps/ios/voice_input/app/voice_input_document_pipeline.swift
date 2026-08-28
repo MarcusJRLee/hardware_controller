@@ -11,12 +11,15 @@ struct VoiceInputProcessedTranscript: Codable, Equatable, Sendable {
 
 struct VoiceInputDocumentPipeline: Sendable {
   private let spokenEditEngine = VoiceSpokenEditEngine()
+  private let casingTransformer = VoiceCasingTransformer()
   private let documentBuilder = VoiceFormattedDocumentBuilder()
   private let renderer = VoiceFormattedTextRenderer()
 
   func process(
     _ rawTranscript: VoiceInputRawTranscript,
-    style: VoiceStyle
+    style: VoiceStyle,
+    casingPolicy: VoiceCasingPolicy = .styleDefault,
+    dictionary: PersonalDictionary = .empty
   ) throws -> VoiceInputProcessedTranscript {
     let spokenEdits =
       style.kind == .verbatim
@@ -26,8 +29,14 @@ struct VoiceInputDocumentPipeline: Sendable {
         operations: []
       )
       : spokenEditEngine.apply(to: rawTranscript.text)
+    let casedText = casingTransformer.apply(
+      casingPolicy,
+      to: spokenEdits.editedText,
+      preserving: spokenEdits.editedText,
+      dictionary: dictionary
+    )
     let document = try documentBuilder.build(
-      formattedText: spokenEdits.editedText,
+      formattedText: casedText,
       rawText: rawTranscript.text,
       style: style
     )

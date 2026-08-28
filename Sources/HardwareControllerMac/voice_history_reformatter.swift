@@ -9,6 +9,7 @@ public actor LocalAIVoiceHistoryReformatter:
   private let validator = RefinedTranscriptValidator()
   private let builder = VoiceFormattedDocumentBuilder()
   private let renderer = VoiceFormattedTextRenderer()
+  private let casingTransformer = VoiceCasingTransformer()
   private var settings: LocalAISettings
   private var operationInProgress = false
   private var operationWaiters: [CheckedContinuation<Void, Never>] = []
@@ -58,10 +59,10 @@ public actor LocalAIVoiceHistoryReformatter:
       nearbyText: nil
     )
     let response: LocalAIRefinementResponse?
-    let candidate: String
+    let rawCandidate: String
     if style.kind == .verbatim {
       response = nil
-      candidate = text
+      rawCandidate = text
     } else {
       try await refiner.prepare(settings: selectedSettings)
       let generated = try await refiner.refine(
@@ -72,13 +73,20 @@ public actor LocalAIVoiceHistoryReformatter:
           dictionary: selectedSettings.dictionary,
           additionalInstructions:
             selectedSettings.additionalInstructions,
-          style: style
+          style: style,
+          casingPolicy: selectedSettings.effectiveCasingPolicy
         ),
         settings: selectedSettings
       )
       response = generated
-      candidate = generated.text
+      rawCandidate = generated.text
     }
+    let candidate = casingTransformer.apply(
+      selectedSettings.effectiveCasingPolicy,
+      to: rawCandidate,
+      preserving: text,
+      dictionary: selectedSettings.dictionary
+    )
     let validated = try validator.validate(
       candidate,
       preserving: text,

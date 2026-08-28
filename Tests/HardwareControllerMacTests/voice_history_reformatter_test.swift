@@ -31,6 +31,25 @@ struct VoiceHistoryReformatterTest {
   }
 
   @Test
+  func reformatUsesTheConfiguredCasingPolicy() async throws {
+    let router = HistoryRefinementRouter()
+    var settings = LocalAISettings.default
+    settings.casingPolicy = .strictLowercase
+    let reformatter = LocalAIVoiceHistoryReformatter(
+      settings: settings,
+      refiner: router
+    )
+
+    let result = try await reformatter.reformat(
+      text: "send the plan",
+      sessionID: UUID(),
+      style: .natural
+    )
+
+    #expect(result.text == "send the plan.")
+  }
+
+  @Test
   func verbatimSkipsGenerationAndStillBuildsValidatedEvidence()
     async throws
   {

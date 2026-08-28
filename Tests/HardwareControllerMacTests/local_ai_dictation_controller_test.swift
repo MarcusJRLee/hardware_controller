@@ -8,6 +8,42 @@ import Testing
 
 struct LocalAIDictationControllerTest {
   @Test
+  func strictLowercaseOverridesNaturalStyleCapitalization() async throws {
+    let fixture = LocalAIControllerFixture(
+      refinement: .output("Buy Milk for Ops@Example.com")
+    )
+    var settings = LocalAISettings.default
+    settings.additionalInstructions = "only provide text in lowercase"
+    let controller = fixture.makeController(settings: settings)
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.session.emit(.committed("buy milk for Ops@Example.com"))
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    #expect(fixture.writer.inserted == ["buy milk for Ops@Example.com."])
+  }
+
+  @Test
+  func strictLowercaseAlsoAppliesToFormattingFallback() async throws {
+    let fixture = LocalAIControllerFixture(
+      refinement: .failure(.providerUnavailable("No formatter."))
+    )
+    var settings = LocalAISettings.default
+    settings.casingPolicy = .strictLowercase
+    let controller = fixture.makeController(settings: settings)
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.session.emit(.committed("Buy Milk for Ops@Example.com"))
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    #expect(fixture.writer.inserted == ["buy milk for Ops@Example.com"])
+  }
+
+  @Test
   func storesDeliveredDictationWithPlayableAudio() async throws {
     let rootDirectory = FileManager.default.temporaryDirectory
       .appending(path: "voice_history_\(UUID().uuidString)")

@@ -6,12 +6,13 @@ public struct VoiceSpokenEditReplayer: Sendable {
   public func replay(
     _ result: VoiceSpokenEditResult
   ) throws -> String {
-    guard result.revision == VoiceSpokenEditResult.currentRevision else {
+    guard Self.supportedRevisions.contains(result.revision) else {
       throw VoiceSpokenEditError.unsupportedRevision(result.revision)
     }
     return try replay(
       sourceText: result.sourceText,
-      operations: result.operations
+      operations: result.operations,
+      revision: result.revision
     )
   }
 
@@ -19,7 +20,9 @@ public struct VoiceSpokenEditReplayer: Sendable {
     guard try replay(result) == result.editedText else {
       throw VoiceSpokenEditError.resultMismatch
     }
-    let canonical = VoiceSpokenEditEngine().apply(to: result.sourceText)
+    let canonical = VoiceSpokenEditEngine(revision: result.revision).apply(
+      to: result.sourceText
+    )
     guard canonical.operations == result.operations else {
       throw VoiceSpokenEditError.nonCanonicalOperations
     }
@@ -28,6 +31,18 @@ public struct VoiceSpokenEditReplayer: Sendable {
   public func replay(
     sourceText: String,
     operations: [VoiceSpokenEditOperation]
+  ) throws -> String {
+    try replay(
+      sourceText: sourceText,
+      operations: operations,
+      revision: VoiceSpokenEditResult.currentRevision
+    )
+  }
+
+  private func replay(
+    sourceText: String,
+    operations: [VoiceSpokenEditOperation],
+    revision: Int
   ) throws -> String {
     var sourceCursor = sourceText.startIndex
     var sourceCursorOffset = 0
@@ -51,7 +66,8 @@ public struct VoiceSpokenEditReplayer: Sendable {
       }
       try validateCommandEvidence(
         sourceText[sourceStart..<sourceEnd],
-        for: operation
+        for: operation,
+        revision: revision
       )
       editedText.append(contentsOf: sourceText[sourceCursor..<sourceStart])
       guard
@@ -98,6 +114,12 @@ public struct VoiceSpokenEditReplayer: Sendable {
         || operation.replacementText == "\n\n1. "
     case .beginOrderedListItem:
       valid = isOrderedListItem(operation.replacementText)
+    case .beginUnorderedList:
+      valid =
+        operation.replacementText == "- "
+        || operation.replacementText == "\n\n- "
+    case .beginUnorderedListItem:
+      valid = operation.replacementText == "\n- "
     case .preserveLiteralCommand:
       valid =
         !operation.replacementText.isEmpty
@@ -112,7 +134,8 @@ public struct VoiceSpokenEditReplayer: Sendable {
 
   private func validateCommandEvidence(
     _ evidence: Substring,
-    for operation: VoiceSpokenEditOperation
+    for operation: VoiceSpokenEditOperation,
+    revision: Int
   ) throws {
     let trimmed = evidence.trimmingCharacters(
       in: .whitespacesAndNewlines.union(Self.trailingCommandCharacters)
@@ -126,9 +149,20 @@ public struct VoiceSpokenEditReplayer: Sendable {
     case .deleteCurrentSentence:
       valid = normalized == "delete that sentence"
     case .insertParagraphBreak, .beginOrderedListItem:
-      valid = normalized == "new paragraph"
+      valid =
+        normalized == "new paragraph"
+        || (revision >= 2 && normalized == "next item")
     case .beginOrderedList:
       valid = normalized == "start a numbered list"
+    case .beginUnorderedList:
+      valid =
+        revision >= 2
+        && ["start a bullet list", "start a bulleted list", "bullet"]
+          .contains(normalized)
+    case .beginUnorderedListItem:
+      valid =
+        revision >= 2
+        && ["new paragraph", "next item", "bullet"].contains(normalized)
     case .endList:
       valid = normalized == "end list"
     case .preserveLiteralCommand:
@@ -139,7 +173,7 @@ public struct VoiceSpokenEditReplayer: Sendable {
       valid =
         literalWords.count == 2
         && literalWords[0].lowercased() == "literal"
-        && Self.commandPhrases.contains(
+        && commandPhrases(revision: revision).contains(
           literalWords[1].split(whereSeparator: { $0.isWhitespace })
             .joined(separator: " ").lowercased()
         )
@@ -175,4 +209,18 @@ public struct VoiceSpokenEditReplayer: Sendable {
     "start a numbered list",
     "end list",
   ]
+
+  private func commandPhrases(revision: Int) -> Set<String> {
+    guard revision >= 2 else {
+      return Self.commandPhrases
+    }
+    return Self.commandPhrases.union([
+      "start a bullet list",
+      "start a bulleted list",
+      "bullet",
+      "next item",
+    ])
+  }
+
+  private static let supportedRevisions: Set<Int> = [1, 2]
 }

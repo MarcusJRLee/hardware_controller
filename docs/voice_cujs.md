@@ -119,6 +119,9 @@ Natural, or Verbatim without retranscription. Dictated ordinal structure becomes
 validated list blocks. A single-line target receives a safe plain-text rendering;
 a multiline target preserves list and paragraph structure. Protected names,
 commands, URLs, code tokens, and Dictionary spellings remain unchanged.
+Typed casing is applied after formatting and on fallback: Strict Lowercase
+lowers prose while preserving operational tokens; Lowercase Prose additionally
+preserves source-signaled names and acronyms.
 
 **Current evidence:** General stores one versioned Natural, Casual Message,
 Formal, Technical, or Verbatim Style. The prompt carries the selected Style as
@@ -139,11 +142,14 @@ databases without rewriting their rows.
 literal text. A destructive command cannot remove stable text outside its
 defined range. The Raw transcript remains inspectable.
 
-**Current evidence:** the deterministic Swift engine recognizes only the five
-exact command phrases and one exact `literal` prefix. Operations record source
+**Current evidence:** the deterministic Swift engine recognizes exact
+backtrack, paragraph, ordered-list, unordered-list, item-boundary, end-list,
+and `literal` phrases. Operations record source
 UTF-8 evidence, the affected Edited suffix, and a typed replacement. Clause and
 sentence deletion stop at stable punctuation or an active list-item marker;
-`new paragraph` begins the next item while a numbered list is active. Revision,
+`new paragraph` and `next item` begin the next active list item; `bullet` begins
+or advances an unordered list only in an explicit list context. Revision-1
+stored traces retain their original command vocabulary. Revision,
 command evidence, canonical ranges, ordering, replay, and stored-result
 corruption are rejected during SQLite write and read. Commands run against Raw
 before Dictionary output can synthesize one. The formatter receives Edited text, provider fallback delivers

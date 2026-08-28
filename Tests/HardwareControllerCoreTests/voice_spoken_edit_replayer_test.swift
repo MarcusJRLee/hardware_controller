@@ -23,6 +23,22 @@ struct VoiceSpokenEditReplayerTest {
   }
 
   @Test
+  func revisionOneTraceRemainsCanonicalAfterAddingListCommands() throws {
+    let current = VoiceSpokenEditEngine().apply(
+      to: "Intro new paragraph Outro"
+    )
+    let legacy = VoiceSpokenEditResult(
+      revision: 1,
+      sourceText: current.sourceText,
+      editedText: current.editedText,
+      operations: current.operations
+    )
+
+    try replayer.validate(legacy)
+    #expect(try replayer.replay(legacy) == "Intro\n\nOutro")
+  }
+
+  @Test
   func rejectsOverlappingSourceEvidence() {
     let operations = [
       VoiceSpokenEditOperation(
