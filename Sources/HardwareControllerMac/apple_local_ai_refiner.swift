@@ -72,7 +72,8 @@ public actor AppleFoundationModelRefiner: TranscriptRefining {
       }
       let session = makeSession(
         additionalInstructions: settings.additionalInstructions,
-        style: settings.style
+        style: settings.style,
+        casingPolicy: settings.effectiveCasingPolicy
       )
       session.prewarm()
       preparedSessionStorage = session
@@ -107,7 +108,8 @@ public actor AppleFoundationModelRefiner: TranscriptRefining {
         preparedSessionStorage as? LanguageModelSession
         ?? makeSession(
           additionalInstructions: request.additionalInstructions,
-          style: request.style
+          style: request.style,
+          casingPolicy: request.casingPolicy
         )
       preparedSessionStorage = nil
       do {
@@ -121,13 +123,25 @@ public actor AppleFoundationModelRefiner: TranscriptRefining {
             )
           )
         )
+        guard response.content.blocks.count == 1,
+          let block = response.content.blocks.first
+        else {
+          throw LocalAIRefinementFailure.invalidResponse(
+            "Apple On-Device returned an invalid block envelope."
+          )
+        }
         return LocalAIRefinementResponse(
-          text: response.content.text,
+          output: try AppleFoundationModelDraftAdapter().draft(
+            kind: block.kind,
+            items: block.items
+          ),
           provider: .appleOnDevice,
           modelIdentifier: "Apple SystemLanguageModel"
         )
       } catch is CancellationError {
         throw CancellationError()
+      } catch let failure as LocalAIRefinementFailure {
+        throw failure
       } catch {
         throw LocalAIRefinementFailure.generationFailed(
           error.localizedDescription
@@ -178,7 +192,8 @@ public actor AppleFoundationModelRefiner: TranscriptRefining {
     @available(macOS 26, *)
     private func makeSession(
       additionalInstructions: String,
-      style: VoiceStyle
+      style: VoiceStyle,
+      casingPolicy: VoiceCasingPolicy
     ) -> LanguageModelSession {
       let model = SystemLanguageModel(
         useCase: .general,
@@ -188,7 +203,8 @@ public actor AppleFoundationModelRefiner: TranscriptRefining {
         model: model,
         instructions: promptBuilder.instructions(
           additionalInstructions: additionalInstructions,
-          style: style
+          style: style,
+          casingPolicy: casingPolicy
         )
       )
     }
@@ -218,9 +234,55 @@ public actor AppleFoundationModelRefiner: TranscriptRefining {
 
 #if canImport(FoundationModels)
   @available(macOS 26, *)
-  @Generable(description: "One polished dictation result.")
+  @Generable(description: "One structured dictation result.")
   private struct AppleRefinementOutput {
-    @Guide(description: "The complete polished text and nothing else.")
-    let text: String
+    @Guide(
+      description: "Exactly one paragraph or list block.",
+      .count(1)
+    )
+    let blocks: [AppleRefinementBlock]
+  }
+
+  @available(macOS 26, *)
+  @Generable(description: "One paragraph or list block.")
+  private struct AppleRefinementBlock {
+    @Guide(
+      description: "The semantic block kind.",
+      .anyOf(["paragraph", "unorderedList", "orderedList"])
+    )
+    let kind: String
+
+    @Guide(
+      description:
+        "Exactly one text value for a paragraph, or one value per list item.",
+      .count(1...16)
+    )
+    let items: [String]
   }
 #endif
+
+struct AppleFoundationModelDraftAdapter: Sendable {
+  func draft(
+    kind rawKind: String,
+    items: [String]
+  ) throws -> VoiceFormattingDraft {
+    guard
+      let kind = VoiceFormattingDraftBlockKind(rawValue: rawKind),
+      !items.isEmpty
+    else {
+      throw LocalAIRefinementFailure.invalidResponse(
+        "Apple On-Device returned an invalid block."
+      )
+    }
+    if kind == .paragraph {
+      return VoiceFormattingDraft(
+        blocks: items.map {
+          VoiceFormattingDraftBlock(kind: .paragraph, items: [$0])
+        }
+      )
+    }
+    return VoiceFormattingDraft(
+      blocks: [VoiceFormattingDraftBlock(kind: kind, items: items)]
+    )
+  }
+}

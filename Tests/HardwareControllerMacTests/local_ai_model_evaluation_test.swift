@@ -33,14 +33,21 @@ struct LocalAIModelEvaluationTest {
         digest: nil
       ),
     ]
+    let selectedModel = ProcessInfo.processInfo.environment[
+      "HC_LOCAL_AI_EVALUATION_MODEL"
+    ]
 
-    for candidate in candidates {
+    for candidate in candidates
+    where selectedModel == nil || selectedModel == candidate.name {
       let report = await evaluate(candidate)
       let encoder = JSONEncoder()
       encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
       let data = try encoder.encode(report)
       let json = try #require(String(data: data, encoding: .utf8))
       print("LOCAL_AI_EVALUATION_REPORT\n\(json)")
+      if report.availabilityFailure == nil {
+        #expect(report.semanticGateFailures.isEmpty)
+      }
     }
   }
 
@@ -92,7 +99,11 @@ struct LocalAIModelEvaluationTest {
 
     let applier = PersonalDictionaryReplacementApplier()
     let validator = RefinedTranscriptValidator()
-    let polisher = DeterministicTranscriptPolisher()
+    let polisher = VoiceFormattingDraftPolisher()
+    let normalizer = VoiceFormattingDraftNormalizer()
+    let casingTransformer = VoiceCasingTransformer()
+    let builder = VoiceFormattedDocumentBuilder()
+    let renderer = VoiceFormattedTextRenderer()
     var outcomes: [EvaluationOutcome] = []
     var latencies: [UInt64] = []
     var modelLoadNanoseconds: [UInt64] = []
@@ -119,7 +130,8 @@ struct LocalAIModelEvaluationTest {
           nearbyText: evaluationCase.nearbyText
         ),
         dictionary: evaluationCase.dictionary,
-        additionalInstructions: ""
+        additionalInstructions: evaluationCase.additionalInstructions,
+        casingPolicy: evaluationCase.casingPolicy
       )
       let start = MonotonicClock.nowNanoseconds()
       do {
@@ -136,24 +148,68 @@ struct LocalAIModelEvaluationTest {
         tokenGenerationNanoseconds +=
           response.tokenGenerationNanoseconds ?? 0
 
-        let output = polisher.polish(
-          response.text,
-          preserving: source
+        let normalized = normalizer.normalize(
+          response.output,
+          transcript: source,
+          intent: request.listIntent
         )
-        let semanticFailure: String?
+        let polished = polisher.polish(
+          normalized,
+          preserving: source,
+          style: request.style
+        )
+        let cased = casingTransformer.apply(
+          request.casingPolicy,
+          to: polished,
+          preserving: source,
+          dictionary: request.dictionary
+        )
+        let document = try builder.build(
+          output: cased,
+          rawText: source,
+          style: request.style,
+          provider: response.provider,
+          modelIdentifier: response.modelIdentifier,
+          promptRevision: VersionedLocalAIPromptBuilder.currentRevision
+        )
+        let output = try renderer.render(
+          document,
+          supportsMultiline: evaluationCase.supportsMultiline
+        )
+        var failureKinds: Set<LocalAIEvaluationFailureKind> = []
+        var semanticFailure: String?
+        let actualBlockKinds = Set(cased.blocks.map(\.kind))
+        if !evaluationCase.requiredBlockKinds.isSubset(
+          of: actualBlockKinds
+        ) {
+          failureKinds.insert(.structure)
+        }
+        let expectedCasing = casingTransformer.apply(
+          request.casingPolicy,
+          to: cased,
+          preserving: source,
+          dictionary: request.dictionary
+        )
+        if expectedCasing != cased {
+          failureKinds.insert(.casing)
+        }
+        if evaluationCase.protectedTokens.contains(where: {
+          !output.contains($0)
+        }) {
+          failureKinds.insert(.protectedToken)
+        }
         do {
-          let validated = try validator.validate(
+          _ = try validator.validate(
             output,
             preserving: source,
             dictionary: evaluationCase.dictionary,
             supportsMultiline: evaluationCase.supportsMultiline,
             context: request.context
           )
-          semanticFailure = evaluationCase.protectedTokens.first {
-            !validated.contains($0)
-          }.map { "Missing protected token: \($0)" }
+          semanticFailure = nil
         } catch {
           semanticFailure = String(describing: error)
+          failureKinds.insert(.semantic)
         }
         outcomes.append(
           EvaluationOutcome(
@@ -162,6 +218,9 @@ struct LocalAIModelEvaluationTest {
             exactQualityPass: evaluationCase.acceptedOutputs.contains(
               output
             ),
+            failureKinds: failureKinds.sorted {
+              $0.rawValue < $1.rawValue
+            },
             semanticFailure: semanticFailure,
             latencyNanoseconds: latency,
             error: nil
@@ -175,6 +234,7 @@ struct LocalAIModelEvaluationTest {
             id: evaluationCase.id,
             output: nil,
             exactQualityPass: false,
+            failureKinds: [],
             semanticFailure: nil,
             latencyNanoseconds: latency,
             error: String(describing: error)
@@ -186,6 +246,12 @@ struct LocalAIModelEvaluationTest {
     let residentBytes =
       candidate.provider == .ollama
       ? await ollamaResidentBytes(model: candidate.name) : nil
+    let gateInputs = outcomes.map {
+      LocalAIEvaluationGateInput(
+        failures: Set($0.failureKinds),
+        providerError: $0.error != nil
+      )
+    }
     let report = EvaluationReport(
       provider: candidate.provider.rawValue,
       model: candidate.name,
@@ -194,9 +260,11 @@ struct LocalAIModelEvaluationTest {
       corpusCount: outcomes.count,
       exactQualityPasses: outcomes.filter(\.exactQualityPass).count,
       semanticCorruptions: outcomes.filter {
-        $0.semanticFailure != nil
+        !$0.failureKinds.isEmpty
       }.count,
       timeoutOrErrorCount: outcomes.filter { $0.error != nil }.count,
+      semanticGateFailures:
+        LocalAIEvaluationSemanticGate().failures(for: gateInputs),
       coldPreparationLatency: coldPreparationLatency,
       prepareNanoseconds: prepareNanoseconds,
       latency: EvaluationLatency(latencies),
@@ -335,6 +403,7 @@ private struct EvaluationReport: Codable {
   let exactQualityPasses: Int
   let semanticCorruptions: Int
   let timeoutOrErrorCount: Int
+  let semanticGateFailures: [String]
   let coldPreparationLatency: EvaluationLatency?
   let prepareNanoseconds: UInt64?
   let latency: EvaluationLatency?
@@ -358,6 +427,7 @@ private struct EvaluationReport: Codable {
       exactQualityPasses: 0,
       semanticCorruptions: 0,
       timeoutOrErrorCount: 0,
+      semanticGateFailures: [],
       coldPreparationLatency: nil,
       prepareNanoseconds: nil,
       latency: nil,
@@ -375,6 +445,7 @@ private struct EvaluationOutcome: Codable {
   let id: String
   let output: String?
   let exactQualityPass: Bool
+  let failureKinds: [LocalAIEvaluationFailureKind]
   let semanticFailure: String?
   let latencyNanoseconds: UInt64
   let error: String?

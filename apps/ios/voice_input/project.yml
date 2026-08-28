@@ -77,6 +77,8 @@ targets:
         group: portable_voice_core
       - path: ../../../Sources/HardwareControllerCore/voice_formatted_document_builder.swift
         group: portable_voice_core
+      - path: ../../../Sources/HardwareControllerCore/voice_formatting_draft_normalizer.swift
+        group: portable_voice_core
       - path: ../../../Sources/HardwareControllerCore/voice_formatted_text_renderer.swift
         group: portable_voice_core
       - path: ../../../Sources/HardwareControllerCore/voice_formatting.swift

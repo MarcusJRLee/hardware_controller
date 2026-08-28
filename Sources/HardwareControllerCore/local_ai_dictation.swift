@@ -274,7 +274,7 @@ public struct LocalAIRefinementRequest: Equatable, Sendable {
 }
 
 public struct LocalAIRefinementResponse: Equatable, Sendable {
-  public let text: String
+  public let output: VoiceFormattingDraft
   public let provider: LocalAIProviderKind
   public let modelIdentifier: String
   public let modelLoadNanoseconds: UInt64?
@@ -283,7 +283,7 @@ public struct LocalAIRefinementResponse: Equatable, Sendable {
   public let tokenGenerationNanoseconds: UInt64?
 
   public init(
-    text: String,
+    output: VoiceFormattingDraft,
     provider: LocalAIProviderKind,
     modelIdentifier: String,
     modelLoadNanoseconds: UInt64? = nil,
@@ -291,7 +291,7 @@ public struct LocalAIRefinementResponse: Equatable, Sendable {
     generatedTokenCount: Int? = nil,
     tokenGenerationNanoseconds: UInt64? = nil
   ) {
-    self.text = text
+    self.output = output
     self.provider = provider
     self.modelIdentifier = modelIdentifier
     self.modelLoadNanoseconds = modelLoadNanoseconds

@@ -85,7 +85,7 @@ struct OllamaLocalAIRefinerTests {
         ),
         response(#"{"models":[]}"#),
         response(
-          #"{"response":"{\"text\":\"Polished text.\"}","done":true,"total_duration":120,"load_duration":20}"#
+          #"{"response":"{\"blocks\":[{\"kind\":\"paragraph\",\"items\":[\"Polished text.\"]}]}","done":true,"total_duration":120,"load_duration":20}"#
         ),
       ]
     )
@@ -117,7 +117,7 @@ struct OllamaLocalAIRefinerTests {
       settings: settings
     )
 
-    #expect(output.text == "Polished text.")
+    #expect(output.output == .paragraph("Polished text."))
     #expect(output.modelIdentifier == "qwen3.5:4b@digest-4b")
     let request = try #require(await transport.requests.last)
     let body = try #require(request.httpBody)

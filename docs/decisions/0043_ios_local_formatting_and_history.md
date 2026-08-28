@@ -26,9 +26,10 @@ macOS History implementation into the mobile target.
 - Treat whisper output as immutable Raw evidence. Apply explicit spoken edits
   to create Edited, then build and validate semantic paragraph/list blocks and
   render Formatted. Compile the same typed casing transformer, list-intent
-  detector, and revisioned spoken-list engine into the portable target so iOS
-  and macOS share those semantics. Verbatim bypasses spoken commands and
-  preserves literal text unless an explicit casing policy is applied.
+  detector, draft normalizer, and revisioned spoken-list engine into the
+  portable target, and invoke them in the iOS document pipeline so iOS and
+  macOS share deterministic list semantics. Verbatim bypasses spoken commands
+  and preserves literal text unless an explicit casing policy is applied.
 - Copy each completed CAF through a protected partial file, synchronize it,
   atomically finalize it, calculate SHA-256 and bytes, and commit a versioned
   SQLite session containing Raw, Edited, Formatted, Style, spoken operations,
