@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   analyze:
-    name: Analyze (swift)
+    name: CodeQL
     runs-on: macos-26
     timeout-minutes: 45
     steps:
