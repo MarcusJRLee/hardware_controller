@@ -42,19 +42,18 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 | Model recommendation | Qwen 3.5 4B is digest-pinned from the fixed evaluation corpus. | [`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md) |
 | Profiles | Transactional named Profiles with independent per-Device setups and active-Action cleanup. | [`decisions/0014_multi_profile_device_configuration.md`](decisions/0014_multi_profile_device_configuration.md) |
 | Application | Controller, History, Profiles, and General in one native foreground window with Dock and menu-bar presence. | [`ux_spec.md`](ux_spec.md) |
-| Release | Version 1.4.1 build 17 is installed as an unreleased personal QA candidate; routine installs preserve both values and no release promotion is authorized. | [`decisions/0023_stable_personal_build_metadata.md`](decisions/0023_stable_personal_build_metadata.md) |
+| Release | Version 1.5.0 build 18 is the approved unreleased personal QA candidate; no release promotion is authorized. | [`decisions/0051_unreleased_voice_integration_build.md`](decisions/0051_unreleased_voice_integration_build.md) |
 | Public source | Open source under Apache License 2.0 with Marcus John Rice Lee as copyright owner, inbound Apache contributions, provisional Signal Bridge identity, and active GitHub security controls. | [`decisions/0028_apache_open_source_and_contributions.md`](decisions/0028_apache_open_source_and_contributions.md) |
 
 ## Approved next program
 
-The local Voice expansion is accepted; macOS M1–M15, iOS Gate K0, I1 local
-onboarding and Model admission, and I2 through Style-qualified local formatting,
-History, warm keyboard delivery, target-safe field handling, I7 lifecycle
-recovery, I8 stale-service recovery, and I9 bounded insertion recovery are
-implemented across the current stacked branches. I10 offline storage and I11
-system-surface capture are implemented in source on focused branches. macOS and
-iOS are the active roadmap; Android, Windows, and Linux remain architectural
-line-of-sight platforms; web and mobile web are deferred.
+The local Voice expansion is accepted and integrated into `dev`: macOS M1–M15,
+iOS Gate K0, I1 local onboarding and Model admission, I2 local formatting and
+History, Style-qualified keyboard delivery, target-safe field handling, I7
+lifecycle recovery, I8 stale-service recovery, I9 bounded insertion recovery,
+I10 offline storage, and I11 system-surface capture. macOS and iOS are the
+active roadmap; Android, Windows, and Linux remain architectural line-of-sight
+platforms; web and mobile web are deferred.
 The acceptance and execution authorities are:
 
 | Authority | Purpose |
@@ -64,10 +63,9 @@ The acceptance and execution authorities are:
 | [`voice_platform_design.md`](voice_platform_design.md) | Model, runtime, iOS keyboard, storage, performance, and milestone design. |
 | [`voice_implementation_goal_prompt.md`](voice_implementation_goal_prompt.md) | Autonomous worktree/PR execution contract and definition of done. |
 
-Implementation integrates focused vertical PRs into `dev`. `main`, release
-metadata, tags, distribution artifacts, and store submission remain unchanged
-until the user verifies the finished `dev` state and separately approves
-promotion.
+Focused vertical PRs are integrated into `dev`. `main`, tags, distribution
+artifacts, and store submission remain unchanged until the user verifies the
+finished `dev` state and separately approves promotion.
 
 ## Quality gates
 
