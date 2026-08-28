@@ -397,6 +397,16 @@ struct VoiceHistoryView: View {
           if let promptRevision = result.promptRevision {
             evidenceLabel("Prompt", value: "r\(promptRevision)")
           }
+          if let formattedDocument = result.formattedDocument {
+            evidenceLabel(
+              "Validation",
+              value: formattedDocument.validationStatus.title
+            )
+            evidenceLabel(
+              "Fallback",
+              value: formattedDocument.validationStatus.fallbackTitle
+            )
+          }
         }
         .id(result.id)
         .accessibilityElement(children: .combine)
@@ -720,6 +730,22 @@ extension LocalAIProviderKind {
     switch self {
     case .appleOnDevice: "Apple On-Device"
     case .ollama: "Ollama"
+    }
+  }
+}
+
+extension VoiceFormattingValidationStatus {
+  fileprivate var title: String {
+    switch self {
+    case .validated: "Validated"
+    case .sourceFallback: "Provider output rejected"
+    }
+  }
+
+  fileprivate var fallbackTitle: String {
+    switch self {
+    case .validated: "Not used"
+    case .sourceFallback: "Edited transcript"
     }
   }
 }

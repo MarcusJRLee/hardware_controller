@@ -466,6 +466,10 @@ renderer alone decides whether the captured target receives structure or one
 plain line. Validation runs on the canonical rendering before delivery.
 The sanitized provider test shares the three-second preparation-plus-generation
 deadline; settings changes and shutdown cancel it and suppress stale results.
+General settings present speech and formatting provider/model identity as
+separate active-pipeline evidence together with typed output, validation, and
+fallback behavior. History renders the stored validation status and whether the
+Edited fallback was used; it does not infer success from provider identity.
 
 The revision-2 Swift spoken-edit engine recognizes only exact, case-insensitive
 command phrases in immutable Raw text, so a Dictionary replacement cannot

@@ -580,6 +580,11 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryManaging {
         raw: "first install git then run bash version",
         formatted: "1. Install Git.\n2. Run `bash --version`.",
         style: .technical,
+        formattedBlock: VoiceFormattedBlock(
+          kind: .orderedList,
+          items: ["Install Git.", "Run `bash --version`."],
+          evidenceIndices: [0]
+        ),
         pinned: true
       ),
       Self.item(
@@ -589,6 +594,12 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryManaging {
         raw: "send the revised plan tomorrow",
         formatted: "send the revised plan tomorrow.",
         style: .casualMessage,
+        formattedBlock: VoiceFormattedBlock(
+          kind: .paragraph,
+          items: ["send the revised plan tomorrow."],
+          evidenceIndices: [0]
+        ),
+        formattingValidationStatus: .sourceFallback,
         pinned: false,
         audioExpirationReason: .byteLimit
       ),
@@ -739,6 +750,8 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryManaging {
     raw: String,
     formatted: String,
     style: VoiceStyle,
+    formattedBlock: VoiceFormattedBlock? = nil,
+    formattingValidationStatus: VoiceFormattingValidationStatus = .validated,
     pinned: Bool,
     audioExpirationReason: VoiceHistoryAudioExpirationReason? = nil,
     recoveryKind: VoiceHistoryRecoveryKind? = nil,
@@ -797,7 +810,24 @@ private actor DemoVoiceSessionHistory: VoiceSessionHistoryManaging {
           style: style,
           provider: .appleOnDevice,
           modelIdentifier: "Apple SystemLanguageModel",
-          promptRevision: VersionedLocalAIPromptBuilder.currentRevision
+          promptRevision: VersionedLocalAIPromptBuilder.currentRevision,
+          formattedDocument: formattedBlock.map { block in
+            VoiceFormattedDocument(
+              rawText: raw,
+              style: style,
+              blocks: [block],
+              evidence: [
+                VoiceFormattingEvidence(
+                  rawUTF8StartOffset: 0,
+                  rawUTF8EndOffset: raw.utf8.count,
+                  provider: .appleOnDevice,
+                  modelIdentifier: "Apple SystemLanguageModel",
+                  promptRevision: VersionedLocalAIPromptBuilder.currentRevision
+                )
+              ],
+              validationStatus: formattingValidationStatus
+            )
+          }
         ),
         VoiceHistoryResult(
           sessionID: id,

@@ -216,6 +216,11 @@ quotations, and dictionary terms. A provider error, invalid output, or
 three-second deadline delivers the deterministic Edited transcript once when
 the captured target is still safe.
 
+**General → Local AI Dictation** names speech-to-text and formatting separately.
+Its active-pipeline evidence shows each provider and model, typed output,
+validation boundary, and deterministic fallback. History records whether each
+formatted result was validated or used the Edited fallback.
+
 ### Apple On-Device
 
 Apple On-Device refinement requires macOS 26, Apple Intelligence enabled, a

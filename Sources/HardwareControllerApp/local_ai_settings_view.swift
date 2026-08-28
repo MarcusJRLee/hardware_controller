@@ -11,7 +11,7 @@ struct LocalAISettingsSection: View {
 
   var body: some View {
     Section("Local AI Dictation") {
-      Picker("Provider", selection: providerBinding) {
+      Picker("Formatting provider", selection: providerBinding) {
         Text("Apple On-Device")
           .tag(LocalAIProviderKind.appleOnDevice)
         Text("Ollama")
@@ -28,8 +28,17 @@ struct LocalAISettingsSection: View {
         .font(.caption)
         .foregroundStyle(.secondary)
 
+      Picker("Casing", selection: casingBinding) {
+        ForEach(VoiceCasingPolicy.allCases, id: \.self) { policy in
+          Text(casingTitle(policy)).tag(policy)
+        }
+      }
+      Text(casingDescription(settings.effectiveCasingPolicy))
+        .font(.caption)
+        .foregroundStyle(.secondary)
+
       if settings.provider == .ollama {
-        Picker("Model", selection: modelBinding) {
+        Picker("Formatting model", selection: modelBinding) {
           ForEach(modelOptions) { option in
             Text(modelTitle(option)).tag(option.name)
           }
@@ -45,6 +54,22 @@ struct LocalAISettingsSection: View {
         )
         .font(.caption)
         .foregroundStyle(.secondary)
+      }
+
+      VStack(alignment: .leading, spacing: 8) {
+        Text("Active pipeline")
+          .font(.headline)
+        LabeledContent("Speech provider", value: pipeline.speechProvider)
+        LabeledContent("Speech model", value: pipeline.speechModel)
+        LabeledContent(
+          "Formatting provider",
+          value: pipeline.formattingProvider
+        )
+        LabeledContent("Formatting model", value: pipeline.formattingModel)
+        LabeledContent("Formatting output", value: pipeline.formattingOutput)
+        LabeledContent("Effective casing", value: pipeline.effectiveCasing)
+        LabeledContent("Validation", value: pipeline.validation)
+        LabeledContent("Fallback", value: pipeline.fallback)
       }
 
       LabeledContent("Status") {
@@ -209,6 +234,10 @@ struct LocalAISettingsSection: View {
     preferencesModel.localAISettings
   }
 
+  private var pipeline: LocalAIPipelinePresentation {
+    LocalAIPipelinePresentation(settings: settings)
+  }
+
   private var selectedReadiness: LocalAIProviderReadiness {
     model.localAIReadiness.readiness(for: settings.provider)
   }
@@ -256,6 +285,15 @@ struct LocalAISettingsSection: View {
       get: { settings.style.kind },
       set: { kind in
         updateSettings { $0.style = VoiceStyle(kind: kind) }
+      }
+    )
+  }
+
+  private var casingBinding: SwiftUI.Binding<VoiceCasingPolicy> {
+    SwiftUI.Binding(
+      get: { settings.casingPolicy },
+      set: { policy in
+        updateSettings { $0.casingPolicy = policy }
       }
     )
   }
@@ -409,6 +447,28 @@ struct LocalAISettingsSection: View {
       "Concise structure with commands and code preserved exactly."
     case .verbatim:
       "Recognition output with no generative rewriting."
+    }
+  }
+
+  private func casingTitle(_ policy: VoiceCasingPolicy) -> String {
+    switch policy {
+    case .styleDefault:
+      "Style Default"
+    case .lowercaseProse:
+      "Lowercase Prose"
+    case .strictLowercase:
+      "Strict Lowercase"
+    }
+  }
+
+  private func casingDescription(_ policy: VoiceCasingPolicy) -> String {
+    switch policy {
+    case .styleDefault:
+      "Follows the selected Style."
+    case .lowercaseProse:
+      "Lowercases prose while preserving names, acronyms, and operational tokens."
+    case .strictLowercase:
+      "Lowercases prose while preserving URLs, email addresses, paths, code tokens, quoted text, and Dictionary values."
     }
   }
 
