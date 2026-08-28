@@ -676,10 +676,7 @@ struct LocalAIDictationControllerTest {
   @Test
   func nonCooperativeLateResultCannotDelayOrDuplicateFallback() async throws {
     let fixture = LocalAIControllerFixture(
-      refinement: .nonCooperativeDelayedOutput(
-        "Too late.",
-        .milliseconds(100)
-      )
+      refinement: .nonCooperativeBlockedOutput("Too late.")
     )
     let controller = fixture.makeController(
       refinementTimeout: .milliseconds(10)
@@ -688,18 +685,18 @@ struct LocalAIDictationControllerTest {
     await controller.handle(.begin)
     try await fixture.waitUntilListening(controller)
     fixture.session.emit(.committed("time bounded"))
-    let clock = ContinuousClock()
-    let start = clock.now
     await controller.handle(.finish)
     try await fixture.waitUntilCompleted(controller)
-    let elapsed = start.duration(to: clock.now)
-    try await Task.sleep(for: .milliseconds(120))
 
-    #expect(elapsed < .milliseconds(200))
     #expect(fixture.writer.inserted == ["time bounded"])
-    #expect(await fixture.refiner.refinementCompletionCount == 1)
     #expect(await controller.snapshot().refinedText == "time bounded")
     #expect(await controller.snapshot().fallbackReason == .timedOut)
+    await fixture.refiner.releaseBlockedRefinement()
+    try await localAIWaitUntil {
+      await fixture.refiner.refinementCompletionCount == 1
+    }
+    #expect(fixture.writer.inserted == ["time bounded"])
+    #expect(await controller.snapshot().refinedText == "time bounded")
   }
 
   @Test(.timeLimit(.minutes(1)))
@@ -1082,7 +1079,7 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
   enum Behavior: Sendable {
     case output(String)
     case delayedOutput(String, Duration)
-    case nonCooperativeDelayedOutput(String, Duration)
+    case nonCooperativeBlockedOutput(String)
     case failure(LocalAIRefinementFailure)
   }
 
@@ -1092,6 +1089,8 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
   private var preparationCancellationObservers: [CheckedContinuation<Void, Never>] = []
   private(set) var preparationCount = 0
   private(set) var refinementCompletionCount = 0
+  private var blockedRefinementContinuation: CheckedContinuation<Void, Never>?
+  private var releaseBlockedRefinementWhenStarted = false
   private(set) var requests: [LocalAIRefinementRequest] = []
   private(set) var releasedSettings: [LocalAISettings] = []
   private(set) var shutdownCount = 0
@@ -1148,6 +1147,15 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
     }
   }
 
+  func releaseBlockedRefinement() {
+    guard let continuation = blockedRefinementContinuation else {
+      releaseBlockedRefinementWhenStarted = true
+      return
+    }
+    blockedRefinementContinuation = nil
+    continuation.resume()
+  }
+
   func refine(
     _ request: LocalAIRefinementRequest,
     settings: LocalAISettings
@@ -1160,10 +1168,15 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
     case .delayedOutput(let value, let delay):
       try await Task.sleep(for: delay)
       output = value
-    case .nonCooperativeDelayedOutput(let value, let delay):
-      await Task.detached {
-        try? await Task.sleep(for: delay)
-      }.value
+    case .nonCooperativeBlockedOutput(let value):
+      await withCheckedContinuation { continuation in
+        if releaseBlockedRefinementWhenStarted {
+          releaseBlockedRefinementWhenStarted = false
+          continuation.resume()
+        } else {
+          blockedRefinementContinuation = continuation
+        }
+      }
       output = value
     case .failure(let failure):
       throw failure
