@@ -1,0 +1,85 @@
+name: CodeQL
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - main
+  push:
+    branches:
+      - dev
+      - main
+  schedule:
+    - cron: "23 7 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (swift)
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect Swift build changes
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          analyze=false
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            analyze=true
+          else
+            while IFS= read -r changed_path; do
+              case "$changed_path" in
+                .github/workflows/codeql.yml|Cargo.lock|Cargo.toml|Package.resolved|Package.swift|rust-toolchain.toml|Sources/*|apps/ios/voice_input/*|crates/*|scripts/build_ios_rust_ffi.sh|scripts/build_rust_ffi.sh|scripts/fetch_ios_asr_runtime.sh)
+                  analyze=true
+                  break
+                  ;;
+              esac
+            done < <(git diff --name-only --diff-filter=ACMRT "$BASE_SHA" "$HEAD_SHA")
+          fi
+          echo "analyze=$analyze" >> "$GITHUB_OUTPUT"
+
+      - name: Initialize CodeQL
+        if: steps.changes.outputs.analyze == 'true'
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          build-mode: manual
+          languages: swift
+          queries: security-extended
+
+      - name: Build Swift products
+        if: steps.changes.outputs.analyze == 'true'
+        run: |
+          scripts/build_rust_ffi.sh
+          swift build --arch arm64
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+          scripts/build_ios_rust_ffi.sh
+          scripts/fetch_ios_asr_runtime.sh
+          xcodebuild build -quiet \
+            -project apps/ios/voice_input/VoiceInput.xcodeproj \
+            -scheme VoiceInput \
+            -configuration Debug \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath "$RUNNER_TEMP/codeql_ios" \
+            ARCHS=arm64 \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            ONLY_ACTIVE_ARCH=YES
+
+      - name: Perform CodeQL analysis
+        if: steps.changes.outputs.analyze == 'true'
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
