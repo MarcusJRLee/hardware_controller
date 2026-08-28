@@ -533,17 +533,18 @@ peak memory, installed size, and energy per audio minute.
 
 ## Program delivery and test balance
 
-Use `dev` as the integration branch. Each coherent vertical slice uses a fresh
-`codex/voice_*` branch in a separate Git worktree and a focused pull request into
-`dev`. A slice includes its acceptance/documentation change, behavior test,
+Use `main` as the integration branch. Each coherent vertical slice uses a fresh
+`codex/voice_*` branch from current `main` and a focused pull request into
+`main`. A slice includes its acceptance/documentation change, behavior test,
 implementation, migration, and verification where those responsibilities change
 together. Do not use layer-only batches or unrelated cleanup to manufacture PR
 boundaries.
 
-Merge a PR to `dev` after required checks pass when repository policy permits.
+Merge a PR to `main` after required checks pass when repository policy permits.
 If policy requires unavailable human review, keep later work in explicit stacked
-PRs without bypassing protections. `main` remains unchanged until the complete
-`dev` state receives user verification and separate merge approval.
+PRs without bypassing protections. Source integration does not approve release
+metadata, tags, packages, notarization, or store submission. See
+[`decisions/0052_main_feature_branch_workflow.md`](decisions/0052_main_feature_branch_workflow.md).
 
 Testing uses four complementary levels:
 
@@ -569,7 +570,7 @@ test first or batch the entire implementation behind mocked internals.
 
 - Reconcile the accepted decision, canonical language, CUJ observations,
   retention defaults, and current source without reopening approved choices.
-- Establish `dev`, the per-PR worktree workflow, and required CI checks.
+- Establish focused branches from `main` and required CI checks.
 - Create the repository directory skeleton only as needed by the first test.
 - Add one failing, deterministic Mac CUJ M1 tracer test using a short sanitized
   audio fixture, fake capture clock, temporary repository, and fake delivery

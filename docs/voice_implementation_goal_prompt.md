@@ -9,7 +9,7 @@ Create and pursue a goal with no token budget to implement the accepted local
 Voice platform roadmap to polished completion. Incur no monetary cost: do not
 purchase services, models, subscriptions, hardware, certificates, or paid build
 capacity. Continue autonomously until every safe, in-scope macOS and iOS
-requirement is implemented, verified, documented, and integrated into the dev
+requirement is implemented, verified, documented, and integrated into the main
 branch. Do not stop merely because the work is large, slow, spans many pull
 requests, or encounters an evidence gap.
 
@@ -47,20 +47,20 @@ Operating mode:
   or prototype web/mobile web in this program.
 
 Git and pull-request workflow:
-- Use dev as the integration branch. If it does not exist, create it from the
-  current main without modifying main.
-- Implement every logical slice on a new codex/voice_* branch in its own Git
-  worktree. Base it on the latest integrated dev state.
+- Use main as the integration branch.
+- Implement every logical slice on a new codex/voice_* branch from the latest
+  integrated main state. Use a separate Git worktree when slices run in
+  parallel.
 - Each PR must be focused and vertically useful: acceptance/docs, behavioral
   test, implementation, migration, and verification for one coherent slice.
   Avoid giant PRs, layer-only batches, unrelated cleanup, and artificial
   one-file PRs.
-- Target every program PR at dev. Merge it after required checks pass when
+- Target every program PR at main. Merge it after required checks pass when
   repository policy permits. If policy requires unavailable human review, keep
   dependent work in explicit stacked PRs and continue without bypassing it.
 - Keep PR descriptions concise: CUJs covered, architecture decision, tests and
   measurements, migrations, risks, and rollback/recovery behavior.
-- Never push directly to main or merge dev into main. Do not change release
+- Never push directly to main. Do not change release
   versions/build numbers, create tags, DMGs, GitHub Releases, App Store
   submissions, or release records without separate explicit approval.
 
@@ -108,7 +108,7 @@ Testing strategy—strong but adaptable:
   complete quality/performance matrix before final handoff.
 
 Program sequence:
-1. Integrate the approved planning/decision/CUJ baseline and establish dev/CI.
+1. Integrate the approved planning/decision/CUJ baseline and establish CI.
 2. Deliver the macOS M1 tracer inside the existing Hardware Controller app.
 3. Complete macOS capture gestures, Styles, Dictionary, spoken edits, safe
    delivery, History, retention, recovery, imported audio, local enforcement,
@@ -136,7 +136,7 @@ Definition of done:
   latency, memory, energy, migrations, and failure paths meet the documented
   gates or have an evidence-backed documented adjustment preserving the product
   promise.
-- All required checks pass on dev. Every focused PR is merged to dev or, only
+- All required checks pass on main. Every focused PR is merged to main or, only
   where repository policy makes that impossible, is ready and explicitly
   ordered with no missing engineering work.
 - The canonical signed macOS development app is installed, verified, and
@@ -145,10 +145,10 @@ Definition of done:
   hardware.
 - README, product brief, architecture, game plan, CUJs, decisions, user guide,
   contributor guidance, troubleshooting, privacy, and release/install runbooks
-  describe the finished dev state without stale proposal language.
+  describe the finished main state without stale proposal language.
 - Final handoff is concise and includes: outcome, PR list, remaining external-
   owner evidence only, exact verification results, known limitations, and quick
   macOS/iOS installation and first-use instructions.
-- main remains untouched. Stop after dev is ready for my final verification and
-  wait for explicit approval before proposing or performing dev → main.
+- Source integration into main does not approve release promotion. Wait for
+  explicit approval before changing release metadata or publishing artifacts.
 ```

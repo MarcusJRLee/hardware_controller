@@ -2,6 +2,9 @@
 
 **Status:** Accepted
 
+**Branch workflow superseded by:**
+[decision 0052](0052_main_feature_branch_workflow.md)
+
 ## Context
 
 The accepted Voice program is integrated into `dev`, including the macOS Voice

@@ -53,7 +53,7 @@ Current behavior remains unchanged until the accepted roadmap ships.
 | --- | --- |
 | Product boundary | Add Voice to the existing Hardware Controller macOS app; create no second macOS product. |
 | Repository | Use one repository with incremental `apps/`, Rust crate, Apple support, schema, and CUJ boundaries. |
-| Delivery | Start with M1 and proceed CUJ-by-CUJ through focused worktree PRs into `dev`; keep `main` gated on final user verification. |
+| Delivery | Use focused feature branches from current `main` and pull requests back into `main`; keep release promotion separately gated. |
 | History | Retain transcripts until deletion; cap successful audio by accepted age, byte, and artifact-count defaults; retain recoverable partials for 24 hours; import bounded local recordings into one app-owned CAF without changing the source. |
 | Local-only | Permit explicit verified Model-package downloads containing no Voice data; exclude Voice data from app sync/backup where supported; add no accounts, telemetry, cloud inference, or remote storage. |
 | Models | Use separate ASR and optional formatting stages with deterministic edits, validation, and Raw/Edited fallback; delegate provider/package choice to measured evidence. |
@@ -63,4 +63,4 @@ Current behavior remains unchanged until the accepted roadmap ships.
 
 No unresolved user choice blocks the implementation goal. K0 signed-device,
 model, performance, and App Review checks are evidence gates that must not stop
-independent work. Release promotion and `dev` → `main` remain separately gated.
+independent work. Release promotion remains separately gated.
