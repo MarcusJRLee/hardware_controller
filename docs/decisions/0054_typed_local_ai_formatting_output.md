@@ -56,3 +56,5 @@ Model output no longer owns list inference or lowercase safety. A larger model
 can improve prose, but it cannot replace deterministic semantics, canonical
 validation, or fallback. This decision does not change the ASR provider or
 supersede the existing Ollama recommendation.
+Settings therefore name ASR and formatting evidence separately, while History
+shows the stored validation result and deterministic fallback use.

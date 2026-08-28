@@ -126,7 +126,12 @@ struct VoiceHistoryModelTest {
     #expect(results[1].sourceResultID == results[0].id)
     #expect(results[2].sourceResultID == results[1].id)
     #expect(results[1].provider == .appleOnDevice)
+    #expect(results[1].formattedDocument?.validationStatus == .validated)
     #expect(presentation.model.sessions[1].audioExpiredAt != nil)
+    #expect(
+      presentation.model.sessions[1].results[1].formattedDocument?
+        .validationStatus == .sourceFallback
+    )
     #expect(
       presentation.model.sessions[1].audioExpirationReason == .byteLimit
     )

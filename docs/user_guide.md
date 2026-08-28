@@ -162,29 +162,36 @@ playback in History. Speech content is never logged.
 
 Open **General → Local AI Dictation** before assigning the Action:
 
-1. Choose **Apple On-Device** or **Ollama**.
+1. Choose **Apple On-Device** or **Ollama** under **Formatting provider**.
 2. Choose **Natural**, **Casual Message**, **Formal**, **Technical**, or
    **Verbatim** under **Style**. Verbatim uses recognition, explicit spoken
    edits, and exact Dictionary replacements but skips the generative model.
    Casual Message prefers
    lowercase sentence starts while preserving required proper-name and
    Dictionary capitalization.
-3. For Ollama, start the local service and install the recommended model:
+3. Choose **Style Default**, **Lowercase Prose**, or **Strict Lowercase** under
+   **Casing**. Strict Lowercase protects operational tokens such as URLs,
+   email addresses, paths, code tokens, quoted text, and Dictionary values.
+4. For Ollama, start the local service and install the recommended model:
 
    ```bash
    ollama pull qwen3.5:4b
    ```
 
-4. Choose an installed model and **5 minutes** or **Until app quits** retention.
+5. Choose an installed formatting model and **5 minutes** or **Until app quits**
+   retention.
    On model change or quit, the app unloads a model it started. It leaves a
    model that was already running for another local Ollama client untouched.
-5. Choose **Refresh Status**, then **Test Selected Provider**. The test uses a
+6. Confirm **Active pipeline**. It names the speech provider and OS-managed
+   recognizer, formatting provider and model, typed output, validation, and
+   Edited fallback independently.
+7. Choose **Refresh Status**, then **Test Selected Provider**. The test uses a
    fixed sanitized phrase without microphone or focused-field access.
-6. Optionally expand **Personal dictionary**. Type a recognition term into its
+8. Optionally expand **Personal dictionary**. Type a recognition term into its
    outlined field and choose **Add**, or fill both outlined replacement fields
    before choosing **Add**. You can also enable nearby-text context or provide
    formatting instructions.
-7. Assign **Local AI Dictation** to a Control under Controller or Profiles.
+9. Assign **Local AI Dictation** to a Control under Controller or Profiles.
 
 Apple On-Device requires macOS 26, Apple Intelligence enabled, a supported
 locale, and installed model assets. It never enables Private Cloud Compute.
@@ -200,6 +207,10 @@ preferences, but cannot override the selected Style, accuracy, privacy, or
 prompt-safety rules. The exact instruction `only provide text in lowercase`
 normalizes to Strict Lowercase and overrides Style capitalization while still
 protecting operational tokens.
+
+History shows **Validation: Validated** and **Fallback: Not used** for accepted
+formatter output. Rejected provider output shows **Provider output rejected**
+and **Edited transcript** instead.
 
 Nearby text is off by default. When enabled, the app reads at most a bounded
 window around the caret from an approved multiline, nonsecure Accessibility

@@ -213,6 +213,8 @@ Given a focused editable field and a ready selected provider:
 - cancellation, process change, secure-status change, focus change, or caret
   change discards late model output and stores a typed delivery reason;
 - raw and refined recovery controls remain distinct.
+- General settings identify speech and formatting providers/models separately;
+  History identifies validation acceptance and deterministic fallback use.
 
 ### Dictation handoff
 
