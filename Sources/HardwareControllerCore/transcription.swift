@@ -18,6 +18,7 @@ public enum TranscriptionFailure: Equatable, Error, Sendable {
   case noFocusedTextField
   case secureTextField
   case focusChanged
+  case processChanged
   case caretChanged
   case audioUnavailable(String)
   case recognitionFailed(String)

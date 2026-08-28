@@ -29,13 +29,17 @@ final class AppModel {
     arguments: [String] = ProcessInfo.processInfo.arguments,
     profileStore: (any ProfilePersisting)? = nil,
     preferredMicrophoneUID: String? = nil,
-    localAISettings: LocalAISettings = .default
+    localAISettings: LocalAISettings = .default,
+    voiceTriggerSettings: VoiceTriggerSettings = .default,
+    voiceSessionHistory: (any VoiceSessionHistoryRecording)? = nil
   ) {
     let runtime = ApplicationRuntime.make(
       arguments: arguments,
       profileStore: profileStore,
       preferredMicrophoneUID: preferredMicrophoneUID,
-      localAISettings: localAISettings
+      localAISettings: localAISettings,
+      voiceTriggerSettings: voiceTriggerSettings,
+      voiceSessionHistory: voiceSessionHistory
     )
     self.runtime = runtime
     applicationSnapshot = runtime.initialSnapshot
@@ -80,6 +84,10 @@ final class AppModel {
     localAIReadiness.readiness(for: applicationSnapshot.localAIProvider)
   }
 
+  var localAIStyle: VoiceStyle {
+    applicationSnapshot.localAIStyle
+  }
+
   var localAIProviderTest: LocalAIProviderTestState {
     applicationSnapshot.localAIProviderTest
   }
@@ -102,6 +110,10 @@ final class AppModel {
 
   var keyboardFallbackFailures: [KeyboardFallbackRegistrationFailure] {
     applicationSnapshot.keyboardFallbackFailures
+  }
+
+  var voiceShortcutFailure: VoiceShortcutRegistrationFailure? {
+    applicationSnapshot.voiceShortcutFailure
   }
 
   var lastError: String? {
@@ -207,7 +219,16 @@ final class AppModel {
   }
 
   var canExecuteLocalAIDictation: Bool {
-    canExecuteDictation && selectedLocalAIReadiness.state.canRun
+    canExecuteDictation
+      && (localAIStyle.kind == .verbatim
+        || selectedLocalAIReadiness.state.canRun)
+  }
+
+  var voiceCaptureButtonState: VoiceCaptureButtonState {
+    VoiceCaptureButtonState(
+      phase: localAIDictationSnapshot.phase,
+      canBegin: canExecuteLocalAIDictation
+    )
   }
 
   /// Reports whether one configured Action can currently execute.
@@ -572,6 +593,17 @@ final class AppModel {
     }
   }
 
+  /// Starts or finishes the shared Voice session from the menu bar.
+  func toggleVoiceCapture() {
+    let state = voiceCaptureButtonState
+    guard state.isEnabled, let command = state.command else {
+      return
+    }
+    enqueueIntent { [runtime] in
+      await runtime.submitVoiceCapture(command)
+    }
+  }
+
   /// Sends one demo Control transition.
   func simulate(
     _ controlID: ControlID,
@@ -607,6 +639,13 @@ final class AppModel {
   func setLocalAISettings(_ settings: LocalAISettings) {
     enqueueIntent { [runtime] in
       await runtime.setLocalAISettings(settings)
+    }
+  }
+
+  /// Applies one persisted Voice capture shortcut configuration.
+  func setVoiceTriggerSettings(_ settings: VoiceTriggerSettings) {
+    enqueueIntent { [runtime] in
+      await runtime.setVoiceTriggerSettings(settings)
     }
   }
 
@@ -669,7 +708,7 @@ final class AppModel {
     )
   }
 
-  /// Copies the retained raw or refined AI result after explicit user action.
+  /// Copies retained Raw or delivered AI text after explicit user action.
   func copyLocalAITranscript(refined: Bool) {
     let snapshot = localAIDictationSnapshot
     let text = refined ? snapshot.refinedText : snapshot.rawText

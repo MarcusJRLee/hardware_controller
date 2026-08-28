@@ -1,6 +1,11 @@
 // swift-tools-version: 6.1
 
+import Foundation
 import PackageDescription
+
+let repositoryDirectory = URL(fileURLWithPath: #filePath)
+  .deletingLastPathComponent().path
+let voiceFFILibrary = "\(repositoryDirectory)/target/release/libvoice_ffi.a"
 
 let package = Package(
   name: "HardwareController",
@@ -15,6 +20,10 @@ let package = Package(
     .library(
       name: "HardwareControllerMac",
       targets: ["HardwareControllerMac"]
+    ),
+    .library(
+      name: "HardwareControllerVoiceFFI",
+      targets: ["HardwareControllerVoiceFFI"]
     ),
     .executable(
       name: "HardwareController",
@@ -34,10 +43,24 @@ let package = Package(
       ]
     ),
     .target(
+      name: "VoiceFFIBridge",
+      path: "Sources/voice_ffi_bridge",
+      publicHeadersPath: "include",
+      linkerSettings: [
+        .unsafeFlags([voiceFFILibrary])
+      ]
+    ),
+    .target(
+      name: "HardwareControllerVoiceFFI",
+      dependencies: ["VoiceFFIBridge"],
+      path: "Sources/hardware_controller_voice_ffi"
+    ),
+    .target(
       name: "HardwareControllerMac",
       dependencies: [
         "HardwareControllerAudioBoundary",
         "HardwareControllerCore",
+        "HardwareControllerVoiceFFI",
       ],
       linkerSettings: [
         .linkedFramework("ApplicationServices"),
@@ -47,6 +70,7 @@ let package = Package(
         .linkedFramework("CoreGraphics"),
         .linkedFramework("IOKit"),
         .linkedFramework("Speech"),
+        .linkedLibrary("sqlite3"),
       ]
     ),
     .executableTarget(
@@ -67,10 +91,16 @@ let package = Package(
       dependencies: ["HardwareControllerCore"]
     ),
     .testTarget(
+      name: "HardwareControllerVoiceFFITests",
+      dependencies: ["HardwareControllerVoiceFFI"],
+      path: "Tests/hardware_controller_voice_ffi_tests"
+    ),
+    .testTarget(
       name: "HardwareControllerMacTests",
       dependencies: [
         "HardwareControllerCore",
         "HardwareControllerMac",
+        "HardwareControllerVoiceFFI",
       ]
     ),
     .testTarget(

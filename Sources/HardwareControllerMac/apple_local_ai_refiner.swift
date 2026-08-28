@@ -6,6 +6,10 @@ import HardwareControllerCore
 #endif
 
 public actor AppleFoundationModelRefiner: TranscriptRefining {
+  public nonisolated let capability = LocalAIProviderCapability(
+    provider: .appleOnDevice,
+    locality: .inProcess
+  )
   private let promptBuilder: VersionedLocalAIPromptBuilder
 
   private var preparedSessionStorage: AnyObject?
@@ -67,7 +71,8 @@ public actor AppleFoundationModelRefiner: TranscriptRefining {
         throw failure(for: availability.state)
       }
       let session = makeSession(
-        additionalInstructions: settings.additionalInstructions
+        additionalInstructions: settings.additionalInstructions,
+        style: settings.style
       )
       session.prewarm()
       preparedSessionStorage = session
@@ -101,7 +106,8 @@ public actor AppleFoundationModelRefiner: TranscriptRefining {
       let session =
         preparedSessionStorage as? LanguageModelSession
         ?? makeSession(
-          additionalInstructions: request.additionalInstructions
+          additionalInstructions: request.additionalInstructions,
+          style: request.style
         )
       preparedSessionStorage = nil
       do {
@@ -171,7 +177,8 @@ public actor AppleFoundationModelRefiner: TranscriptRefining {
   #if canImport(FoundationModels)
     @available(macOS 26, *)
     private func makeSession(
-      additionalInstructions: String
+      additionalInstructions: String,
+      style: VoiceStyle
     ) -> LanguageModelSession {
       let model = SystemLanguageModel(
         useCase: .general,
@@ -180,7 +187,8 @@ public actor AppleFoundationModelRefiner: TranscriptRefining {
       return LanguageModelSession(
         model: model,
         instructions: promptBuilder.instructions(
-          additionalInstructions: additionalInstructions
+          additionalInstructions: additionalInstructions,
+          style: style
         )
       )
     }

@@ -1,6 +1,6 @@
 # 0013: Three-destination application navigation
 
-- **Status:** Accepted
+- **Status:** Superseded by [0030](0030_voice_history_workspace.md)
 - **Date:** 2026-07-31
 
 ## Context

@@ -42,12 +42,14 @@ struct PreferredMicrophone: Codable, Equatable, Identifiable, Sendable {
 
 /// Stores versioned application presentation preferences.
 struct ApplicationPreferences: Codable, Equatable, Sendable {
-  static let currentSchemaVersion = 3
+  static let currentSchemaVersion = 6
 
   var appearance: ApplicationAppearance
   var sidebarVisibility: SidebarVisibilityPreference
   var preferredMicrophone: PreferredMicrophone?
   var localAI: LocalAISettings
+  var voiceTrigger: VoiceTriggerSettings
+  var voiceHistoryRetention: VoiceHistoryRetentionSettings
   var schemaVersion: Int
 
   /// Creates one complete preference value.
@@ -56,12 +58,16 @@ struct ApplicationPreferences: Codable, Equatable, Sendable {
     sidebarVisibility: SidebarVisibilityPreference = .expanded,
     preferredMicrophone: PreferredMicrophone? = nil,
     localAI: LocalAISettings = .default,
+    voiceTrigger: VoiceTriggerSettings = .default,
+    voiceHistoryRetention: VoiceHistoryRetentionSettings = .macOSDefault,
     schemaVersion: Int = currentSchemaVersion
   ) {
     self.appearance = appearance
     self.sidebarVisibility = sidebarVisibility
     self.preferredMicrophone = preferredMicrophone
     self.localAI = localAI
+    self.voiceTrigger = voiceTrigger
+    self.voiceHistoryRetention = voiceHistoryRetention
     self.schemaVersion = schemaVersion
   }
 
@@ -70,6 +76,8 @@ struct ApplicationPreferences: Codable, Equatable, Sendable {
     case sidebarVisibility
     case preferredMicrophone
     case localAI
+    case voiceTrigger
+    case voiceHistoryRetention
     case schemaVersion
   }
 
@@ -93,6 +101,16 @@ struct ApplicationPreferences: Codable, Equatable, Sendable {
         LocalAISettings.self,
         forKey: .localAI
       ) ?? .default
+    voiceTrigger =
+      try container.decodeIfPresent(
+        VoiceTriggerSettings.self,
+        forKey: .voiceTrigger
+      ) ?? .default
+    voiceHistoryRetention =
+      try container.decodeIfPresent(
+        VoiceHistoryRetentionSettings.self,
+        forKey: .voiceHistoryRetention
+      ) ?? .macOSDefault
     schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
   }
 
@@ -120,6 +138,8 @@ enum ApplicationPreferencesValidationError: Error, Equatable, Sendable {
   case unsupportedSchemaVersion(Int)
   case invalidPreferredMicrophone
   case invalidLocalAISettings(LocalAISettingsValidationError)
+  case invalidVoiceTriggerSettings(VoiceTriggerSettingsValidationError)
+  case invalidVoiceHistoryRetention(VoiceHistoryRetentionValidationError)
 }
 
 /// Isolates preference persistence from presentation state.
@@ -265,6 +285,20 @@ struct ApplicationPreferencesStore:
         ApplicationPreferencesValidationError
         .invalidLocalAISettings(error)
     }
+    do {
+      try preferences.voiceTrigger.validate()
+    } catch let error as VoiceTriggerSettingsValidationError {
+      throw
+        ApplicationPreferencesValidationError
+        .invalidVoiceTriggerSettings(error)
+    }
+    do {
+      _ = try preferences.voiceHistoryRetention.validated()
+    } catch let error as VoiceHistoryRetentionValidationError {
+      throw
+        ApplicationPreferencesValidationError
+        .invalidVoiceHistoryRetention(error)
+    }
   }
 
   /// Migrates every supported preference schema without changing user intent.
@@ -272,13 +306,21 @@ struct ApplicationPreferencesStore:
     _ preferences: ApplicationPreferences
   ) throws -> ApplicationPreferences {
     switch preferences.schemaVersion {
-    case 1, 2:
+    case 1, 2, 3, 4, 5:
       var migrated = preferences
       migrated.schemaVersion = ApplicationPreferences.currentSchemaVersion
       if preferences.schemaVersion == 1 {
         migrated.preferredMicrophone = nil
       }
-      migrated.localAI = .default
+      if preferences.schemaVersion < 3 {
+        migrated.localAI = .default
+      }
+      if preferences.schemaVersion < 4 {
+        migrated.voiceTrigger = .default
+      }
+      if preferences.schemaVersion < 6 {
+        migrated.voiceHistoryRetention = .macOSDefault
+      }
       return migrated
     case ApplicationPreferences.currentSchemaVersion:
       return preferences
@@ -406,6 +448,10 @@ final class ApplicationPreferencesModel {
   private var microphoneSelectionHandler: ((String?) -> Void)?
   @ObservationIgnored
   private var localAISettingsHandler: ((LocalAISettings) -> Void)?
+  @ObservationIgnored
+  private var voiceTriggerSettingsHandler: ((VoiceTriggerSettings) -> Void)?
+  @ObservationIgnored
+  private var voiceHistoryRetentionHandler: ((VoiceHistoryRetentionSettings) -> Void)?
 
   /// Loads, overrides, and applies presentation preferences once.
   init(
@@ -458,6 +504,14 @@ final class ApplicationPreferencesModel {
 
   var localAISettings: LocalAISettings {
     preferences.localAI
+  }
+
+  var voiceTriggerSettings: VoiceTriggerSettings {
+    preferences.voiceTrigger
+  }
+
+  var voiceHistoryRetention: VoiceHistoryRetentionSettings {
+    preferences.voiceHistoryRetention
   }
 
   /// Keeps an unavailable saved Device selectable while default fallback is active.
@@ -523,6 +577,20 @@ final class ApplicationPreferencesModel {
     localAISettingsHandler = handler
   }
 
+  /// Installs the process callback after application composition completes.
+  func setVoiceTriggerSettingsHandler(
+    _ handler: @escaping (VoiceTriggerSettings) -> Void
+  ) {
+    voiceTriggerSettingsHandler = handler
+  }
+
+  /// Installs the History maintenance callback after composition completes.
+  func setVoiceHistoryRetentionHandler(
+    _ handler: @escaping (VoiceHistoryRetentionSettings) -> Void
+  ) {
+    voiceHistoryRetentionHandler = handler
+  }
+
   /// Refreshes the local Device list without changing the saved preference.
   func refreshMicrophones() {
     do {
@@ -578,6 +646,46 @@ final class ApplicationPreferencesModel {
     candidate.localAI = settings
     return persist(candidate) { [weak self] in
       self?.localAISettingsHandler?(settings)
+    }
+  }
+
+  /// Persists one Voice trigger configuration before registering it.
+  @discardableResult
+  func setVoiceTriggerSettings(_ settings: VoiceTriggerSettings) -> Bool {
+    guard settings != preferences.voiceTrigger else {
+      return true
+    }
+    do {
+      try settings.validate()
+    } catch {
+      lastError = "Voice capture shortcut settings are invalid: \(error)"
+      return false
+    }
+    var candidate = preferences
+    candidate.voiceTrigger = settings
+    return persist(candidate) { [weak self] in
+      self?.voiceTriggerSettingsHandler?(settings)
+    }
+  }
+
+  /// Persists validated caps before applying them to local History storage.
+  @discardableResult
+  func setVoiceHistoryRetention(
+    _ settings: VoiceHistoryRetentionSettings
+  ) -> Bool {
+    guard settings != preferences.voiceHistoryRetention else {
+      return true
+    }
+    do {
+      _ = try settings.validated()
+    } catch {
+      lastError = "Voice History retention settings are invalid: \(error)"
+      return false
+    }
+    var candidate = preferences
+    candidate.voiceHistoryRetention = settings
+    return persist(candidate) { [weak self] in
+      self?.voiceHistoryRetentionHandler?(settings)
     }
   }
 

@@ -467,7 +467,7 @@ private struct AppMark: View {
 
 struct NoticeBanner: View {
   let message: String
-  let dismiss: () -> Void
+  let dismiss: (() -> Void)?
 
   var body: some View {
     HStack(spacing: 10) {
@@ -476,9 +476,11 @@ struct NoticeBanner: View {
       Text(message)
         .font(.callout)
         .frame(maxWidth: .infinity, alignment: .leading)
-      Button("Dismiss", action: dismiss)
-        .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
+      if let dismiss {
+        Button("Dismiss", action: dismiss)
+          .buttonStyle(.plain)
+          .foregroundStyle(.secondary)
+      }
     }
     .padding(13)
     .background(
@@ -846,7 +848,7 @@ private struct LocalAITranscriptionStatusView: View {
         .buttonStyle(.bordered)
       }
       if !snapshot.refinedText.isEmpty {
-        Button("Copy Refined") {
+        Button(snapshot.fallbackReason == nil ? "Copy Refined" : "Copy Edited") {
           model.copyLocalAITranscript(refined: true)
         }
         .buttonStyle(.bordered)
@@ -862,7 +864,7 @@ private struct LocalAITranscriptionStatusView: View {
     }
     if let fallback = snapshot.fallbackReason {
       return
-        "The raw transcript was inserted because refinement was unavailable: \(fallback.recoveryMessage)"
+        "The deterministic Edited transcript was inserted because refinement was unavailable: \(fallback.recoveryMessage)"
     }
     if !snapshot.volatileText.isEmpty {
       return snapshot.volatileText
@@ -892,7 +894,10 @@ private struct LocalAITranscriptionStatusView: View {
   }
 
   private var readinessDetail: String {
-    switch model.selectedLocalAIReadiness.state {
+    if model.localAIStyle.kind == .verbatim {
+      return "Ready. Verbatim skips generative formatting."
+    }
+    return switch model.selectedLocalAIReadiness.state {
     case .checking:
       "Checking the selected local provider…"
     case .ready:
@@ -1115,6 +1120,8 @@ extension TranscriptionFailure {
       "For safety, transcription is never inserted into password fields."
     case .focusChanged:
       "The focused field changed, so insertion stopped safely."
+    case .processChanged:
+      "The target application changed, so insertion stopped safely."
     case .caretChanged:
       "The text cursor moved, so live insertion stopped safely."
     case .audioUnavailable(let message):
@@ -1209,6 +1216,8 @@ extension LocalAIRefinementFailure {
     switch self {
     case .providerUnavailable(let detail):
       detail
+    case .remoteProviderRejected:
+      "Remote-capable providers are disabled in local-only mode."
     case .modelMissing(let name):
       "The selected model \(name) is not installed."
     case .modelDigestChanged:

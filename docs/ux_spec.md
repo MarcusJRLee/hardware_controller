@@ -12,8 +12,9 @@ opened, it should answer three questions immediately:
 2. What will each physical Control do?
 3. Is an Action active right now?
 
-Profiles and General answer two secondary questions without crowding
-Controller: which work mode is active, and where application preferences live.
+History, Profiles, and General answer secondary questions without crowding
+Controller: what was captured, which work mode is active, and where application
+preferences live.
 
 Color is reserved for active state, required attention, and errors. Typography,
 spacing, motion, and control position carry the rest of the hierarchy.
@@ -35,13 +36,13 @@ surface.
 | Dictation active  | Immediate but non-distracting active treatment.                   |
 | Error             | Persistent marker until the state is understood or resolved.      |
 
-The menu contains Device status, an active Profile picker, Controller,
+The menu contains Device status, an active Profile picker, Controller, History,
 Profiles, Settings, launch-at-login state, and Quit. It does not duplicate the
 complete application window.
 
 ### Application window
 
-One native sidebar contains exactly Controller, Profiles, and General. It opens
+One native sidebar contains exactly Controller, History, Profiles, and General. It opens
 expanded, collapses through the native toolbar control, and remembers only its
 visibility. Manual launch opens Controller; Settings and Command–Comma open
 General in the same window.
@@ -60,10 +61,26 @@ Selecting a Control opens its configuration without navigating away from Device
 context. A generic list is available for assistive technology and Devices whose
 layout metadata is absent.
 
+History uses a searchable session list and selected-result evidence view. It
+keeps prior results immutable, makes correction and stage reruns explicit, and
+uses one delayed action for safe re-delivery to a fresh target. Destructive
+deletion is visually distinct from reuse actions. When audio expires, the
+playback card names the applicable age, size, count, or low-disk rule while
+leaving transcript evidence available.
+
+The list header exposes one labeled import action beside quiet refresh. Import
+uses the native audio open panel and shows one shared progress state while local
+ASR, formatting, app-owned CAF finalization, and History commit run. The new
+row is selected and labeled **Imported recording**; transcript-only and
+audio-only outcomes use explicit non-error notices and keep recovery actions
+available.
+
 Profiles uses a stable Profile list and selected-Profile editor. Active state
 is separate from selection. General uses native form sections for Appearance,
-the Local Dictation microphone, Local AI Dictation, and Launch at Login. Local
-AI progressively reveals provider-specific model and retention controls while
+the Local Dictation microphone, Local AI Dictation, Voice History storage, and
+Launch at Login. Voice History storage uses independent preset pickers for age,
+bytes, and audio count with explicit `Unlimited` and no-retained-audio choices.
+Local AI progressively reveals provider-specific model retention controls while
 keeping dictionary, context, instructions, readiness, and provider test in one
 restrained section.
 
@@ -127,7 +144,7 @@ system permission itself.
 | Action begin       | Action label and menu bar enter active state.                        |
 | Action end         | Active state clears only after the executor accepts the end.         |
 | Listening/finalize | Dedicated status shows authoritative phase, target app, and text.     |
-| AI refinement      | Dedicated status distinguishes preparing, refining, validating, delivering, raw fallback, and failure. |
+| AI refinement      | Dedicated status distinguishes preparing, refining, validating, delivering, deterministic Edited fallback, and failure. |
 | Focus failure      | Automatic insertion stops and recoverable final text can be copied.   |
 | Microphone change  | Active Dictation ends and prepared capture uses the new app route.     |
 | Device unplug      | Layout remains visible, becomes unavailable, and explains reconnect. |

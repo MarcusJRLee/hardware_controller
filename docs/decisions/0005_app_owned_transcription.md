@@ -4,6 +4,8 @@
 - **Date:** 2026-07-26
 - **Supersedes:**
   [`0002_dictation_strategy.md`](0002_dictation_strategy.md)
+- **Future persistence/provider scope amended by:**
+  [`0029_local_voice_platform_expansion.md`](0029_local_voice_platform_expansion.md)
 
 ## Context
 

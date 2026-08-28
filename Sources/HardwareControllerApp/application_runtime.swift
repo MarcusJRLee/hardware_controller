@@ -48,12 +48,14 @@ struct ApplicationSnapshot: Equatable, Sendable {
   var localAIDictation: LocalAIDictationSnapshot = .idle
   var localAIReadiness: LocalAIReadinessSnapshot = .checking
   var localAIProvider: LocalAIProviderKind = .appleOnDevice
+  var localAIStyle: VoiceStyle = .natural
   var localAIProviderTest: LocalAIProviderTestState = .idle
   var transcriptionPrepared = false
   var transcriptionPreparationFailure: TranscriptionFailure?
   var launchAtLogin: Bool
   var hardwareInputFailure: HardwareInputStartFailure?
   var keyboardFallbackFailures: [KeyboardFallbackRegistrationFailure] = []
+  var voiceShortcutFailure: VoiceShortcutRegistrationFailure?
   var lastError: String?
   var recoveryNotice: String?
 }
@@ -197,11 +199,19 @@ protocol ApplicationProcessControlling: Sendable {
     profileName: String
   ) async -> LocalAIReadinessSnapshot
 
+  /// Replaces the independent Voice chord and reports a reservation conflict.
+  func setVoiceTriggerSettings(
+    _ settings: VoiceTriggerSettings
+  ) async throws -> VoiceShortcutRegistrationFailure?
+
   /// Returns current local provider and model readiness.
   func localAIReadiness() async -> LocalAIReadinessSnapshot
 
   /// Runs a sanitized generation test without microphone or target access.
   func testLocalAIProvider() async -> LocalAIRefinementFailure?
+
+  /// Submits one app-initiated command to the shared Voice dispatcher.
+  func submitVoiceCapture(_ command: DictationCommand) -> Bool
 
   /// Runs one configured Binding without physical input.
   func testBinding(_ controlID: ControlID)
@@ -221,6 +231,7 @@ final class ApplicationProcessEventRelay:
     case keyboardFallbackFailures(
       [KeyboardFallbackRegistrationFailure]
     )
+    case voiceShortcutFailure(VoiceShortcutRegistrationFailure?)
   }
 
   typealias Handler = @Sendable (Event) -> Void
@@ -295,6 +306,14 @@ final class ApplicationProcessEventRelay:
     let handler = lock.withLock { self.handler }
     handler?(.keyboardFallbackFailures(failures))
   }
+
+  /// Publishes the independent Voice chord reservation outcome.
+  func publishVoiceShortcutFailure(
+    _ failure: VoiceShortcutRegistrationFailure?
+  ) {
+    let handler = lock.withLock { self.handler }
+    handler?(.voiceShortcutFailure(failure))
+  }
 }
 
 /// Owns queue- or actor-isolated process seams behind a Sendable interface.
@@ -311,9 +330,12 @@ private final class LiveApplicationProcess:
   private let transcriptionController: OwnedTranscriptionController
   private let localAIDictationController: LocalAIDictationController
   private let dictationDispatcher: any DictationCommandDispatching
+  private let voiceDictationDispatcher: any DictationCommandDispatching
   private let eventRelay: ApplicationProcessEventRelay
   private var profile: Profile
   private var localAISettings: LocalAISettings
+  private var voiceTriggerSettings: VoiceTriggerSettings = .default
+  private var voiceKeyboardTriggerController: VoiceKeyboardTriggerController?
   private var keyboardFallbackInputSource: KeyboardFallbackInputSource?
   private var isRunning = false
 
@@ -324,6 +346,8 @@ private final class LiveApplicationProcess:
     showsDemoPressedState: Bool,
     preferredMicrophoneUID: String?,
     localAISettings: LocalAISettings,
+    voiceSessionHistory providedHistory:
+      (any VoiceSessionHistoryRecording)?,
     eventRelay: ApplicationProcessEventRelay
   ) {
     self.isDemoMode = isDemoMode
@@ -356,6 +380,23 @@ private final class LiveApplicationProcess:
     )
     self.transcriptionController = transcriptionController
 
+    let history: any VoiceSessionHistoryRecording
+    if let providedHistory {
+      history = providedHistory
+    } else {
+      do {
+        history = try SQLiteVoiceSessionHistory.applicationSupportHistory()
+      } catch let failure as VoiceSessionHistoryError {
+        history = UnavailableVoiceSessionHistory(failure: failure)
+      } catch {
+        history = UnavailableVoiceSessionHistory(
+          failure: .storageUnavailable(
+            "Voice History could not open its local storage."
+          )
+        )
+      }
+    }
+
     let localAIDictationController = LocalAIDictationController(
       factory: sessionFactory,
       microphone: microphone,
@@ -364,6 +405,7 @@ private final class LiveApplicationProcess:
       authorization: SystemTranscriptionAuthorizationProvider(),
       settings: localAISettings,
       profileName: profile.name,
+      history: history,
       snapshotHandler: eventRelay.publishLocalAIDictation
     )
     self.localAIDictationController = localAIDictationController
@@ -390,6 +432,7 @@ private final class LiveApplicationProcess:
       localAIDispatcher = dispatchers.localAI
     }
     dictationDispatcher = localDispatcher
+    voiceDictationDispatcher = localAIDispatcher
 
     let runtime = LiveControllerRuntime(
       queue: inputQueue,
@@ -421,7 +464,7 @@ private final class LiveApplicationProcess:
   /// Starts live input or installs the deterministic demo Device.
   func start() async -> HardwareInputStartResult {
     isRunning = true
-    await registerKeyboardFallbacks()
+    await registerKeyboardInputs()
     if isDemoMode {
       runtime.connect(
         HardwareDeviceConnection(
@@ -476,7 +519,7 @@ private final class LiveApplicationProcess:
   /// Restarts hardware input after wake.
   func resume() async -> HardwareInputStartResult {
     isRunning = true
-    await registerKeyboardFallbacks()
+    await registerKeyboardInputs()
     guard !isDemoMode else {
       return .started
     }
@@ -501,7 +544,8 @@ private final class LiveApplicationProcess:
       profileName: profile.name
     )
     if isRunning {
-      await registerKeyboardFallbacks()
+      await voiceKeyboardTriggerController?.interrupt()
+      await registerKeyboardInputs()
     }
   }
 
@@ -547,6 +591,22 @@ private final class LiveApplicationProcess:
     return await localAIDictationController.readiness()
   }
 
+  /// Replaces the Voice state machine before changing its exact global chord.
+  func setVoiceTriggerSettings(
+    _ settings: VoiceTriggerSettings
+  ) async throws -> VoiceShortcutRegistrationFailure? {
+    await voiceKeyboardTriggerController?.interrupt()
+    voiceKeyboardTriggerController = try VoiceKeyboardTriggerController(
+      settings: settings,
+      dispatcher: voiceDictationDispatcher
+    )
+    voiceTriggerSettings = settings
+    guard isRunning else {
+      return nil
+    }
+    return await registerKeyboardInputs().voiceFailure
+  }
+
   /// Reports both local provider states without loading either model.
   func localAIReadiness() async -> LocalAIReadinessSnapshot {
     if isDemoMode {
@@ -561,6 +621,14 @@ private final class LiveApplicationProcess:
       return nil
     }
     return await localAIDictationController.testProvider()
+  }
+
+  /// Uses the same Local AI dispatcher as Controls and the Voice chord.
+  func submitVoiceCapture(_ command: DictationCommand) -> Bool {
+    guard isRunning else {
+      return false
+    }
+    return voiceDictationDispatcher.submit(command)
   }
 
   private static let demoLocalAIReadiness = LocalAIReadinessSnapshot(
@@ -619,35 +687,56 @@ private final class LiveApplicationProcess:
     rawValue: "vec-demo"
   )
 
-  /// Reserves only active-Profile fallback chords on the main event target.
-  private func registerKeyboardFallbacks() async {
+  /// Reserves Binding fallbacks and the Voice chord on one main event target.
+  @discardableResult
+  private func registerKeyboardInputs() async
+    -> KeyboardInputRegistrationResult
+  {
     let registrations = ProfileBindingResolver(
       profile: profile
     ).keyboardFallbacks
     let runtime = self.runtime
-    let failures = await MainActor.run {
-      let source =
-        keyboardFallbackInputSource
-        ?? KeyboardFallbackInputSource { registration, phase, timestamp in
+    let voiceController = voiceKeyboardTriggerController
+    let voiceShortcut = voiceTriggerSettings.shortcut
+    let result = await MainActor.run {
+      keyboardFallbackInputSource?.stop()
+      let source = KeyboardFallbackInputSource(
+        onEvent: { registration, phase, timestamp in
           runtime.handleKeyboardFallback(
             registration,
             phase: phase,
             timestampNanoseconds: timestamp
           )
+        },
+        onVoiceEvent: { phase, timestamp in
+          Task {
+            await voiceController?.handle(
+              phase: phase,
+              timestampNanoseconds: timestamp
+            )
+          }
         }
+      )
       keyboardFallbackInputSource = source
-      return source.replace(with: registrations)
+      return source.replace(
+        fallbacks: registrations,
+        voiceShortcut: voiceShortcut
+      )
     }
-    eventRelay.publishKeyboardFallbackFailures(failures)
+    eventRelay.publishKeyboardFallbackFailures(result.fallbackFailures)
+    eventRelay.publishVoiceShortcutFailure(result.voiceFailure)
+    return result
   }
 
   /// Releases global shortcuts before sleep or process shutdown.
   private func stopKeyboardFallbacks() async {
+    await voiceKeyboardTriggerController?.interrupt()
     await MainActor.run {
       keyboardFallbackInputSource?.stop()
       keyboardFallbackInputSource = nil
     }
     eventRelay.publishKeyboardFallbackFailures([])
+    eventRelay.publishVoiceShortcutFailure(nil)
   }
 }
 
@@ -675,6 +764,7 @@ actor ApplicationRuntime {
   private var isStopped = false
   private var isSuspended = false
   private var localAISettings: LocalAISettings
+  private var voiceTriggerSettings: VoiceTriggerSettings
   private var localAIProviderTestGeneration: UInt64 = 0
 
   /// Creates the complete live or deterministic demo application runtime.
@@ -684,7 +774,9 @@ actor ApplicationRuntime {
     profileStore providedProfileStore:
       (any ProfilePersisting)? = nil,
     preferredMicrophoneUID: String? = nil,
-    localAISettings: LocalAISettings = .default
+    localAISettings: LocalAISettings = .default,
+    voiceTriggerSettings: VoiceTriggerSettings = .default,
+    voiceSessionHistory: (any VoiceSessionHistoryRecording)? = nil
   ) -> ApplicationRuntime {
     let isDemoMode = arguments.contains("--demo")
     let showsDemoPressedState =
@@ -732,6 +824,7 @@ actor ApplicationRuntime {
         systemState.speechRecognitionPermission,
       transcription: transcription,
       localAIProvider: localAISettings.provider,
+      localAIStyle: localAISettings.style,
       launchAtLogin: systemState.launchAtLogin,
       recoveryNotice: nil
     )
@@ -745,6 +838,8 @@ actor ApplicationRuntime {
       system: system,
       preferredMicrophoneUID: preferredMicrophoneUID,
       localAISettings: localAISettings,
+      voiceTriggerSettings: voiceTriggerSettings,
+      voiceSessionHistory: voiceSessionHistory,
       loadsProfileOnStart: !isDemoMode
     )
   }
@@ -838,6 +933,8 @@ actor ApplicationRuntime {
     system: any ApplicationSystemControlling,
     preferredMicrophoneUID: String? = nil,
     localAISettings: LocalAISettings = .default,
+    voiceTriggerSettings: VoiceTriggerSettings = .default,
+    voiceSessionHistory: (any VoiceSessionHistoryRecording)? = nil,
     loadsProfileOnStart: Bool = false,
     processFactory:
       @Sendable (
@@ -846,6 +943,7 @@ actor ApplicationRuntime {
         Bool,
         String?,
         LocalAISettings,
+        (any VoiceSessionHistoryRecording)?,
         ApplicationProcessEventRelay
       ) -> any ApplicationProcessControlling = {
         profile,
@@ -853,6 +951,7 @@ actor ApplicationRuntime {
         showsDemoPressedState,
         preferredMicrophoneUID,
         localAISettings,
+        voiceSessionHistory,
         eventRelay in
         LiveApplicationProcess(
           profile: profile,
@@ -860,6 +959,7 @@ actor ApplicationRuntime {
           showsDemoPressedState: showsDemoPressedState,
           preferredMicrophoneUID: preferredMicrophoneUID,
           localAISettings: localAISettings,
+          voiceSessionHistory: voiceSessionHistory,
           eventRelay: eventRelay
         )
       }
@@ -873,6 +973,7 @@ actor ApplicationRuntime {
       showsDemoPressedState,
       preferredMicrophoneUID,
       localAISettings,
+      voiceSessionHistory,
       eventRelay
     )
 
@@ -885,6 +986,7 @@ actor ApplicationRuntime {
     self.system = system
     self.loadsProfileOnStart = loadsProfileOnStart
     self.localAISettings = localAISettings
+    self.voiceTriggerSettings = voiceTriggerSettings
     self.process = process
     snapshot = initialSnapshot
 
@@ -917,6 +1019,14 @@ actor ApplicationRuntime {
       return
     }
     updateRuntimeAvailability()
+    do {
+      snapshot.voiceShortcutFailure =
+        try await process
+        .setVoiceTriggerSettings(voiceTriggerSettings)
+    } catch {
+      snapshot.lastError =
+        "Voice capture shortcut settings could not be applied."
+    }
     switch await process.start() {
     case .started:
       snapshot.hardwareInputFailure = nil
@@ -1350,6 +1460,24 @@ actor ApplicationRuntime {
     process.testBinding(controlID)
   }
 
+  /// Routes one in-app command through the process-owned Voice session.
+  @discardableResult
+  func submitVoiceCapture(_ command: DictationCommand) -> Bool {
+    guard isStarted, !isStopped, !isSuspended else {
+      return false
+    }
+    if command == .begin, !canExecuteLocalAIDictation {
+      return false
+    }
+    let accepted = process.submitVoiceCapture(command)
+    if !accepted {
+      snapshot.lastError =
+        "Voice capture is busy. Wait for the current session to finish."
+      publish()
+    }
+    return accepted
+  }
+
   /// Sends one demo transition through the process implementation.
   func simulate(
     _ controlID: ControlID,
@@ -1384,6 +1512,7 @@ actor ApplicationRuntime {
     localAIProviderTestGeneration &+= 1
     localAISettings = settings
     snapshot.localAIProvider = settings.provider
+    snapshot.localAIStyle = settings.style
     snapshot.localAIProviderTest = .idle
     snapshot.localAIReadiness = .checking
     updateRuntimeAvailability()
@@ -1393,6 +1522,20 @@ actor ApplicationRuntime {
       profileName: activeProfile.name
     )
     updateRuntimeAvailability()
+    publish()
+  }
+
+  /// Applies a persisted Voice chord and publishes any reservation conflict.
+  func setVoiceTriggerSettings(_ settings: VoiceTriggerSettings) async {
+    do {
+      let failure = try await process.setVoiceTriggerSettings(settings)
+      voiceTriggerSettings = settings
+      snapshot.voiceShortcutFailure = failure
+      snapshot.lastError = nil
+    } catch {
+      snapshot.lastError =
+        "Voice capture shortcut settings could not be applied."
+    }
     publish()
   }
 
@@ -1486,6 +1629,8 @@ actor ApplicationRuntime {
       snapshot.localAIDictation = localAISnapshot
     case .keyboardFallbackFailures(let failures):
       snapshot.keyboardFallbackFailures = failures
+    case .voiceShortcutFailure(let failure):
+      snapshot.voiceShortcutFailure = failure
     }
     publish()
   }
@@ -1685,9 +1830,10 @@ actor ApplicationRuntime {
   /// Reports whether permissions and the selected local provider are ready.
   private var canExecuteLocalAIDictation: Bool {
     canExecuteDictation
-      && snapshot.localAIReadiness.readiness(
-        for: localAISettings.provider
-      ).state.canRun
+      && (localAISettings.style.kind == .verbatim
+        || snapshot.localAIReadiness.readiness(
+          for: localAISettings.provider
+        ).state.canRun)
   }
 
   /// Reports whether synthetic shortcuts can currently execute.

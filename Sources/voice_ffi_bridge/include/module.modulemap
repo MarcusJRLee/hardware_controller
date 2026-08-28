@@ -1,0 +1,4 @@
+module VoiceFFIBridge {
+  header "voice_ffi_bridge.h"
+  export *
+}

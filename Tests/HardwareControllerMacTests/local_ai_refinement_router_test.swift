@@ -51,6 +51,100 @@ struct LocalAIRefinementRouterTest {
         ))
   }
 
+  @Test
+  func rejectsRemoteCapableProviderBeforeAnyAdapterCall() async {
+    let apple = RouterRecordingRefiner(provider: .appleOnDevice)
+    let remote = RouterRecordingRefiner(
+      provider: .ollama,
+      locality: .remoteCapable
+    )
+    let router = LocalAIRefinementRouter(
+      apple: apple,
+      ollama: remote
+    )
+    var settings = LocalAISettings.default
+    settings.provider = .ollama
+
+    let readiness = await router.readiness(
+      settings: settings,
+      locale: Locale(identifier: "en_US")
+    )
+    await #expect(
+      throws: LocalAIRefinementFailure.remoteProviderRejected
+    ) {
+      try await router.prepare(settings: settings)
+    }
+    await #expect(
+      throws: LocalAIRefinementFailure.remoteProviderRejected
+    ) {
+      try await router.refine(request(), settings: settings)
+    }
+    await router.release(settings: settings)
+    await router.shutdown()
+
+    guard case .unavailable = readiness.ollama.state else {
+      Issue.record("Remote-capable readiness must fail closed.")
+      return
+    }
+    #expect(
+      await remote.snapshot()
+        == RouterRefinerSnapshot()
+    )
+  }
+
+  @Test
+  func rejectsDeclaredProviderIdentityMismatchBeforeAdapterCall() async {
+    let mismatchedApple = RouterRecordingRefiner(provider: .ollama)
+    let ollama = RouterRecordingRefiner(provider: .ollama)
+    let router = LocalAIRefinementRouter(
+      apple: mismatchedApple,
+      ollama: ollama
+    )
+    let settings = LocalAISettings.default
+
+    let readiness = await router.readiness(
+      settings: settings,
+      locale: Locale(identifier: "en_US")
+    )
+    await #expect(
+      throws: LocalAIRefinementFailure.providerUnavailable(
+        "The selected provider declared mismatched identity evidence."
+      )
+    ) {
+      try await router.prepare(settings: settings)
+    }
+
+    guard case .unavailable = readiness.apple.state else {
+      Issue.record("Mismatched provider identity must fail closed.")
+      return
+    }
+    #expect(await mismatchedApple.snapshot() == RouterRefinerSnapshot())
+  }
+
+  @Test
+  func rejectsMismatchedProviderIdentityInGeneratedResponse() async {
+    let apple = RouterRecordingRefiner(
+      provider: .appleOnDevice,
+      responseProvider: .ollama
+    )
+    let ollama = RouterRecordingRefiner(provider: .ollama)
+    let router = LocalAIRefinementRouter(
+      apple: apple,
+      ollama: ollama
+    )
+    let settings = LocalAISettings.default
+
+    await #expect(
+      throws: LocalAIRefinementFailure.providerUnavailable(
+        "The selected provider returned mismatched identity evidence."
+      )
+    ) {
+      try await router.refine(request(), settings: settings)
+    }
+
+    #expect(await apple.snapshot().refinementCount == 1)
+  }
+
   private func request() -> LocalAIRefinementRequest {
     LocalAIRefinementRequest(
       sessionID: UUID(),
@@ -79,11 +173,20 @@ private struct RouterRefinerSnapshot: Equatable {
 }
 
 private actor RouterRecordingRefiner: TranscriptRefining {
-  let provider: LocalAIProviderKind
+  nonisolated let capability: LocalAIProviderCapability
+  nonisolated let responseProvider: LocalAIProviderKind
   private var state = RouterRefinerSnapshot()
 
-  init(provider: LocalAIProviderKind) {
-    self.provider = provider
+  init(
+    provider: LocalAIProviderKind,
+    locality: LocalAIProviderLocality = .inProcess,
+    responseProvider: LocalAIProviderKind? = nil
+  ) {
+    capability = LocalAIProviderCapability(
+      provider: provider,
+      locality: locality
+    )
+    self.responseProvider = responseProvider ?? provider
   }
 
   func readiness(
@@ -92,7 +195,7 @@ private actor RouterRecordingRefiner: TranscriptRefining {
   ) -> LocalAIProviderReadiness {
     state.readinessCount += 1
     return LocalAIProviderReadiness(
-      provider: provider,
+      provider: capability.provider,
       state: .ready
     )
   }
@@ -108,7 +211,7 @@ private actor RouterRecordingRefiner: TranscriptRefining {
     state.refinementCount += 1
     return LocalAIRefinementResponse(
       text: request.transcript,
-      provider: provider,
+      provider: responseProvider,
       modelIdentifier: "test-model"
     )
   }

@@ -16,7 +16,7 @@ use its keyboard shortcut.
 
 1. Quit every running Hardware Controller copy.
 2. Follow the signed personal-build commands in
-   [`README.md`](../README.md#build-and-verify). Verify the signature against
+   [`README.md`](../README.md#signed-hardware-build). Verify the signature against
    the private `HC_EXPECTED_TEAM_ID`, then replace the Applications copy only
    when that install is explicitly approved.
 3. Open exactly `/Applications/Hardware Controller.app`.
@@ -35,7 +35,7 @@ may request Accessibility, Microphone, Speech Recognition, or Launch at Login
 authorization again for a newly signed identity.
 
 Opening the app manually presents or raises Controller. The left sidebar opens
-expanded with Controller, Profiles, and General and can be collapsed with the
+expanded with Controller, History, Profiles, and General and can be collapsed with the
 native toolbar control. Hardware Controller appears in the Dock while running.
 The pedal-shaped menu-bar item switches Profiles, opens each destination,
 controls Launch at Login, and quits the app.
@@ -148,30 +148,43 @@ automatic insertion stops, recognized final text stays visible, and
 **Copy Text** provides explicit recovery without automatically changing the
 clipboard.
 
-Starting a new session clears the previous in-memory transcript. Audio and
-transcript text are not persisted or logged.
+Starting a new session clears the previous presentation transcript. Local
+Dictation audio and text remain memory-only. Local AI Dictation stores one local
+CAF and immutable final text results under the app's Application Support
+directory. **History** makes those sessions searchable and reusable. Under
+**General → Voice History storage**, set independent age, size, and recording
+limits or choose **Unlimited**. The defaults retain successful audio until the
+first of 90 days, 2 GiB, or 5,000 recordings. Automatic cleanup keeps transcript
+evidence, skips active, pinned, and sole recovery audio, and explains expired
+playback in History. Speech content is never logged.
 
 ## Configure Local AI Dictation
 
 Open **General → Local AI Dictation** before assigning the Action:
 
 1. Choose **Apple On-Device** or **Ollama**.
-2. For Ollama, start the local service and install the recommended model:
+2. Choose **Natural**, **Casual Message**, **Formal**, **Technical**, or
+   **Verbatim** under **Style**. Verbatim uses recognition, explicit spoken
+   edits, and exact Dictionary replacements but skips the generative model.
+   Casual Message prefers
+   lowercase sentence starts while preserving required proper-name and
+   Dictionary capitalization.
+3. For Ollama, start the local service and install the recommended model:
 
    ```bash
    ollama pull qwen3.5:4b
    ```
 
-3. Choose an installed model and **5 minutes** or **Until app quits** retention.
+4. Choose an installed model and **5 minutes** or **Until app quits** retention.
    On model change or quit, the app unloads a model it started. It leaves a
    model that was already running for another local Ollama client untouched.
-4. Choose **Refresh Status**, then **Test Selected Provider**. The test uses a
+5. Choose **Refresh Status**, then **Test Selected Provider**. The test uses a
    fixed sanitized phrase without microphone or focused-field access.
-5. Optionally expand **Personal dictionary**. Type a recognition term into its
+6. Optionally expand **Personal dictionary**. Type a recognition term into its
    outlined field and choose **Add**, or fill both outlined replacement fields
    before choosing **Add**. You can also enable nearby-text context or provide
    formatting instructions.
-6. Assign **Local AI Dictation** to a Control under Controller or Profiles.
+7. Assign **Local AI Dictation** to a Control under Controller or Profiles.
 
 Apple On-Device requires macOS 26, Apple Intelligence enabled, a supported
 locale, and installed model assets. It never enables Private Cloud Compute.
@@ -182,8 +195,9 @@ resident on the reference Mac.
 
 Recognition vocabulary helps Apple's speech backend identify names and
 technical terms. Exact replacements run deterministically after recognition
-and before the model. Additional instructions can express style preferences,
-but cannot override accuracy, privacy, or prompt-safety rules.
+and before the model. Additional instructions can express workflow-specific
+preferences, but cannot override the selected Style, accuracy, privacy, or
+prompt-safety rules.
 
 Nearby text is off by default. When enabled, the app reads at most a bounded
 window around the caret from an approved multiline, nonsecure Accessibility
@@ -198,22 +212,87 @@ speech, recognized words appear only in the temporary HUD. After release, the
 app:
 
 1. finalizes on-device Apple speech recognition;
-2. applies exact dictionary replacements;
-3. corrects and formats text through the selected local provider;
-4. validates meaning, protected terms, target capability, and output shape;
-5. inserts one result into the unchanged target.
+2. applies exact spoken-edit commands to Raw text;
+3. applies exact Dictionary replacements without treating replacement output as
+   a command;
+4. corrects and formats text through the selected local provider, unless Style
+   is Verbatim;
+5. validates meaning and protected terms and creates paragraph/list blocks;
+6. renders those blocks for the captured target and inserts one result.
 
-Formatting is automatic. Clear lists or steps become bullets or numbered lists
-only in safe multiline targets; single-line and compatibility targets always
-receive one plain line. There is no Clean/Structured setting.
+Spoken commands are deliberately exact:
+
+| Say | Result |
+| --- | --- |
+| `scratch that` | Remove only the current clause since its last stable boundary. |
+| `delete that sentence` | Remove only the current sentence. |
+| `new paragraph` | Insert a paragraph break, or begin the next item in an active numbered list. |
+| `start a numbered list` | Begin item 1. |
+| `end list` | Finish a nonempty numbered list. |
+| `literal scratch that` | Keep `scratch that` as ordinary text. The same escape works for every exact command phrase. |
+
+A near-match or a command that cannot safely act remains literal text. Raw text
+is retained separately from the replayable Edited result. If a command removes
+the entire thought, the session is retained without generation or insertion.
+
+Formatting structure is automatic. Clear lists or steps become validated
+bullet or numbered-list blocks. Safe multiline targets retain that structure;
+single-line and compatibility targets receive a deterministic plain line.
+There is no Clean/Structured setting.
 
 Model warm-up begins while you speak. If warm-up plus generation does not
-finish within three seconds after the final raw transcript, or the provider is
-missing, changed, overloaded, or returns invalid text, the app inserts the raw
-transcript once when the original target is still safe. Controller explains
+finish within three seconds after the final Raw transcript, or the provider is
+missing, changed, overloaded, or returns invalid text, the app inserts the
+deterministic Edited transcript once when the original target is still safe.
+Controller explains
 the fallback. **Copy Raw** and **Copy Refined** remain separate recovery actions
 when their respective text exists. Cancellation, focus change, or caret change
 discards late model output.
+
+Local AI requires an empty text cursor when capture begins. If the target
+application, secure status, focused field, or cursor changes before delivery,
+automatic insertion stops without switching to another delivery method. The
+audio and final text remain in local History with the reason, and Controller's
+copy actions remain available. History re-delivery is always explicit and
+creates a new result, including when the attempt fails.
+
+## Use Voice History
+
+1. Open **History** from the sidebar or menu-bar item. Choose **Import → Audio
+   Recording** to select a supported local file. Hardware Controller runs
+   on-device transcription and the selected local Style, copies the audio into
+   app-owned storage, and leaves the original untouched. It never inserts an
+   imported result automatically. The default import caps are 2 GiB source,
+   2 GiB decoded audio, and 12 hours; normal History retention also applies.
+2. Search matches Raw, Edited, Formatted, Delivered, and corrected results.
+3. Select a session, then choose any result to inspect its source, Style,
+   provider/model/prompt, structured-document, timing, and delivery evidence.
+4. Choose a timed span to play its bounded portion of retained audio. A session
+   remains searchable when audio is unavailable.
+   After an interruption, History marks app-owned audio **Recovered** and
+   offers whole-recording playback even when no timed transcript exists.
+5. Edit **Correction**, then choose **Save Correction**. This appends a new
+   corrected result; it never changes prior evidence.
+6. Choose **Retranscribe** to rerun local Apple speech against retained audio,
+   or choose a Style and **Reformat** to run the current local refinement path.
+   A Recovery session begins with empty text by design; retranscription appends
+   the first reusable Raw result. Unpinned recovered audio expires after 24
+   hours, while its session and any resulting text remain searchable.
+7. Choose **Copy** for explicit clipboard recovery. For insertion, choose
+   **Insert in 3 Seconds**, focus a nonsecure empty caret in the destination,
+   and wait. The app captures that fresh target after the delay and records the
+   success or typed failure as a new Delivered result.
+8. Choose **Export** to write a portable V1 `.voice_history` directory
+   containing `manifest.json`, streaming SHA-256 `checksums.json`, and, when
+   retained, one `audio.caf`. Export does not mutate the stored session. Choose
+   **Import → Voice History Archive** to restore it locally without inserting
+   text. Identical evidence is a no-op; a conflicting session identifier,
+   changed checksum, undeclared file, unsupported version, or exceeded limit is
+   rejected before History changes. The final revision 4 `session.json` export
+   remains importable.
+9. Pin important audio against future automatic quota eviction. **Delete**
+   transactionally removes the selected session and its owned local audio;
+   storage-level deletion is not a promise of secure SSD erasure.
 
 ## Configure keyboard shortcuts
 
@@ -223,6 +302,28 @@ without changing it.
 
 Keyboard shortcuts are independent of Local Dictation. They still require
 Accessibility but not Microphone or Speech Recognition access.
+
+## Use Voice capture without a Device
+
+The optional Voice chord is machine-wide and independent of Profiles,
+Controls, and Binding keyboard fallbacks. It runs the current Local AI
+Dictation pipeline, including its microphone, Apple on-device recognition,
+selected local Formatting provider, safe target delivery, and local session
+storage.
+
+1. Open **General → Voice capture shortcut**.
+2. Choose **Record** and press an exact chord with at least two modifier keys.
+3. Focus a nonsecure editable field.
+4. Hold the chord, speak, then release it to finish; or press it twice quickly
+   to keep listening and twice again to finish.
+5. Use **Clear shortcut** to stop reserving the chord.
+
+Capture begins on the first key-down; it does not wait to distinguish a hold
+from a double press. Repeated key-down events and unmatched releases do nothing.
+Changing the chord, sleeping, or quitting cancels active capture. If macOS or
+another app owns the exact chord, General keeps the setting visible and asks
+you to record a different one. The Voice chord is off by default and works
+without a connected Device.
 
 ## Use a keyboard fallback without the pedal
 
@@ -297,8 +398,9 @@ current system default and resumes the saved Device after reconnect.
   result; automatic insertion has not occurred until Delivering.
 - **Transcription needs attention**: the status card explains the failure and
   offers **Copy Text** when final text is recoverable.
-- **Local AI Dictation complete**: refined text or a labeled raw fallback was
-  inserted once. Raw and refined recovery remain distinct.
+- **Local AI Dictation complete**: refined text or a labeled deterministic
+  Edited fallback was inserted once. Raw and Edited/refined recovery remain
+  distinct.
 
 A transcription failure appears once in its dedicated card. It does not add a
 second generic Action failure card or move the Controller layout.
@@ -405,13 +507,13 @@ through **Copy Text**. If recovery does not appear, quit and reopen the app.
 - If the digest changed, reselect the model only after deciding to trust the
   new local weights. The app never accepts drift silently.
 
-### Local AI inserted the raw transcript
+### Local AI inserted the Edited transcript
 
 Controller states the provider, timeout, overload, or validation reason. The
-raw fallback is intentional and is delivered only once. Check provider status,
-try a shorter utterance, or disable nearby context if a custom model copied
-unrelated target text. **Copy Raw** remains available for the current recovery
-state.
+deterministic fallback is intentional and is delivered only once. Check
+provider status, try a shorter utterance, or disable nearby context if a custom
+model copied unrelated target text. **Copy Edited** preserves the inserted
+fallback; **Copy Raw** remains independently available.
 
 ### The app says Controller unavailable
 

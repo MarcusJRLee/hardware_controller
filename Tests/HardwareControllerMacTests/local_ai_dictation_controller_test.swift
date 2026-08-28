@@ -1,3 +1,4 @@
+import AVFoundation
 @preconcurrency import ApplicationServices
 import Foundation
 import HardwareControllerCore
@@ -6,6 +7,128 @@ import Testing
 @testable import HardwareControllerMac
 
 struct LocalAIDictationControllerTest {
+  @Test
+  func storesDeliveredDictationWithPlayableAudio() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_\(UUID().uuidString)")
+    defer {
+      try? FileManager.default.removeItem(at: rootDirectory)
+    }
+    let history = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory
+    )
+    let fixture = LocalAIControllerFixture(
+      refinement: .output("send the revised plan tomorrow")
+    )
+    let capturedAt = Date(timeIntervalSince1970: 1_000)
+    let controller = fixture.makeController(
+      history: history,
+      now: { capturedAt }
+    )
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.microphone.emit(try makeVoiceAudioFixture())
+    fixture.session.emit(.committed("send the revised plan tomorrow"))
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    let sessions = try await history.recentSessions(limit: 10)
+    let session = try #require(sessions.first)
+    #expect(sessions.count == 1)
+    #expect(fixture.writer.inserted == ["Send the revised plan tomorrow."])
+    #expect(session.rawText == "send the revised plan tomorrow")
+    #expect(session.editedText == "send the revised plan tomorrow")
+    #expect(session.formattedText == "Send the revised plan tomorrow.")
+    #expect(session.deliveredText == "Send the revised plan tomorrow.")
+    #expect(session.deliveryOutcome == .inserted)
+    #expect(session.document.startedAt == capturedAt)
+    #expect(session.document.endedAt == capturedAt)
+    let audioURL = try #require(session.audioArtifactURL)
+    let audioFile = try AVAudioFile(forReading: audioURL)
+    #expect(audioFile.length > 0)
+  }
+
+  @Test
+  func failedInsertionKeepsCopyableTextAndPlayableAudio() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_failed_\(UUID().uuidString)")
+    defer {
+      try? FileManager.default.removeItem(at: rootDirectory)
+    }
+    let history = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory
+    )
+    let fixture = LocalAIControllerFixture(
+      refinement: .output("keep this revised plan"),
+      writerFailure: .focusChanged
+    )
+    let controller = fixture.makeController(history: history)
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.microphone.emit(try makeVoiceAudioFixture())
+    fixture.session.emit(.committed("keep this revised plan"))
+    await controller.handle(.finish)
+    try await localAIWaitUntil {
+      await controller.snapshot().phase == .failed
+    }
+
+    let sessions = try await history.recentSessions(limit: 10)
+    let session = try #require(sessions.first)
+    #expect(sessions.count == 1)
+    #expect(session.rawText == "keep this revised plan")
+    #expect(session.formattedText == "Keep this revised plan.")
+    #expect(session.deliveredText.isEmpty)
+    #expect(session.deliveryOutcome == .failed)
+    #expect(session.document.deliveryFailureReason == .focusChanged)
+    let audioURL = try #require(session.audioArtifactURL)
+    #expect(try AVAudioFile(forReading: audioURL).length > 0)
+  }
+
+  @Test
+  func asrLossKeepsRecoverableAudioWithoutModifyingTarget() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_history_asr_loss_\(UUID().uuidString)")
+    defer {
+      try? FileManager.default.removeItem(at: rootDirectory)
+    }
+    let history = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory
+    )
+    let fixture = LocalAIControllerFixture(
+      refinement: .output("Never generated.")
+    )
+    let controller = fixture.makeController(history: history)
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.microphone.emit(try makeVoiceAudioFixture())
+    try await localAIWaitUntil {
+      fixture.session.appendCount == 1
+    }
+    fixture.session.fail(
+      SpeechRecognitionBackendError.modelUnavailable
+    )
+    try await localAIWaitUntil {
+      await controller.snapshot().phase == .failed
+    }
+
+    let sessions = try await history.recentSessions(limit: 10)
+    let session = try #require(sessions.first)
+    #expect(sessions.count == 1)
+    #expect(session.rawText.isEmpty)
+    #expect(session.editedText.isEmpty)
+    #expect(session.formattedText.isEmpty)
+    #expect(session.deliveredText.isEmpty)
+    #expect(session.deliveryOutcome == .notAttempted)
+    #expect(session.document.deliveryFailure == nil)
+    #expect(fixture.writer.inserted.isEmpty)
+    #expect(await fixture.refiner.requests.isEmpty)
+    let audioURL = try #require(session.audioArtifactURL)
+    #expect(try AVAudioFile(forReading: audioURL).length > 0)
+  }
+
   @Test(
     .enabled(
       if:
@@ -64,6 +187,27 @@ struct LocalAIDictationControllerTest {
 
     #expect(failure == nil)
     #expect(fixture.microphone.startCount == 0)
+    #expect(fixture.writer.inserted.isEmpty)
+  }
+
+  @Test
+  func nonemptyCapturedSelectionNeverStartsAudioOrFormatting() async {
+    let fixture = LocalAIControllerFixture(
+      refinement: .output("Never use this")
+    )
+    let controller = fixture.makeController(
+      selectedRange: FocusedTextRange(location: 4, length: 2)
+    )
+
+    await controller.handle(.begin)
+
+    let snapshot = await controller.snapshot()
+    #expect(snapshot.phase == .failed)
+    #expect(
+      snapshot.failure == .transcription(.noFocusedTextField)
+    )
+    #expect(fixture.microphone.startCount == 0)
+    #expect(await fixture.refiner.preparationCount == 0)
     #expect(fixture.writer.inserted.isEmpty)
   }
 
@@ -211,6 +355,229 @@ struct LocalAIDictationControllerTest {
   }
 
   @Test
+  func storesStructuredFormattingAndRendersSingleLineTargetsSafely()
+    async throws
+  {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_formatting_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let fixture = LocalAIControllerFixture(
+      refinement: .output(
+        "Plan.\n\n- Keep Bash.\n- Keep https://example.com."
+      )
+    )
+    var settings = LocalAISettings.default
+    settings.style = .technical
+    let controller = fixture.makeController(
+      settings: settings,
+      supportsMultilineText: false,
+      history: history
+    )
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.session.emit(
+      .committed("plan keep Bash keep https://example.com")
+    )
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    let item = try #require(
+      try await history.recentSessions(limit: 1).first
+    )
+    #expect(
+      item.formattedText
+        == "Plan.\n\n- Keep Bash.\n- Keep https://example.com."
+    )
+    #expect(
+      item.deliveredText
+        == "Plan. Keep Bash.; Keep https://example.com."
+    )
+    #expect(item.formattedDocument?.style == .technical)
+    #expect(item.formattedDocument?.blocks.count == 2)
+    #expect(item.formattedDocument?.validationStatus == .validated)
+  }
+
+  @Test
+  func modelOrdinalProseIsNormalizedBeforeDelivery() async throws {
+    let fixture = LocalAIControllerFixture(
+      refinement: .output(
+        "There are three steps: first, stop the service; second, copy the backup; third, restart the service."
+      )
+    )
+    let controller = fixture.makeController()
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.session.emit(
+      .committed(
+        "there are three steps first stop the service second copy the backup third restart the service"
+      )
+    )
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    #expect(
+      fixture.writer.inserted == [
+        "There are three steps:\n\n1. stop the service\n2. copy the backup\n3. restart the service."
+      ])
+  }
+
+  @Test
+  func verbatimStyleBypassesTheGenerativeModel() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_verbatim_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let fixture = LocalAIControllerFixture(refinement: .output("Changed."))
+    var settings = LocalAISettings.default
+    settings.style = .verbatim
+    let controller = fixture.makeController(
+      settings: settings,
+      history: history
+    )
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.session.emit(.committed("um keep this exactly"))
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    #expect(fixture.writer.inserted == ["um keep this exactly"])
+    #expect(await fixture.refiner.preparationCount == 0)
+    #expect(await fixture.refiner.refinementCompletionCount == 0)
+    let item = try #require(
+      try await history.recentSessions(limit: 1).first
+    )
+    #expect(item.formattedDocument?.style == .verbatim)
+    #expect(item.formattedDocument?.validationStatus == .validated)
+  }
+
+  @Test
+  func appliesSpokenEditsBeforeFormattingAndStoresTheirTrace() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_spoken_edits_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let rawText =
+      "Keep this. Wrong scratch that Right new paragraph start a numbered list First new paragraph Second end list Done."
+    let editedText =
+      "Keep this. Right\n\n1. First\n2. Second\n\nDone."
+    let fixture = LocalAIControllerFixture(
+      refinement: .output(editedText)
+    )
+    let controller = fixture.makeController(history: history)
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.session.emit(.committed(rawText))
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    let request = try #require(await fixture.refiner.requests.first)
+    let item = try #require(
+      try await history.recentSessions(limit: 1).first
+    )
+    let spokenEdits = try #require(item.document.spokenEdits)
+    #expect(request.transcript == editedText)
+    #expect(item.rawText == rawText)
+    #expect(item.editedText == editedText)
+    #expect(spokenEdits.editedText == editedText)
+    #expect(spokenEdits.operations.count == 5)
+    #expect(
+      try VoiceSpokenEditReplayer().replay(spokenEdits)
+        == item.editedText
+    )
+  }
+
+  @Test
+  func dictionaryReplacementCannotSynthesizeADestructiveCommand()
+    async throws
+  {
+    let fixture = LocalAIControllerFixture(refinement: .output("Unused."))
+    var settings = LocalAISettings.default
+    settings.style = .verbatim
+    settings.dictionary = PersonalDictionary(
+      replacements: [
+        PersonalDictionaryReplacement(
+          spokenForm: "backtrack",
+          replacement: "scratch that"
+        )
+      ]
+    )
+    let controller = fixture.makeController(settings: settings)
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.session.emit(.committed("Keep backtrack as literal text"))
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    #expect(fixture.writer.inserted == ["Keep scratch that as literal text"])
+    #expect(await fixture.refiner.requests.isEmpty)
+  }
+
+  @Test
+  func formattingFallbackStillHonorsExplicitSpokenEdits() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_spoken_edit_fallback_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let fixture = LocalAIControllerFixture(
+      refinement: .failure(.providerUnavailable("No formatter."))
+    )
+    let controller = fixture.makeController(history: history)
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.session.emit(
+      .committed("Wrong scratch that Right new paragraph Next")
+    )
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    let item = try #require(
+      try await history.recentSessions(limit: 1).first
+    )
+    #expect(fixture.writer.inserted == ["Right\n\nNext"])
+    #expect(item.rawText == "Wrong scratch that Right new paragraph Next")
+    #expect(item.editedText == "Right\n\nNext")
+    #expect(item.formattedText == "Right\n\nNext")
+    #expect(item.document.spokenEdits?.operations.count == 2)
+  }
+
+  @Test
+  func fullyScratchedSessionCompletesWithoutFormattingOrInsertion()
+    async throws
+  {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_spoken_edit_empty_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let fixture = LocalAIControllerFixture(refinement: .output("Unused."))
+    let controller = fixture.makeController(history: history)
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.session.emit(.committed("Only thought scratch that"))
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    let item = try #require(
+      try await history.recentSessions(limit: 1).first
+    )
+    #expect(fixture.writer.inserted.isEmpty)
+    #expect(await fixture.refiner.requests.isEmpty)
+    #expect(item.rawText == "Only thought scratch that")
+    #expect(item.editedText.isEmpty)
+    #expect(item.formattedText.isEmpty)
+    #expect(item.deliveredText.isEmpty)
+    #expect(item.deliveryOutcome == .notAttempted)
+    #expect(item.document.spokenEdits?.operations.count == 1)
+  }
+
+  @Test
   func refinementFailureInsertsRawTranscriptExactlyOnce() async throws {
     let fixture = LocalAIControllerFixture(
       refinement: .failure(.providerUnavailable("Ollama is not running."))
@@ -225,11 +592,66 @@ struct LocalAIDictationControllerTest {
 
     let snapshot = await controller.snapshot()
     #expect(fixture.writer.inserted == ["keep the raw text"])
-    #expect(snapshot.refinedText.isEmpty)
+    #expect(snapshot.refinedText == "keep the raw text")
     #expect(
       snapshot.fallbackReason
         == .providerUnavailable("Ollama is not running.")
     )
+  }
+
+  @Test
+  func remoteCapableFormatterFallsBackWithoutReceivingVoiceContent()
+    async throws
+  {
+    let rootDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "voice_remote_fallback_\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let remote = RemoteCapableRefinerProbe()
+    let router = LocalAIRefinementRouter(ollama: remote)
+    let fixture = LocalAIControllerFixture(refinement: .output("Unused."))
+    var settings = LocalAISettings.default
+    settings.provider = .ollama
+    let controller = fixture.makeController(
+      settings: settings,
+      refiner: router,
+      history: history
+    )
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.microphone.emit(try makeVoiceAudioFixture())
+    fixture.session.emit(.committed("keep this content local"))
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    let item = try #require(
+      try await history.recentSessions(limit: 1).first
+    )
+    #expect(fixture.writer.inserted == ["keep this content local"])
+    #expect(await remote.invocationCount == 0)
+    #expect(item.formattedText == "keep this content local")
+    #expect(item.deliveredText == "keep this content local")
+    #expect(item.deliveryOutcome == .inserted)
+    #expect(await controller.snapshot().fallbackReason == .remoteProviderRejected)
+    let audioURL = try #require(item.audioArtifactURL)
+    #expect(try AVAudioFile(forReading: audioURL).length > 0)
+  }
+
+  @Test
+  func editedFallbackFlattensOnlyForASingleLineTarget() async throws {
+    let fixture = LocalAIControllerFixture(
+      refinement: .failure(.providerUnavailable("No formatter."))
+    )
+    let controller = fixture.makeController(supportsMultilineText: false)
+
+    await controller.handle(.begin)
+    try await fixture.waitUntilListening(controller)
+    fixture.session.emit(.committed("first line\nsecond line"))
+    await controller.handle(.finish)
+    try await fixture.waitUntilCompleted(controller)
+
+    #expect(fixture.writer.inserted == ["first line second line"])
   }
 
   @Test
@@ -254,10 +676,7 @@ struct LocalAIDictationControllerTest {
   @Test
   func nonCooperativeLateResultCannotDelayOrDuplicateFallback() async throws {
     let fixture = LocalAIControllerFixture(
-      refinement: .nonCooperativeDelayedOutput(
-        "Too late.",
-        .milliseconds(100)
-      )
+      refinement: .nonCooperativeBlockedOutput("Too late.")
     )
     let controller = fixture.makeController(
       refinementTimeout: .milliseconds(10)
@@ -266,18 +685,18 @@ struct LocalAIDictationControllerTest {
     await controller.handle(.begin)
     try await fixture.waitUntilListening(controller)
     fixture.session.emit(.committed("time bounded"))
-    let clock = ContinuousClock()
-    let start = clock.now
     await controller.handle(.finish)
     try await fixture.waitUntilCompleted(controller)
-    let elapsed = start.duration(to: clock.now)
-    try await Task.sleep(for: .milliseconds(120))
 
-    #expect(elapsed < .milliseconds(200))
     #expect(fixture.writer.inserted == ["time bounded"])
-    #expect(await fixture.refiner.refinementCompletionCount == 1)
-    #expect(await controller.snapshot().refinedText.isEmpty)
+    #expect(await controller.snapshot().refinedText == "time bounded")
     #expect(await controller.snapshot().fallbackReason == .timedOut)
+    await fixture.refiner.releaseBlockedRefinement()
+    try await localAIWaitUntil {
+      await fixture.refiner.refinementCompletionCount == 1
+    }
+    #expect(fixture.writer.inserted == ["time bounded"])
+    #expect(await controller.snapshot().refinedText == "time bounded")
   }
 
   @Test(.timeLimit(.minutes(1)))
@@ -355,14 +774,16 @@ private struct BenchmarkRetainedRefinementRouter:
 private final class LocalAIControllerFixture: @unchecked Sendable {
   let session = LocalAIFakeRecognitionSession()
   let microphone = LocalAIFakeMicrophone()
-  let writer = LocalAIRecordingWriter()
+  let writer: LocalAIRecordingWriter
   let factory: LocalAIFakeRecognitionFactory
   let refiner: LocalAIFakeRefinementRouter
 
   init(
     refinement: LocalAIFakeRefinementRouter.Behavior,
-    preparationDelay: Duration? = nil
+    preparationDelay: Duration? = nil,
+    writerFailure: TranscriptionFailure? = nil
   ) {
+    writer = LocalAIRecordingWriter(failure: writerFailure)
     factory = LocalAIFakeRecognitionFactory(session: session)
     refiner = LocalAIFakeRefinementRouter(
       behavior: refinement,
@@ -375,19 +796,32 @@ private final class LocalAIControllerFixture: @unchecked Sendable {
     refinementTimeout: Duration = .seconds(3),
     refiner: (any LocalAIRefinementRouting)? = nil,
     authorization: any TranscriptionAuthorizationProviding =
-      LocalAIFixedAuthorization()
+      LocalAIFixedAuthorization(),
+    supportsMultilineText: Bool = true,
+    selectedRange: FocusedTextRange? = FocusedTextRange(
+      location: 0,
+      length: 0
+    ),
+    history: any VoiceSessionHistoryRecording =
+      DiscardingVoiceSessionHistory(),
+    now: @escaping @Sendable () -> Date = { Date() }
   ) -> LocalAIDictationController {
     LocalAIDictationController(
       factory: factory,
       microphone: microphone,
-      targeter: LocalAIFixedTargeter(),
+      targeter: LocalAIFixedTargeter(
+        supportsMultilineText: supportsMultilineText,
+        selectedRange: selectedRange
+      ),
       writer: writer,
       authorization: authorization,
       contextCapturer: LocalAIFixedContextCapturer(),
       refiner: refiner ?? self.refiner,
       settings: settings,
       profileName: "Coding",
-      refinementTimeout: refinementTimeout
+      refinementTimeout: refinementTimeout,
+      history: history,
+      now: now
     )
   }
 
@@ -456,6 +890,20 @@ private struct LocalAIFixedAuthorization:
 }
 
 private struct LocalAIFixedTargeter: FocusedTextTargeting {
+  let supportsMultilineText: Bool
+  let selectedRange: FocusedTextRange?
+
+  init(
+    supportsMultilineText: Bool = true,
+    selectedRange: FocusedTextRange? = FocusedTextRange(
+      location: 0,
+      length: 0
+    )
+  ) {
+    self.supportsMultilineText = supportsMultilineText
+    self.selectedRange = selectedRange
+  }
+
   func capture() throws -> FocusedTextTarget {
     FocusedTextTarget(
       element: AXUIElementCreateSystemWide(),
@@ -463,7 +911,8 @@ private struct LocalAIFixedTargeter: FocusedTextTargeting {
       applicationName: "Notes",
       applicationBundleIdentifier: "com.apple.Notes",
       role: kAXTextAreaRole as String,
-      supportsMultilineText: true,
+      supportsMultilineText: supportsMultilineText,
+      selectedRange: selectedRange,
       deliveryCapability: .finalOnly
     )
   }
@@ -527,8 +976,10 @@ private final class LocalAIFakeRecognitionSession:
   SpeechRecognitionSession,
   @unchecked Sendable
 {
+  private let lock = NSLock()
   let updates: AsyncThrowingStream<TranscriptRevision, any Error>
   private let continuation: AsyncThrowingStream<TranscriptRevision, any Error>.Continuation
+  private var appends = 0
 
   init() {
     (updates, continuation) = AsyncThrowingStream.makeStream()
@@ -538,7 +989,17 @@ private final class LocalAIFakeRecognitionSession:
     continuation.yield(revision)
   }
 
-  func append(_ audio: CapturedAudioBuffer) async throws {}
+  var appendCount: Int {
+    lock.withLock { appends }
+  }
+
+  func fail(_ error: any Error) {
+    continuation.finish(throwing: error)
+  }
+
+  func append(_ audio: CapturedAudioBuffer) async throws {
+    lock.withLock { appends += 1 }
+  }
 
   func finish() async throws {
     continuation.finish()
@@ -573,6 +1034,12 @@ private final class LocalAIFakeMicrophone:
     return stream
   }
 
+  func emit(_ audio: CapturedAudioBuffer) {
+    _ = lock.withLock {
+      continuation?.yield(audio)
+    }
+  }
+
   func stop() async {
     lock.withLock {
       continuation?.finish()
@@ -586,7 +1053,12 @@ private final class LocalAIRecordingWriter:
   @unchecked Sendable
 {
   private let lock = NSLock()
+  private let failure: TranscriptionFailure?
   private var storage: [String] = []
+
+  init(failure: TranscriptionFailure? = nil) {
+    self.failure = failure
+  }
 
   var inserted: [String] {
     lock.withLock { storage }
@@ -596,6 +1068,9 @@ private final class LocalAIRecordingWriter:
     _ text: String,
     into target: FocusedTextTarget
   ) throws {
+    if let failure {
+      throw failure
+    }
     lock.withLock { storage.append(text) }
   }
 }
@@ -604,7 +1079,7 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
   enum Behavior: Sendable {
     case output(String)
     case delayedOutput(String, Duration)
-    case nonCooperativeDelayedOutput(String, Duration)
+    case nonCooperativeBlockedOutput(String)
     case failure(LocalAIRefinementFailure)
   }
 
@@ -614,6 +1089,9 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
   private var preparationCancellationObservers: [CheckedContinuation<Void, Never>] = []
   private(set) var preparationCount = 0
   private(set) var refinementCompletionCount = 0
+  private var blockedRefinementContinuation: CheckedContinuation<Void, Never>?
+  private var releaseBlockedRefinementWhenStarted = false
+  private(set) var requests: [LocalAIRefinementRequest] = []
   private(set) var releasedSettings: [LocalAISettings] = []
   private(set) var shutdownCount = 0
 
@@ -669,10 +1147,20 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
     }
   }
 
+  func releaseBlockedRefinement() {
+    guard let continuation = blockedRefinementContinuation else {
+      releaseBlockedRefinementWhenStarted = true
+      return
+    }
+    blockedRefinementContinuation = nil
+    continuation.resume()
+  }
+
   func refine(
     _ request: LocalAIRefinementRequest,
     settings: LocalAISettings
   ) async throws -> LocalAIRefinementResponse {
+    requests.append(request)
     let output: String
     switch behavior {
     case .output(let value):
@@ -680,10 +1168,15 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
     case .delayedOutput(let value, let delay):
       try await Task.sleep(for: delay)
       output = value
-    case .nonCooperativeDelayedOutput(let value, let delay):
-      await Task.detached {
-        try? await Task.sleep(for: delay)
-      }.value
+    case .nonCooperativeBlockedOutput(let value):
+      await withCheckedContinuation { continuation in
+        if releaseBlockedRefinementWhenStarted {
+          releaseBlockedRefinementWhenStarted = false
+          continuation.resume()
+        } else {
+          blockedRefinementContinuation = continuation
+        }
+      }
       output = value
     case .failure(let failure):
       throw failure
@@ -705,8 +1198,51 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
   }
 }
 
+private actor RemoteCapableRefinerProbe: TranscriptRefining {
+  nonisolated let capability = LocalAIProviderCapability(
+    provider: .ollama,
+    locality: .remoteCapable
+  )
+  private(set) var invocationCount = 0
+
+  func readiness(
+    settings: LocalAISettings,
+    locale: Locale
+  ) -> LocalAIProviderReadiness {
+    invocationCount += 1
+    return LocalAIProviderReadiness(
+      provider: .ollama,
+      state: .ready
+    )
+  }
+
+  func prepare(settings: LocalAISettings) {
+    invocationCount += 1
+  }
+
+  func refine(
+    _ request: LocalAIRefinementRequest,
+    settings: LocalAISettings
+  ) -> LocalAIRefinementResponse {
+    invocationCount += 1
+    return LocalAIRefinementResponse(
+      text: request.transcript,
+      provider: .ollama,
+      modelIdentifier: "remote-probe"
+    )
+  }
+
+  func release(settings: LocalAISettings) {
+    invocationCount += 1
+  }
+
+  func shutdown() {
+    invocationCount += 1
+  }
+}
+
 private func localAIWaitUntil(
-  timeout: Duration = .seconds(1),
+  timeout: Duration = .seconds(5),
   _ condition: @escaping @Sendable () async -> Bool
 ) async throws {
   let clock = ContinuousClock()

@@ -1,0 +1,277 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signalbridge.dev/schemas/voice_history_archive_v1.schema.json",
+  "title": "Voice History archive V1 manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "schemaRevision",
+    "exportedAt",
+    "document",
+    "results",
+    "isPinned"
+  ],
+  "properties": {
+    "format": { "const": "voice_history" },
+    "schemaRevision": { "const": 1 },
+    "exportedAt": { "$ref": "#/$defs/timestamp" },
+    "document": { "$ref": "#/$defs/document" },
+    "results": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 10000,
+      "items": { "$ref": "#/$defs/result" }
+    },
+    "audioFilename": { "const": "audio.caf" },
+    "audioDurationMilliseconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    },
+    "audioExpiredAt": { "$ref": "#/$defs/timestamp" },
+    "audioExpirationReason": {
+      "enum": [
+        "age_limit",
+        "artifact_limit",
+        "byte_limit",
+        "low_disk",
+        "recovery_limit"
+      ]
+    },
+    "recoveryKind": {
+      "enum": [
+        "interrupted_capture",
+        "orphaned_finalization",
+        "interrupted_expiration"
+      ]
+    },
+    "recoveredAt": { "$ref": "#/$defs/timestamp" },
+    "isPinned": { "type": "boolean" }
+  },
+  "dependentRequired": {
+    "audioFilename": ["audioDurationMilliseconds"],
+    "audioExpiredAt": ["audioExpirationReason"],
+    "audioExpirationReason": ["audioExpiredAt"],
+    "recoveryKind": ["recoveredAt"],
+    "recoveredAt": ["recoveryKind"]
+  },
+  "$defs": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "startedAt",
+        "endedAt",
+        "rawText",
+        "editedText",
+        "formattedText",
+        "deliveredText",
+        "deliveryOutcome",
+        "inputKind"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "startedAt": { "$ref": "#/$defs/timestamp" },
+        "endedAt": { "$ref": "#/$defs/timestamp" },
+        "rawText": { "type": "string" },
+        "editedText": { "type": "string" },
+        "formattedText": { "type": "string" },
+        "deliveredText": { "type": "string" },
+        "targetApplicationName": { "type": "string" },
+        "deliveryOutcome": {
+          "enum": ["inserted", "failed", "notAttempted"]
+        },
+        "deliveryFailure": { "type": "string" },
+        "deliveryFailureReason": { "$ref": "#/$defs/deliveryFailureReason" },
+        "formattedDocument": { "$ref": "#/$defs/formattedDocument" },
+        "spokenEdits": { "$ref": "#/$defs/spokenEdits" },
+        "inputKind": { "enum": ["microphoneCapture", "importedAudio"] }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sessionID",
+        "createdAt",
+        "stage",
+        "origin",
+        "text",
+        "timedSpans"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "sessionID": { "$ref": "#/$defs/uuid" },
+        "createdAt": { "$ref": "#/$defs/timestamp" },
+        "stage": {
+          "enum": ["raw", "edited", "formatted", "delivered", "corrected"]
+        },
+        "origin": {
+          "enum": [
+            "capture",
+            "spokenEdits",
+            "formatting",
+            "delivery",
+            "correction",
+            "retranscription",
+            "reformatting",
+            "redelivery",
+            "audioImport"
+          ]
+        },
+        "text": { "type": "string" },
+        "sourceResultID": { "$ref": "#/$defs/uuid" },
+        "style": { "$ref": "#/$defs/style" },
+        "provider": { "enum": ["appleOnDevice", "ollama"] },
+        "modelIdentifier": { "type": "string" },
+        "promptRevision": { "type": "integer", "minimum": 1 },
+        "formattedDocument": { "$ref": "#/$defs/formattedDocument" },
+        "timedSpans": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/timedSpan" }
+        },
+        "deliveryOutcome": {
+          "enum": ["inserted", "failed", "notAttempted"]
+        },
+        "deliveryFailure": { "type": "string" },
+        "deliveryFailureReason": { "$ref": "#/$defs/deliveryFailureReason" }
+      }
+    },
+    "deliveryFailureReason": {
+      "enum": [
+        "focusChanged",
+        "processChanged",
+        "secureStatusChanged",
+        "caretChanged",
+        "insertionRejected"
+      ]
+    },
+    "style": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "revision"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "natural",
+            "casualMessage",
+            "formal",
+            "technical",
+            "verbatim"
+          ]
+        },
+        "revision": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "formattedDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rawText", "style", "blocks", "evidence", "validationStatus"],
+      "properties": {
+        "rawText": { "type": "string" },
+        "style": { "$ref": "#/$defs/style" },
+        "blocks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/formattedBlock" }
+        },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/formattingEvidence" }
+        },
+        "validationStatus": { "enum": ["validated", "rawFallback"] }
+      }
+    },
+    "formattedBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "items", "evidenceIndices"],
+      "properties": {
+        "kind": {
+          "enum": ["paragraph", "unorderedList", "orderedList", "verbatim"]
+        },
+        "items": { "type": "array", "items": { "type": "string" } },
+        "evidenceIndices": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "formattingEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rawUTF8StartOffset", "rawUTF8EndOffset"],
+      "properties": {
+        "rawUTF8StartOffset": { "type": "integer", "minimum": 0 },
+        "rawUTF8EndOffset": { "type": "integer", "minimum": 0 },
+        "provider": { "enum": ["appleOnDevice", "ollama"] },
+        "modelIdentifier": { "type": "string" },
+        "promptRevision": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "spokenEdits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "sourceText", "editedText", "operations"],
+      "properties": {
+        "revision": { "type": "integer", "minimum": 1 },
+        "sourceText": { "type": "string" },
+        "editedText": { "type": "string" },
+        "operations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/spokenEditOperation" }
+        }
+      }
+    },
+    "spokenEditOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "sourceUTF8StartOffset",
+        "sourceUTF8EndOffset",
+        "editedUTF8StartOffset",
+        "editedUTF8EndOffset",
+        "replacementText"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "deleteCurrentClause",
+            "deleteCurrentSentence",
+            "insertParagraphBreak",
+            "beginOrderedList",
+            "beginOrderedListItem",
+            "endList",
+            "preserveLiteralCommand"
+          ]
+        },
+        "sourceUTF8StartOffset": { "type": "integer", "minimum": 0 },
+        "sourceUTF8EndOffset": { "type": "integer", "minimum": 0 },
+        "editedUTF8StartOffset": { "type": "integer", "minimum": 0 },
+        "editedUTF8EndOffset": { "type": "integer", "minimum": 0 },
+        "replacementText": { "type": "string" }
+      }
+    },
+    "timedSpan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["startMilliseconds", "endMilliseconds", "text"],
+      "properties": {
+        "startMilliseconds": { "type": "integer", "minimum": 0 },
+        "endMilliseconds": { "type": "integer", "minimum": 1 },
+        "text": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

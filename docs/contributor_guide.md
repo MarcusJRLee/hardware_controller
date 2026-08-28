@@ -4,14 +4,19 @@
 
 | Goal | Command or entry point | Device or signing required |
 | --- | --- | --- |
-| Explore the UI | `swift run HardwareController --demo` | No |
+| Explore the UI | `scripts/run_demo.sh` | No Device or signing; rustup required |
 | Verify a change | `scripts/check.sh` | No |
+| Verify portable Rust and C ABI | `scripts/check_rust.sh` | No |
 | Exercise real hardware | Signed build from `scripts/build_app.sh` | Yes |
 | Run an opt-in system check | [README verification commands](../README.md#opt-in-system-verification) | Named resource only |
 
 Demo mode uses deterministic process data and does not request Accessibility,
 Microphone, Speech Recognition, or hardware access. Tests replace process
 boundaries and skip opt-in system checks unless their environment flag is set.
+`scripts/check.sh` runs the required SQLite contention and HID latency checks in
+separate test processes. The contention check deliberately holds a writer lock;
+the HID check measures scheduler latency. Isolation keeps either from distorting
+unrelated parallel suites.
 
 ## Source map
 
@@ -21,8 +26,17 @@ boundaries and skip opt-in system checks unless their environment flag is set.
 | `Sources/HardwareControllerMac/` | IOKit, Accessibility, audio, speech, local refinement, persistence adapters, and process runtime. |
 | `Sources/HardwareControllerAudioBoundary/` | Narrow Objective-C exception boundary around AVFAudio operations. |
 | `Sources/HardwareControllerApp/` | AppKit application lifecycle, SwiftUI presentation, navigation, and presentation state. |
+| `crates/voice_core/` | Dependency-free portable Voice domain policy; unsafe Rust is denied. |
+| `crates/voice_archive/` | Bounded portable Voice History inventory, identity, and digest verification. |
+| `crates/voice_models/` | Bounded portable Model-package schema, inventory, license, and digest verification. |
+| `crates/voice_ffi/` | Versioned synchronous C ABI and source-controlled public header. |
+| `Sources/hardware_controller_voice_ffi/` | Typed, pointer-free Swift values over the linked synchronous Rust ABI. |
+| `Sources/voice_ffi_bridge/` | Header-only C import boundary for Swift. |
+| `schemas/` | Language-neutral versioned Model-package and archive contracts. |
 | `Tests/*Tests/` | Colocated target-level unit and boundary tests mirroring source ownership. |
 | `Tests/*Tests/fixtures/` | Sanitized hardware and Local AI evidence used by deterministic tests. |
+| `Tests/cuj/` | Versioned cross-language behavior fixtures. |
+| `Tests/voice_ffi/` | Real C consumers for ABI compile, link, and execution checks. |
 | `packaging/` | Bundle metadata, entitlements, and source artwork. |
 | `scripts/` | Verification, private signing, release validation, and distribution tooling. |
 
@@ -42,6 +56,11 @@ Tests must not prompt for permissions, require a connected Device, contact a
 remote host, or consume a real microphone unless an explicit opt-in flag names
 that dependency. Use immutable fixtures and injected clocks, stores, and
 system boundaries for the default suite.
+
+Portable policy changes update the shared CUJ fixture, Rust test, Swift
+conformance test, public header when applicable, and decision record together.
+Keep unsafe code inside `voice_ffi`; platform wrappers translate values and
+errors without adding policy.
 
 ## Adding a Driver
 

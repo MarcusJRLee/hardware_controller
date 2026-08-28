@@ -43,6 +43,49 @@ public enum FocusedTextDeliveryCapability:
   }
 }
 
+public enum FocusedTextTargetOwnershipFailure:
+  Equatable,
+  Sendable
+{
+  case focusChanged
+  case processChanged
+  case secureStatusChanged
+
+  var transcriptionFailure: TranscriptionFailure {
+    switch self {
+    case .focusChanged:
+      .focusChanged
+    case .processChanged:
+      .processChanged
+    case .secureStatusChanged:
+      .secureTextField
+    }
+  }
+}
+
+enum FocusedTextTargetOwnershipPolicy {
+  static func failure(
+    expectedProcessIdentifier: pid_t,
+    currentProcessIdentifier: pid_t?,
+    currentIsSecure: Bool,
+    isSameElement: Bool
+  ) -> FocusedTextTargetOwnershipFailure? {
+    guard let currentProcessIdentifier else {
+      return .focusChanged
+    }
+    guard currentProcessIdentifier == expectedProcessIdentifier else {
+      return .processChanged
+    }
+    guard !currentIsSecure else {
+      return .secureStatusChanged
+    }
+    guard isSameElement else {
+      return .focusChanged
+    }
+    return nil
+  }
+}
+
 struct FocusedTextTargetMetadata: Equatable, Sendable {
   let applicationBundleIdentifier: String?
   let role: String?
@@ -123,6 +166,7 @@ public final class FocusedTextTarget:
   public let supportsMultilineText: Bool
   public let selectedRange: FocusedTextRange?
   public let deliveryCapability: FocusedTextDeliveryCapability
+  let guardsCapturedCaret: Bool
   let element: AXUIElement
 
   init(
@@ -134,7 +178,8 @@ public final class FocusedTextTarget:
     supportsMultilineText: Bool = false,
     selectedRange: FocusedTextRange? = nil,
     deliveryCapability:
-      FocusedTextDeliveryCapability = .finalOnly
+      FocusedTextDeliveryCapability = .finalOnly,
+    guardsCapturedCaret: Bool = false
   ) {
     self.element = element
     self.processIdentifier = processIdentifier
@@ -144,9 +189,10 @@ public final class FocusedTextTarget:
     self.supportsMultilineText = supportsMultilineText
     self.selectedRange = selectedRange
     self.deliveryCapability = deliveryCapability
+    self.guardsCapturedCaret = guardsCapturedCaret
   }
 
-  /// Keeps the same target lease while preventing provisional field mutation.
+  /// Keeps recognition final-only without changing the delivery target lease.
   func finalOnlyCopy() -> FocusedTextTarget {
     FocusedTextTarget(
       element: element,
@@ -159,11 +205,40 @@ public final class FocusedTextTarget:
       deliveryCapability: .finalOnly
     )
   }
+
+  /// Preserves the route while requiring the original empty caret.
+  func guardedDeliveryCopy() throws -> FocusedTextTarget {
+    guard let selectedRange, selectedRange.length == 0 else {
+      throw TranscriptionFailure.noFocusedTextField
+    }
+    return FocusedTextTarget(
+      element: element,
+      processIdentifier: processIdentifier,
+      applicationName: applicationName,
+      applicationBundleIdentifier: applicationBundleIdentifier,
+      role: role,
+      supportsMultilineText: supportsMultilineText,
+      selectedRange: selectedRange,
+      deliveryCapability: deliveryCapability,
+      guardsCapturedCaret: true
+    )
+  }
 }
 
 public protocol FocusedTextTargeting: Sendable {
   func capture() throws -> FocusedTextTarget
   func isStillFocused(_ target: FocusedTextTarget) -> Bool
+  func ownershipFailure(
+    for target: FocusedTextTarget
+  ) -> FocusedTextTargetOwnershipFailure?
+}
+
+extension FocusedTextTargeting {
+  public func ownershipFailure(
+    for target: FocusedTextTarget
+  ) -> FocusedTextTargetOwnershipFailure? {
+    isStillFocused(target) ? nil : .focusChanged
+  }
 }
 
 public struct AccessibilityFocusedTextTargeting:
@@ -270,20 +345,27 @@ public struct AccessibilityFocusedTextTargeting:
   public func isStillFocused(
     _ target: FocusedTextTarget
   ) -> Bool {
+    ownershipFailure(for: target) == nil
+  }
+
+  public func ownershipFailure(
+    for target: FocusedTextTarget
+  ) -> FocusedTextTargetOwnershipFailure? {
     guard let current = focusedElement() else {
-      return false
+      return .focusChanged
     }
     var processIdentifier: pid_t = 0
-    guard
-      AXUIElementGetPid(
-        current,
-        &processIdentifier
-      ) == .success,
-      processIdentifier == target.processIdentifier
-    else {
-      return false
-    }
-    return CFEqual(current, target.element)
+    let currentProcessIdentifier: pid_t? =
+      AXUIElementGetPid(current, &processIdentifier) == .success
+      ? processIdentifier : nil
+    return FocusedTextTargetOwnershipPolicy.failure(
+      expectedProcessIdentifier: target.processIdentifier,
+      currentProcessIdentifier: currentProcessIdentifier,
+      currentIsSecure:
+        attribute(kAXSubroleAttribute, from: current)
+        == kAXSecureTextFieldSubrole as String,
+      isSameElement: CFEqual(current, target.element)
+    )
   }
 
   public func focusedCaretPoint() -> CGPoint? {

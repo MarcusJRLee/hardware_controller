@@ -11,13 +11,13 @@ inference.
 
 ## Quick start
 
-Requirements: Apple silicon, macOS 15 or later, and Xcode 26 or a compatible
-Swift 6 toolchain.
+Requirements: Apple silicon, macOS 15 or later, Xcode 26 or a compatible Swift
+6 toolchain, and rustup. The repository pins Rust 1.98.
 
 ```bash
 git clone https://github.com/MarcusJRLee/hardware_controller.git
 cd hardware_controller
-swift run HardwareController --demo
+scripts/run_demo.sh
 ```
 
 Demo mode is deterministic and requires no foot controller, Apple signing
@@ -27,8 +27,13 @@ identity, or privacy permission.
 
 | Goal | Start here | Additional requirement |
 | --- | --- | --- |
-| Explore the app | `swift run HardwareController --demo` | None |
+| Explore the app | `scripts/run_demo.sh` | rustup |
 | Contribute | `scripts/check.sh` | Xcode 26 or compatible Swift 6 toolchain |
+| Verify only the portable core | `scripts/check_rust.sh` | rustup and a C17 compiler |
+| Verify the iOS app | `scripts/check_ios.sh` | Xcode 26, XcodeGen, iOS simulator, and Rust iOS targets |
+| Install the iOS app | `scripts/install_ios.sh` | Connected unlocked iPhone, Developer Mode, Apple Development identity, and private Team ID |
+| Build the iOS app | `scripts/build_ios_device.sh` | Rust iOS targets, Apple Development identity, and private Team ID |
+| Prepare the iOS starter model | `scripts/prepare_ios_whisper_model_package.sh /path/to/output` | 130 MB free build space and HTTPS during preparation |
 | Use real hardware | [Signed hardware build](#signed-hardware-build) | Apple Development identity and supported Device |
 | Install as a nondeveloper | [Public distribution](docs/public_distribution.md) | Notarized public release; not yet available |
 
@@ -40,8 +45,54 @@ Run the same formatting, build, test, and release-script checks as GitHub:
 scripts/check.sh
 ```
 
+`scripts/check_ios.sh` additionally rejects network clients and network/cloud
+capabilities in iOS product sources before building or testing.
+
+## Install the iOS app
+
+Configure the ignored `.env.local` signing values, connect and unlock an iPhone,
+then run:
+
+```bash
+scripts/install_ios.sh
+```
+
+The command asks which available iPhone and configuration to use, then builds,
+installs, and launches Voice Input. **Development** is the default Debug build.
+**Local QA** is an optimized Release build that remains Apple Development
+signed; it is not an App Store or production release. Automation may use
+`--device <identifier-or-name> --config <development|local_qa>`.
+
 See the [contributor guide](docs/contributor_guide.md) for source ownership,
 test placement, Driver additions, and opt-in system checks.
+
+The iOS app performs capture and inference locally and has no model-download
+path. To exercise its first speech-to-text adapter, prepare the pinned Whisper
+Tiny English package on the Mac, move that folder into Files on the iPhone,
+then use **Voice Input → Local models → Import Model package → Use for speech to
+text**. Runtime/model downloads occur only in repository build preparation;
+the installed app does not require a network connection.
+
+The custom keyboard records through the containing app or its Control Center
+control; iOS does not permit microphone capture inside a keyboard extension.
+After local finalization, the keyboard makes one automatic insertion attempt.
+If no field update is confirmed, **Recover…** permits one explicit same-target
+retry or an on-device clipboard copy that expires after ten minutes and cannot
+cross Universal Clipboard. Any field, session, or process change falls back to
+**Voice Input → History**, where completed text remains copyable.
+
+**Voice Input → History → History storage** configures recording age, total
+bytes, and count. The defaults are 90 days, 1 GiB, and 2,000 recordings. Pin
+important audio to exclude it from automatic cleanup; transcripts remain after
+audio expires. Low-disk maintenance restores a 1 GiB free-space reserve without
+discarding a committed capture. Installed Model packages use a separate budget
+and are removed only by an explicit user action.
+
+For keyboard-free iPhone capture, add **Voice Capture** to Control Center, the
+Lock Screen, or the Action button, or use the bundled Siri/Shortcuts start and
+stop actions. The containing app records locally and shows a Live Activity with
+a stop action. Completed text is saved before it becomes available; copy or
+share it from **Voice Input → History**, or retrieve it from the keyboard later.
 
 ## Signed hardware build
 
@@ -89,6 +140,11 @@ center. The menu-bar template uses the same three-node geometry. Neither mark
 copies a supported Device or manufacturer branding. The source raster is
 [`packaging/app_icon_source.png`](packaging/app_icon_source.png).
 
+Across macOS and iOS, the interface is restrained and purpose-led: neutral
+surfaces, no decorative borders, system typography, and one strong action per
+workflow. Color is reserved for state or recovery that cannot be communicated
+as clearly through hierarchy and symbols.
+
 A source change or version number is not release approval. Do not run
 `scripts/build_release.sh`, create a DMG, tag, GitHub Release, or release record
 without explicit approval for that exact version. The intentionally retained
@@ -109,8 +165,23 @@ The center Control defaults to Local Dictation in Hold mode. Left and right
 default to No Action. Any configured Control may receive an opt-in exact
 keyboard fallback for use while its Device is disconnected.
 
+To dictate without a Device, open **General → Voice capture shortcut**, record
+an exact chord with at least two modifiers, then hold it while speaking. Two
+short presses latch capture; the next two finish. The chord uses Local AI
+Dictation and is disabled until you configure it.
+
 See the [user guide](docs/user_guide.md) for Profiles, target behavior,
 recovery, and troubleshooting.
+
+Voice History repairs app-owned partial, orphan, and interrupted-expiration
+audio at startup before applying storage limits. Recovered audio is marked,
+playable, and locally retranscribable without invented text; unpinned recovery
+audio expires after 24 hours while its History row remains searchable.
+History can also import a supported local recording, transcribe and format it
+on-device, and retain one app-owned copy without changing the original. V1
+`.voice_history` archives move immutable transcript/audio evidence between
+installations through the Rust verifier linked into the Apple app, then bounded
+Swift restore logic. Import never delivers text.
 
 ## Dictation Actions
 
@@ -126,11 +197,16 @@ model warm-up begins while the user speaks and never blocks the HID-to-Action
 path.
 
 Local AI Dictation removes fillers, resolves clear self-corrections, corrects
-supported recognition errors, adds punctuation, and chooses paragraphs or
-lists when the target safely supports multiline text. It validates protected
-numbers, URLs, email addresses, paths, code-like tokens, quotations, and
-dictionary terms. A provider error, invalid output, or three-second deadline
-delivers the raw transcript once when the captured target is still safe.
+supported recognition errors, and applies the selected Natural, Casual
+Message, Formal, Technical, or Verbatim Style. It creates validated paragraph
+and list blocks, then preserves or flattens structure for the target. It
+also applies exact spoken commands such as **scratch that**, **delete that
+sentence**, **new paragraph**, and numbered-list boundaries before formatting;
+say **literal** immediately before a command phrase to keep the phrase. It
+validates protected numbers, URLs, email addresses, paths, code-like tokens,
+quotations, and dictionary terms. A provider error, invalid output, or
+three-second deadline delivers the deterministic Edited transcript once when
+the captured target is still safe.
 
 ### Apple On-Device
 
@@ -168,8 +244,17 @@ but preserves a model that another local Ollama client already had running.
 
 ## Privacy and safety
 
-- Microphone audio, transcripts, nearby context, prompts, and generated text
-  remain in memory and are not logged or persisted.
+- Local Dictation remains memory-only. Local AI Dictation records one local CAF
+  plus immutable Raw, Edited, Formatted, Delivered, and corrected results under
+  the app's Application Support directory. **History** can search, inspect,
+  replay, correct, retranscribe, reformat, retry, export, pin, and delete those
+  sessions. **General → Voice History storage** independently caps audio age,
+  total bytes, and recording count; defaults are 90 days, 2 GiB, or 5,000
+  recordings, whichever is reached first. `Unlimited` and no-retained-audio
+  choices are explicit. Cleanup keeps transcripts searchable and protects
+  active, pinned, and sole recovery audio.
+- Nearby context, prompts, and model payloads remain memory-only. Speech content
+  is never written to logs.
 - Apple speech recognition is required to run on-device.
 - Ollama traffic is restricted to fixed numeric loopback; no user content is
   sent to a remote host.
@@ -184,19 +269,23 @@ but preserves a model that another local Ollama client already had running.
 ## What ships
 
 - Exact-signature, exclusive IOKit HID input on a user-interactive serial queue.
-- Independent per-Control Bindings, Hold/Toggle semantics, and exact keyboard
-  fallbacks scoped to the active Profile.
+- Independent per-Control Bindings, Hold/Toggle semantics, exact keyboard
+  fallbacks scoped to the active Profile, and an independent opt-in hold/latch
+  Voice chord.
 - `SpeechAnalyzer` on macOS 26+ and on-device-required
   `SFSpeechRecognizer` on macOS 15–25.
 - Adaptive Accessibility and guarded foreground text delivery for native,
   browser, and validated terminal targets.
 - Apple Foundation Models and optional local Ollama refinement behind one typed
   provider contract.
+- A dependency-free Rust retention policy plus bounded, digest-verifying Model-
+  package and Voice History archive validators behind one versioned caller-
+  owned C ABI.
 - Atomic, schema-versioned local Profiles and application preferences with
   explicit migration, corruption recovery, and forward-schema protection.
-- A native Controller, Profiles, and General shell with Dock and menu-bar
-  presence, direct permission recovery, and transient final-only transcript
-  HUD.
+- A native Controller, History, Profiles, and General shell with Dock and
+  menu-bar presence, searchable local Voice evidence, direct permission
+  recovery, and transient final-only transcript HUD.
 - No accounts, analytics, telemetry, cloud APIs, remote storage, or third-party
   linked runtime dependencies.
 
@@ -226,6 +315,8 @@ HC_RUN_LOCAL_AI_MODEL_EVALUATION=1 swift test \
   --filter LocalAIModelEvaluationTest
 HC_RUN_LOCAL_AI_END_TO_END_BENCHMARK=1 swift test \
   --filter measuresWarmReleaseToInsertionWithTheRecommendedModel
+
+HC_RUN_IOS_ASR_PERFORMANCE=1 scripts/check_voice_whisper_bridge.sh
 ```
 
 The web, terminal, foreground-event, and complete speech-to-field commands are
@@ -242,6 +333,9 @@ documented in [release validation](docs/release_validation.md).
 | [Branding](BRANDING.md) | Canonical-project and modified-build identification. |
 | [User guide](docs/user_guide.md) | Installation, setup, use, and troubleshooting. |
 | [Product brief](docs/product_brief.md) | Product scope, domain language, and acceptance stories. |
+| [Voice platform design](docs/voice_platform_design.md) | Accepted local Voice roadmap for the existing macOS app and iOS. |
+| [Voice CUJs](docs/voice_cujs.md) | Accepted test-first macOS and iOS behavior contract. |
+| [Voice implementation goal](docs/voice_implementation_goal_prompt.md) | Copy-paste autonomous execution prompt and definition of done. |
 | [Game plan](docs/game_plan.md) | Current quality gates and remaining evidence. |
 | [Public distribution](docs/public_distribution.md) | Gated Developer ID, notarization, and free-DMG runbook. |
 | [Public repository migration](docs/public_repository_migration.md) | Completed clean-history replacement record and GitHub controls. |

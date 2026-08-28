@@ -1,3 +1,4 @@
+import HardwareControllerCore
 import SwiftUI
 
 /// Presents application-wide appearance and startup preferences.
@@ -23,6 +24,13 @@ struct GeneralSettingsView: View {
           NoticeBanner(
             message: notice,
             dismiss: preferencesModel.clearNotice
+          )
+        }
+
+        if let failure = model.voiceShortcutFailure {
+          NoticeBanner(
+            message: failure.recoveryMessage,
+            dismiss: nil
           )
         }
 
@@ -90,6 +98,94 @@ struct GeneralSettingsView: View {
               )
           }
 
+          Section("Voice capture shortcut") {
+            ShortcutRecorderButton(
+              shortcut: preferencesModel.voiceTriggerSettings.shortcut
+            ) { shortcut in
+              var settings = preferencesModel.voiceTriggerSettings
+              settings.shortcut = shortcut
+              _ = preferencesModel.setVoiceTriggerSettings(settings)
+            }
+
+            if preferencesModel.voiceTriggerSettings.shortcut != nil {
+              Button("Clear shortcut", role: .destructive) {
+                var settings = preferencesModel.voiceTriggerSettings
+                settings.shortcut = nil
+                _ = preferencesModel.setVoiceTriggerSettings(settings)
+              }
+              .buttonStyle(.link)
+            }
+
+            Text(
+              "Hold the chord while speaking, or press it twice to keep listening. Press it twice again to finish. Use at least two modifier keys."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+          }
+
+          Section("Voice History storage") {
+            Picker(
+              "Audio age",
+              selection: Binding<Int?>(
+                get: {
+                  preferencesModel.voiceHistoryRetention.maximumAgeDays
+                },
+                set: { setRetentionAge($0) }
+              )
+            ) {
+              Text("Don't retain").tag(Int?.some(0))
+              Text("30 days").tag(Int?.some(30))
+              Text("90 days").tag(Int?.some(90))
+              Text("180 days").tag(Int?.some(180))
+              Text("1 year").tag(Int?.some(365))
+              Text("Unlimited").tag(Int?.none)
+            }
+            .accessibilityIdentifier("voice_history_retention_age")
+
+            Picker(
+              "Audio size",
+              selection: Binding<Int64?>(
+                get: {
+                  preferencesModel.voiceHistoryRetention.maximumAudioBytes
+                },
+                set: { setRetentionBytes($0) }
+              )
+            ) {
+              Text("Don't retain").tag(Int64?.some(0))
+              Text("512 MiB").tag(Int64?.some(512 * 1_024 * 1_024))
+              Text("1 GiB").tag(Int64?.some(1 * 1_024 * 1_024 * 1_024))
+              Text("2 GiB").tag(Int64?.some(2 * 1_024 * 1_024 * 1_024))
+              Text("4 GiB").tag(Int64?.some(4 * 1_024 * 1_024 * 1_024))
+              Text("Unlimited").tag(Int64?.none)
+            }
+            .accessibilityIdentifier("voice_history_retention_size")
+
+            Picker(
+              "Audio recordings",
+              selection: Binding<Int?>(
+                get: {
+                  preferencesModel.voiceHistoryRetention
+                    .maximumArtifactCount
+                },
+                set: { setRetentionCount($0) }
+              )
+            ) {
+              Text("Don't retain").tag(Int?.some(0))
+              Text("1,000").tag(Int?.some(1_000))
+              Text("2,500").tag(Int?.some(2_500))
+              Text("5,000").tag(Int?.some(5_000))
+              Text("10,000").tag(Int?.some(10_000))
+              Text("Unlimited").tag(Int?.none)
+            }
+            .accessibilityIdentifier("voice_history_retention_count")
+
+            Text(
+              "The first limit reached—or low disk space—expires the oldest unpinned audio. Transcripts and result history remain searchable. Active recordings and failed deliveries are protected."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+          }
+
           LocalAISettingsSection(
             model: model,
             preferencesModel: preferencesModel
@@ -114,6 +210,39 @@ struct GeneralSettingsView: View {
     }
     return
       "Move Hardware Controller to Applications before enabling Launch at Login."
+  }
+
+  private func setRetentionAge(_ value: Int?) {
+    let current = preferencesModel.voiceHistoryRetention
+    _ = preferencesModel.setVoiceHistoryRetention(
+      VoiceHistoryRetentionSettings(
+        maximumAgeDays: value,
+        maximumAudioBytes: current.maximumAudioBytes,
+        maximumArtifactCount: current.maximumArtifactCount
+      )
+    )
+  }
+
+  private func setRetentionBytes(_ value: Int64?) {
+    let current = preferencesModel.voiceHistoryRetention
+    _ = preferencesModel.setVoiceHistoryRetention(
+      VoiceHistoryRetentionSettings(
+        maximumAgeDays: current.maximumAgeDays,
+        maximumAudioBytes: value,
+        maximumArtifactCount: current.maximumArtifactCount
+      )
+    )
+  }
+
+  private func setRetentionCount(_ value: Int?) {
+    let current = preferencesModel.voiceHistoryRetention
+    _ = preferencesModel.setVoiceHistoryRetention(
+      VoiceHistoryRetentionSettings(
+        maximumAgeDays: current.maximumAgeDays,
+        maximumAudioBytes: current.maximumAudioBytes,
+        maximumArtifactCount: value
+      )
+    )
   }
 
 }

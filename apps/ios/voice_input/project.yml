@@ -1,0 +1,245 @@
+name: VoiceInput
+
+options:
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "18.0"
+
+settings:
+  base:
+    CLANG_ENABLE_MODULES: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_VERSION: 6.0
+
+targets:
+  VoiceInput:
+    type: application
+    platform: iOS
+    sources:
+      - app
+      - system_capture
+      - path: resources/third_party_notices.txt
+        buildPhase: resources
+    dependencies:
+      - target: VoiceInputShared
+      - target: HardwareControllerVoiceCore
+      - target: HardwareControllerVoiceFFI
+        embed: false
+      - target: VoiceWhisperBridge
+        embed: false
+      - target: VoiceInputKeyboard
+        embed: true
+      - target: VoiceInputWidgets
+        embed: true
+      - framework: ../../../.build/ios_voice_ffi/VoiceFFI.xcframework
+        embed: false
+      - framework: ../../../.build/ios_asr_runtime/build-apple/whisper.xcframework
+        embed: true
+    entitlements:
+      path: config/app.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.longdevity.hardwarecontroller.voiceinput.shared
+    info:
+      path: config/app_info.plist
+      properties:
+        CFBundleDisplayName: Voice Input
+        CFBundleName: Voice Input
+        NSMicrophoneUsageDescription: Voice Input records audio locally for transcription.
+        NSSupportsLiveActivities: true
+        UIBackgroundModes:
+          - audio
+        UILaunchScreen: {}
+    settings:
+      base:
+        OTHER_LDFLAGS: $(inherited) -lsqlite3
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput
+        TARGETED_DEVICE_FAMILY: 1
+
+  VoiceInputShared:
+    type: framework.static
+    platform: iOS
+    sources:
+      - shared
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.shared
+
+  HardwareControllerVoiceCore:
+    type: framework.static
+    platform: iOS
+    sources:
+      - path: ../../../Sources/HardwareControllerCore/local_ai_provider_kind.swift
+        group: portable_voice_core
+      - path: ../../../Sources/HardwareControllerCore/voice_formatted_document_builder.swift
+        group: portable_voice_core
+      - path: ../../../Sources/HardwareControllerCore/voice_formatted_text_renderer.swift
+        group: portable_voice_core
+      - path: ../../../Sources/HardwareControllerCore/voice_formatting.swift
+        group: portable_voice_core
+      - path: ../../../Sources/HardwareControllerCore/voice_history_retention.swift
+        group: portable_voice_core
+      - path: ../../../Sources/HardwareControllerCore/voice_spoken_edit.swift
+        group: portable_voice_core
+      - path: ../../../Sources/HardwareControllerCore/voice_spoken_edit_engine.swift
+        group: portable_voice_core
+      - path: ../../../Sources/HardwareControllerCore/voice_spoken_edit_replayer.swift
+        group: portable_voice_core
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.voicecore
+
+  HardwareControllerVoiceFFI:
+    type: framework.static
+    platform: iOS
+    sources:
+      - path: ../../../Sources/hardware_controller_voice_ffi
+        group: portable
+        createIntermediateGroups: false
+        excludes:
+          - voice_ffi_build_stamp.generated.swift
+    dependencies:
+      - framework: ../../../.build/ios_voice_ffi/VoiceFFI.xcframework
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.voiceffi
+
+  VoiceWhisperBridge:
+    type: framework.static
+    platform: iOS
+    sources:
+      - path: ../../../Sources/voice_whisper_bridge/voice_whisper_bridge.c
+        group: portable
+        createIntermediateGroups: false
+      - path: ../../../Sources/voice_whisper_bridge/include/voice_whisper_bridge.h
+        group: portable
+        headerVisibility: public
+    dependencies:
+      - framework: ../../../.build/ios_asr_runtime/build-apple/whisper.xcframework
+    settings:
+      base:
+        DEFINES_MODULE: YES
+        GENERATE_INFOPLIST_FILE: YES
+        HEADER_SEARCH_PATHS: $(inherited) $(SRCROOT)/../../../Sources/voice_whisper_bridge/include
+        MODULEMAP_FILE: $(SRCROOT)/../../../Sources/voice_whisper_bridge/include/module.modulemap
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.whisperbridge
+
+  VoiceInputKeyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - keyboard
+    dependencies:
+      - target: VoiceInputShared
+    entitlements:
+      path: config/keyboard.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.longdevity.hardwarecontroller.voiceinput.shared
+    info:
+      path: config/keyboard_info.plist
+      properties:
+        CFBundleDisplayName: Voice Keyboard
+        NSExtension:
+          NSExtensionAttributes:
+            IsASCIICapable: true
+            PrefersRightToLeft: false
+            PrimaryLanguage: en-US
+            RequestsOpenAccess: true
+          NSExtensionPointIdentifier: com.apple.keyboard-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.keyboard
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: 1
+
+  VoiceInputWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - widgets
+      - system_capture
+    dependencies:
+      - target: VoiceInputShared
+    entitlements:
+      path: config/widgets.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.longdevity.hardwarecontroller.voiceinput.shared
+    info:
+      path: config/widgets_info.plist
+      properties:
+        CFBundleDisplayName: Voice Input Controls
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.widgets
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: 1
+
+  VoiceInputTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - tests
+      - path: ../../../Tests/cuj/voice_model_package_v1/valid
+        group: fixtures
+        createIntermediateGroups: false
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: VoiceInputShared
+      - target: VoiceInput
+      - target: HardwareControllerVoiceCore
+      - target: HardwareControllerVoiceFFI
+        embed: false
+    entitlements:
+      path: config/tests.entitlements
+      properties:
+        application-identifier: $(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.longdevity.hardwarecontroller.voiceinput.shared
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.tests
+
+  VoiceInputUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - ui_tests
+    dependencies:
+      - target: VoiceInput
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.uitests
+        TEST_TARGET_NAME: VoiceInput
+
+schemes:
+  VoiceInput:
+    build:
+      targets:
+        VoiceInput: all
+        VoiceInputTests: [test]
+        VoiceInputUITests: [test]
+    test:
+      targets:
+        - VoiceInputTests
+        - VoiceInputUITests
+
+  VoiceInputShared:
+    build:
+      targets:
+        VoiceInputShared: all
+        VoiceInputTests: [test]
+    test:
+      targets:
+        - VoiceInputTests

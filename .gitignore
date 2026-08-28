@@ -17,6 +17,10 @@ xcuserdata/
 .swiftpm/
 Package.resolved
 
+# Rust
+target/
+Sources/hardware_controller_voice_ffi/voice_ffi_build_stamp.generated.swift
+
 # Local configuration and diagnostics
 .env
 .env.*

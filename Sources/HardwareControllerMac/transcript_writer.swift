@@ -351,9 +351,7 @@ public struct SafeTranscriptWriter<
     if case .bufferedEvent(let anchor, _) =
       target.deliveryCapability
     {
-      guard targeter.isStillFocused(target) else {
-        throw TranscriptionFailure.focusChanged
-      }
+      try validateOwnership(of: target)
       guard inserter.selectedRange(in: target) == anchor else {
         throw TranscriptionFailure.caretChanged
       }
@@ -363,13 +361,35 @@ public struct SafeTranscriptWriter<
       return
     }
 
+    if target.guardsCapturedCaret {
+      guard let anchor = target.selectedRange else {
+        throw TranscriptionFailure.caretChanged
+      }
+      var expectedCaret = anchor
+      for chunk in Self.chunks(
+        text,
+        maximumUTF16Units: maximumUTF16UnitsPerInsertion
+      ) {
+        try validateOwnership(of: target)
+        guard inserter.selectedRange(in: target) == expectedCaret else {
+          throw TranscriptionFailure.caretChanged
+        }
+        guard inserter.insert(chunk, into: target) else {
+          throw TranscriptionFailure.insertionFailed
+        }
+        expectedCaret = FocusedTextRange(
+          location: expectedCaret.location + chunk.utf16.count,
+          length: 0
+        )
+      }
+      return
+    }
+
     for chunk in Self.chunks(
       text,
       maximumUTF16Units: maximumUTF16UnitsPerInsertion
     ) {
-      guard targeter.isStillFocused(target) else {
-        throw TranscriptionFailure.focusChanged
-      }
+      try validateOwnership(of: target)
       guard inserter.insert(chunk, into: target) else {
         throw TranscriptionFailure.insertionFailed
       }
@@ -381,9 +401,7 @@ public struct SafeTranscriptWriter<
     anchoredAt anchor: FocusedTextRange,
     in target: FocusedTextTarget
   ) throws {
-    guard targeter.isStillFocused(target) else {
-      throw TranscriptionFailure.focusChanged
-    }
+    try validateOwnership(of: target)
 
     let expectedCaret = FocusedTextRange(
       location:
@@ -406,6 +424,14 @@ public struct SafeTranscriptWriter<
       inserter.insert(mutation.replacementText, into: target)
     else {
       throw TranscriptionFailure.insertionFailed
+    }
+  }
+
+  private func validateOwnership(
+    of target: FocusedTextTarget
+  ) throws {
+    if let failure = targeter.ownershipFailure(for: target) {
+      throw failure.transcriptionFailure
     }
   }
 

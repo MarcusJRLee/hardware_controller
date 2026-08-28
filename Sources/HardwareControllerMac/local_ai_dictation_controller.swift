@@ -1,5 +1,6 @@
 import Foundation
 import HardwareControllerCore
+import os
 
 private enum LocalAIRefinementDeadlineOutcome: Sendable {
   case response(LocalAIRefinementResponse)
@@ -45,10 +46,19 @@ public actor LocalAIDictationController {
   private let validator: RefinedTranscriptValidator
   private let polisher: DeterministicTranscriptPolisher
   private let replacementApplier: PersonalDictionaryReplacementApplier
+  private let spokenEditEngine: VoiceSpokenEditEngine
+  private let formattedDocumentBuilder: VoiceFormattedDocumentBuilder
+  private let formattedTextRenderer: VoiceFormattedTextRenderer
   private let locale: Locale
   private let refinementTimeout: Duration
   private let snapshotHandler: SnapshotHandler
   private let speechMailbox: LocalAISpeechSnapshotMailbox
+  private let history: any VoiceSessionHistoryRecording
+  private let now: @Sendable () -> Date
+  private let logger = Logger(
+    subsystem: ApplicationIdentity.bundleIdentifier,
+    category: "VoiceHistory"
+  )
 
   private var settings: LocalAISettings
   private var profileName: String
@@ -60,6 +70,9 @@ public actor LocalAIDictationController {
   private var providerTestTask: Task<LocalAIRefinementFailure?, Never>?
   private var refinementTask: Task<Void, Never>?
   private var speechObservationTask: Task<Void, Never>?
+  private var sessionStartedAt: Date?
+  private var activeFormattedDocument: VoiceFormattedDocument?
+  private var activeCanonicalFormattedText = ""
 
   public init(
     factory: any SpeechRecognitionSessionCreating,
@@ -76,6 +89,9 @@ public actor LocalAIDictationController {
     locale: Locale = .current,
     finalizationTimeout: Duration = .seconds(5),
     refinementTimeout: Duration = .seconds(3),
+    history: any VoiceSessionHistoryRecording =
+      DiscardingVoiceSessionHistory(),
+    now: @escaping @Sendable () -> Date = { Date() },
     snapshotHandler: @escaping SnapshotHandler = { _ in }
   ) {
     let preparedTargeter = PreparedLocalAITargeter(
@@ -91,6 +107,7 @@ public actor LocalAIDictationController {
       locale: locale,
       vocabularyHints: settings.dictionary.vocabulary,
       finalizationTimeout: finalizationTimeout,
+      audioBufferHandler: history.append,
       snapshotHandler: mailbox.publish
     )
     self.preparedTargeter = preparedTargeter
@@ -101,10 +118,15 @@ public actor LocalAIDictationController {
     validator = RefinedTranscriptValidator()
     polisher = DeterministicTranscriptPolisher()
     replacementApplier = PersonalDictionaryReplacementApplier()
+    spokenEditEngine = VoiceSpokenEditEngine()
+    formattedDocumentBuilder = VoiceFormattedDocumentBuilder()
+    formattedTextRenderer = VoiceFormattedTextRenderer()
     self.settings = settings
     self.profileName = profileName
     self.locale = locale
     self.refinementTimeout = refinementTimeout
+    self.history = history
+    self.now = now
     self.snapshotHandler = snapshotHandler
     speechMailbox = mailbox
 
@@ -188,16 +210,18 @@ public actor LocalAIDictationController {
         ),
         dictionary: .empty,
         additionalInstructions:
-          currentSettings.additionalInstructions
+          currentSettings.additionalInstructions,
+        style: currentSettings.style
       )
       let response = try await responseBeforeTimeout(
         request,
         settings: currentSettings,
         preparationTask: preparationTask
       )
-      let polished = polisher.polish(
+      let polished = polishedText(
         response.text,
-        preserving: transcript
+        preserving: transcript,
+        style: currentSettings.style
       )
       _ = try validator.validate(
         polished,
@@ -290,9 +314,23 @@ public actor LocalAIDictationController {
       )
       return
     }
+    let deliveryTarget: FocusedTextTarget
+    do {
+      deliveryTarget = try capturedTarget.guardedDeliveryCopy()
+    } catch {
+      publishFailure(
+        .transcription(transcriptionFailure(from: error)),
+        sessionID: UUID(),
+        targetApplicationName: capturedTarget.applicationName
+      )
+      return
+    }
 
     let sessionID = UUID()
-    target = capturedTarget
+    let startedAt = now()
+    sessionStartedAt = startedAt
+    history.begin(sessionID: sessionID, startedAt: startedAt)
+    target = deliveryTarget
     preparedTargeter.prepare(capturedTarget.finalOnlyCopy())
     state = LocalAIDictationSnapshot(
       sessionID: sessionID,
@@ -306,8 +344,12 @@ public actor LocalAIDictationController {
     publish()
 
     let currentSettings = settings
-    providerPreparationTask = Task { [refiner] in
-      try await refiner.prepare(settings: currentSettings)
+    if currentSettings.style.kind == .verbatim {
+      providerPreparationTask = nil
+    } else {
+      providerPreparationTask = Task { [refiner] in
+        try await refiner.prepare(settings: currentSettings)
+      }
     }
     await speech.setVocabularyHints(
       currentSettings.dictionary.vocabulary
@@ -430,56 +472,134 @@ public actor LocalAIDictationController {
     }
     let currentSettings = settings
     let preparationTask = providerPreparationTask
-    let normalizedTranscript = replacementApplier.apply(
-      currentSettings.dictionary,
+    let spokenEditResult = spokenEditEngine.apply(
       to: rawText
     )
+    let normalizedTranscript = replacementApplier.apply(
+      currentSettings.dictionary,
+      to: spokenEditResult.editedText
+    )
+    let storedSpokenEdits =
+      spokenEditResult.operations.isEmpty
+      ? nil : spokenEditResult
+    guard !normalizedTranscript.isEmpty else {
+      providerPreparationTask?.cancel()
+      await recordCompletedSession(
+        sessionID: sessionID,
+        rawText: rawText,
+        editedText: normalizedTranscript,
+        formattedText: "",
+        deliveredText: "",
+        targetApplicationName: targetContext.applicationName,
+        deliveryOutcome: .notAttempted,
+        spokenEdits: storedSpokenEdits
+      )
+      state = LocalAIDictationSnapshot(
+        sessionID: sessionID,
+        phase: .completed,
+        volatileText: "",
+        rawText: rawText,
+        refinedText: "",
+        targetApplicationName: targetContext.applicationName,
+        failure: nil
+      )
+      clearSessionResources()
+      publish()
+      return
+    }
     let request = LocalAIRefinementRequest(
       sessionID: sessionID,
       transcript: normalizedTranscript,
       context: targetContext,
       dictionary: currentSettings.dictionary,
       additionalInstructions:
-        currentSettings.additionalInstructions
+        currentSettings.additionalInstructions,
+      style: currentSettings.style
     )
     let start = MonotonicClock.nowNanoseconds()
 
     do {
-      let response = try await responseBeforeTimeout(
-        request,
-        settings: currentSettings,
-        preparationTask: preparationTask
-      )
+      let response: LocalAIRefinementResponse?
+      let candidate: String
+      if currentSettings.style.kind == .verbatim {
+        response = nil
+        candidate = normalizedTranscript
+      } else {
+        let modelResponse = try await responseBeforeTimeout(
+          request,
+          settings: currentSettings,
+          preparationTask: preparationTask
+        )
+        response = modelResponse
+        candidate = polishedText(
+          modelResponse.text,
+          preserving: normalizedTranscript,
+          style: currentSettings.style
+        )
+      }
       guard !Task.isCancelled, state.sessionID == sessionID else {
         return
       }
       replace(phase: .validating)
-      let polished = polisher.polish(
-        response.text,
-        preserving: normalizedTranscript
-      )
       let validated = try validator.validate(
-        polished,
+        candidate,
         preserving: normalizedTranscript,
         dictionary: currentSettings.dictionary,
-        supportsMultiline: targetContext.supportsMultilineText,
+        supportsMultiline: true,
         context: targetContext
+      )
+      let formattedDocument = try formattedDocumentBuilder.build(
+        formattedText: validated,
+        rawText: rawText,
+        style: currentSettings.style,
+        provider: response?.provider,
+        modelIdentifier: response?.modelIdentifier,
+        promptRevision: response == nil
+          ? nil : VersionedLocalAIPromptBuilder.currentRevision
+      )
+      let canonicalFormattedText = try formattedTextRenderer.render(
+        formattedDocument,
+        supportsMultiline: true
+      )
+      _ = try validator.validate(
+        canonicalFormattedText,
+        preserving: normalizedTranscript,
+        dictionary: currentSettings.dictionary,
+        supportsMultiline: true,
+        context: targetContext
+      )
+      let deliveredText = try formattedTextRenderer.render(
+        formattedDocument,
+        supportsMultiline: targetContext.supportsMultilineText
       )
       guard !Task.isCancelled, state.sessionID == sessionID else {
         return
       }
-      replace(phase: .delivering, refinedText: validated)
+      activeFormattedDocument = formattedDocument
+      activeCanonicalFormattedText = canonicalFormattedText
+      replace(phase: .delivering, refinedText: deliveredText)
       guard let target else {
         throw TranscriptionFailure.focusChanged
       }
-      try writer.insert(validated, into: target)
+      try writer.insert(deliveredText, into: target)
       let duration = MonotonicClock.nowNanoseconds() - start
+      await recordCompletedSession(
+        sessionID: sessionID,
+        rawText: rawText,
+        editedText: normalizedTranscript,
+        formattedText: canonicalFormattedText,
+        deliveredText: deliveredText,
+        targetApplicationName: target.applicationName,
+        deliveryOutcome: .inserted,
+        formattedDocument: formattedDocument,
+        spokenEdits: storedSpokenEdits
+      )
       state = LocalAIDictationSnapshot(
         sessionID: sessionID,
         phase: .completed,
         volatileText: "",
         rawText: rawText,
-        refinedText: validated,
+        refinedText: deliveredText,
         targetApplicationName: target.applicationName,
         failure: nil,
         refinementNanoseconds: duration
@@ -495,13 +615,27 @@ public actor LocalAIDictationController {
       await fallbackOrFail(
         reason: failure,
         rawText: rawText,
-        sessionID: sessionID
+        sessionID: sessionID,
+        editedText: normalizedTranscript,
+        spokenEdits: storedSpokenEdits
+      )
+    } catch is VoiceFormattingError {
+      await fallbackOrFail(
+        reason: .invalidResponse(
+          "Structured formatting validation failed."
+        ),
+        rawText: rawText,
+        sessionID: sessionID,
+        editedText: normalizedTranscript,
+        spokenEdits: storedSpokenEdits
       )
     } catch {
       await failDelivery(
         transcriptionFailure(from: error),
         rawText: rawText,
-        sessionID: sessionID
+        sessionID: sessionID,
+        editedText: normalizedTranscript,
+        spokenEdits: storedSpokenEdits
       )
     }
   }
@@ -574,12 +708,25 @@ public actor LocalAIDictationController {
   private func fallbackOrFail(
     reason: LocalAIRefinementFailure,
     rawText: String,
-    sessionID: UUID
+    sessionID: UUID,
+    editedText: String? = nil,
+    spokenEdits: VoiceSpokenEditResult? = nil
   ) async {
     guard state.sessionID == sessionID else {
       return
     }
-    guard !rawText.isEmpty, let target else {
+    let fallbackText = editedText ?? rawText
+    guard !fallbackText.isEmpty, let target else {
+      await recordCompletedSession(
+        sessionID: sessionID,
+        rawText: rawText,
+        editedText: fallbackText,
+        formattedText: "",
+        deliveredText: "",
+        targetApplicationName: state.targetApplicationName,
+        deliveryOutcome: .notAttempted,
+        spokenEdits: spokenEdits
+      )
       publishFailure(
         .refinement(reason),
         sessionID: sessionID,
@@ -591,13 +738,35 @@ public actor LocalAIDictationController {
     }
     do {
       replace(phase: .delivering, refinedText: "")
-      try writer.insert(rawText, into: target)
+      let fallbackDocument = try? formattedDocumentBuilder.build(
+        formattedText: fallbackText,
+        rawText: rawText,
+        style: settings.style,
+        validationStatus: .sourceFallback
+      )
+      let deliveredFallback = deterministicFallbackText(
+        fallbackText,
+        supportsMultiline: targetContext?.supportsMultilineText
+          ?? target.supportsMultilineText
+      )
+      try writer.insert(deliveredFallback, into: target)
+      await recordCompletedSession(
+        sessionID: sessionID,
+        rawText: rawText,
+        editedText: fallbackText,
+        formattedText: fallbackText,
+        deliveredText: deliveredFallback,
+        targetApplicationName: target.applicationName,
+        deliveryOutcome: .inserted,
+        formattedDocument: fallbackDocument,
+        spokenEdits: spokenEdits
+      )
       state = LocalAIDictationSnapshot(
         sessionID: sessionID,
         phase: .completed,
         volatileText: "",
         rawText: rawText,
-        refinedText: "",
+        refinedText: deliveredFallback,
         targetApplicationName: target.applicationName,
         failure: nil,
         fallbackReason: reason
@@ -608,7 +777,9 @@ public actor LocalAIDictationController {
       await failDelivery(
         transcriptionFailure(from: error),
         rawText: rawText,
-        sessionID: sessionID
+        sessionID: sessionID,
+        editedText: fallbackText,
+        spokenEdits: spokenEdits
       )
     }
   }
@@ -621,6 +792,15 @@ public actor LocalAIDictationController {
     guard state.sessionID == sessionID else {
       return
     }
+    await recordCompletedSession(
+      sessionID: sessionID,
+      rawText: rawText,
+      formattedText: state.refinedText,
+      deliveredText: "",
+      targetApplicationName: state.targetApplicationName,
+      deliveryOutcome: .notAttempted,
+      formattedDocument: activeFormattedDocument
+    )
     publishFailure(
       .transcription(failure),
       sessionID: sessionID,
@@ -633,11 +813,27 @@ public actor LocalAIDictationController {
   private func failDelivery(
     _ failure: TranscriptionFailure,
     rawText: String,
-    sessionID: UUID
+    sessionID: UUID,
+    editedText: String? = nil,
+    spokenEdits: VoiceSpokenEditResult? = nil
   ) async {
     guard state.sessionID == sessionID else {
       return
     }
+    await recordCompletedSession(
+      sessionID: sessionID,
+      rawText: rawText,
+      editedText: editedText,
+      formattedText: activeCanonicalFormattedText.isEmpty
+        ? state.refinedText : activeCanonicalFormattedText,
+      deliveredText: "",
+      targetApplicationName: state.targetApplicationName,
+      deliveryOutcome: .failed,
+      deliveryFailure: failure.localizedDescription,
+      deliveryFailureReason: VoiceSessionDeliveryFailureReason(failure),
+      formattedDocument: activeFormattedDocument,
+      spokenEdits: spokenEdits
+    )
     publishFailure(
       .delivery(failure),
       sessionID: sessionID,
@@ -649,6 +845,7 @@ public actor LocalAIDictationController {
   }
 
   private func cancel() async {
+    let sessionID = state.sessionID
     let wasActive = [
       LocalAIDictationPhase.preparing,
       .listening,
@@ -663,6 +860,9 @@ public actor LocalAIDictationController {
     providerPreparationTask?.cancel()
     refinementTask?.cancel()
     await speech.handle(.cancel)
+    if let sessionID {
+      await history.cancel(sessionID: sessionID)
+    }
     speechSessionID = nil
     clearSessionResources()
     if wasActive {
@@ -734,10 +934,73 @@ public actor LocalAIDictationController {
     providerPreparationTask = nil
     refinementTask = nil
     speechSessionID = nil
+    sessionStartedAt = nil
+    activeFormattedDocument = nil
+    activeCanonicalFormattedText = ""
+  }
+
+  private func recordCompletedSession(
+    sessionID: UUID,
+    rawText: String,
+    editedText: String? = nil,
+    formattedText: String,
+    deliveredText: String,
+    targetApplicationName: String?,
+    deliveryOutcome: VoiceSessionDeliveryOutcome,
+    deliveryFailure: String? = nil,
+    deliveryFailureReason: VoiceSessionDeliveryFailureReason? = nil,
+    formattedDocument: VoiceFormattedDocument? = nil,
+    spokenEdits: VoiceSpokenEditResult? = nil
+  ) async {
+    let document = VoiceSessionDocument(
+      id: sessionID,
+      startedAt: sessionStartedAt ?? now(),
+      endedAt: now(),
+      rawText: rawText,
+      editedText: editedText ?? rawText,
+      formattedText: formattedText,
+      deliveredText: deliveredText,
+      targetApplicationName: targetApplicationName,
+      deliveryOutcome: deliveryOutcome,
+      deliveryFailure: deliveryFailure,
+      deliveryFailureReason: deliveryFailureReason,
+      formattedDocument: formattedDocument,
+      spokenEdits: spokenEdits
+    )
+    do {
+      try await history.complete(document)
+    } catch {
+      logger.error("Voice History persistence failed.")
+    }
   }
 
   private func publish() {
     snapshotHandler(state)
+  }
+
+  private func polishedText(
+    _ text: String,
+    preserving source: String,
+    style: VoiceStyle
+  ) -> String {
+    switch style.kind {
+    case .casualMessage, .verbatim:
+      text.trimmingCharacters(in: .whitespacesAndNewlines)
+    case .natural, .formal, .technical:
+      polisher.polish(text, preserving: source)
+    }
+  }
+
+  private func deterministicFallbackText(
+    _ text: String,
+    supportsMultiline: Bool
+  ) -> String {
+    guard !supportsMultiline else {
+      return text
+    }
+    return text.split(
+      whereSeparator: { $0 == "\n" || $0 == "\r" || $0 == "\t" }
+    ).joined(separator: " ")
   }
 }
 
@@ -777,6 +1040,12 @@ private final class PreparedLocalAITargeter:
 
   func isStillFocused(_ target: FocusedTextTarget) -> Bool {
     underlying.isStillFocused(target)
+  }
+
+  func ownershipFailure(
+    for target: FocusedTextTarget
+  ) -> FocusedTextTargetOwnershipFailure? {
+    underlying.ownershipFailure(for: target)
   }
 }
 

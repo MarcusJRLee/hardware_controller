@@ -1,0 +1,75 @@
+# 0031 — Bound Voice History audio independently from transcripts
+
+## Status
+
+Accepted and implemented for macOS M7 and iOS I10.
+
+## Context
+
+M6 retains one optional CAF beside immutable, searchable session and result
+evidence. Without automatic bounds, successful Dictation can grow storage
+indefinitely. Cleanup must not remove an active recording, pinned audio, or the
+only recovery artifact for a failed or incomplete delivery.
+
+## Decision
+
+- Configure age, total audio bytes, and retained-audio count independently.
+  `Unlimited` is explicit; zero means retain no eligible completed audio.
+- Default macOS to 90 days, 2 GiB, and 5,000 audio artifacts. Reserve the
+  accepted iOS default of 90 days, 1 GiB, and 2,000 artifacts in the portable
+  policy without applying it to macOS preferences.
+- Evaluate age first, then count, then bytes, then low disk. Within each rule,
+  select by session end time and UUID so ties are deterministic.
+- When the byte cap is exceeded, reclaim to 90% of the cap. Low-disk cleanup
+  restores a 1 GiB reserve when the local volume reports less basic available
+  capacity. Do not call the synchronous CacheDelete-backed important-usage key.
+- Exclude active, pinned, failed, and not-attempted sessions from automatic
+  expiration. Protected audio still counts toward limits, and an unmet cap or
+  low-disk request remains visible as typed maintenance evidence.
+- Quarantine the selected CAF, atomically clear its database reference while
+  recording expiration time and reason, then remove the quarantine. Restore
+  the original file when the database transaction fails. Decision
+  [0032](0032_voice_history_crash_recovery.md) owns reconciliation if final
+  quarantine removal fails or a prior crash leaves partial/orphan data.
+- Keep duration, timed spans, immutable text results, search, and export
+  metadata after audio expires. Export schema revision 2 added optional
+  expiration time and reason; decision [0032](0032_voice_history_crash_recovery.md)
+  extended the manifest to revision 3 with Recovery provenance. Decision
+  [0036](0036_imported_voice_audio.md) later advances it to revision 4 with
+  Voice-session input provenance.
+- Use one shared History service for capture, browsing, preferences, and
+  maintenance. Run policy and SQLite/file work on actors after finalization and
+  at first startup access, outside hardware callbacks, target validation, and
+  text insertion.
+- Give session and retention connections one five-second SQLite coordination
+  bound. Transient writer contention waits outside the input-to-action hot path;
+  exhaustion remains an explicit storage failure.
+- Request OS-backup exclusion for the owned Voice History root on supported
+  volumes. Manual copies, filesystem snapshots, and external backup tools remain
+  outside app control.
+
+## Consequences
+
+- General exposes restrained preset choices while the versioned preference
+  schema supports any validated value within the portable policy bounds.
+- History states why playback is unavailable and retains all reusable text.
+- Missing or unreadable artifacts do not block cleanup of unrelated sessions.
+- Automatic cleanup is storage lifecycle management, not secure erasure; SSD
+  wear leveling, snapshots, and external backups remain outside its guarantee.
+
+## Evidence
+
+Pure-policy tests cover defaults, `Unlimited`, zero, protected artifacts,
+stable ordering, the byte low-water mark, low disk, invalid sizes, and invalid
+configuration. SQLite tests cover startup and post-finalization enforcement,
+rapid shared-service finalization, corrupt or missing sizes, recovery protection,
+expiration provenance, stale maintenance ordering, capacity inspection failure,
+wall-clock rollback, concurrent pin protection, search preservation, export
+without audio, and release after a deterministic 2.25-second writer lock. The
+complete 451-test/69-suite M7 corpus passed. Measured
+5,000-session warm-search p95 is 2.615 ms against the 250 ms requirement;
+packaged-UI evidence is recorded in the game plan.
+
+Decision [0049](0049_ios_offline_storage_enforcement.md) later applies the
+reserved iOS defaults, persisted pinning, basic-capacity low-disk enforcement,
+and best-effort post-commit maintenance in the containing app.

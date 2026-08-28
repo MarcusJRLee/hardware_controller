@@ -17,6 +17,27 @@ struct LocalAIDictationTests {
     )
     #expect(settings.modelRetention == .recentUse)
     #expect(!settings.includeNearbyText)
+    #expect(settings.style == .natural)
+  }
+
+  @Test
+  func legacySettingsDecodeWithNaturalStyle() throws {
+    let data = Data(
+      """
+      {
+        "provider":"appleOnDevice",
+        "ollamaModel":{"name":"qwen3.5:4b"},
+        "modelRetention":"recentUse",
+        "includeNearbyText":false,
+        "dictionary":{"vocabulary":[],"replacements":[]},
+        "additionalInstructions":""
+      }
+      """.utf8
+    )
+
+    let settings = try JSONDecoder().decode(LocalAISettings.self, from: data)
+
+    #expect(settings.style == .natural)
   }
 
   @Test
@@ -48,6 +69,14 @@ struct LocalAIDictationTests {
     #expect(throws: LocalAISettingsValidationError.instructionsTooLong) {
       try settings.validate()
     }
+
+    settings = .default
+    settings.style = VoiceStyle(kind: .formal, revision: 99)
+    #expect(
+      throws: LocalAISettingsValidationError.unsupportedStyleRevision(99)
+    ) {
+      try settings.validate()
+    }
   }
 
   @Test
@@ -64,5 +93,18 @@ struct LocalAIDictationTests {
 
     #expect(snapshot.hasRecoverableRawText)
     #expect(snapshot.hasRecoverableRefinedText)
+  }
+
+  @Test
+  func localOnlyModePermitsOnlyInProcessAndFixedLoopbackProviders() {
+    #expect(
+      LocalAIProviderLocality.inProcess.permitsContentInLocalOnlyMode
+    )
+    #expect(
+      LocalAIProviderLocality.fixedLoopback.permitsContentInLocalOnlyMode
+    )
+    #expect(
+      !LocalAIProviderLocality.remoteCapable.permitsContentInLocalOnlyMode
+    )
   }
 }

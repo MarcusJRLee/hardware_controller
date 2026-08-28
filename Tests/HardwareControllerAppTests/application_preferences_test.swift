@@ -40,7 +40,8 @@ struct ApplicationPreferencesStoreTests {
           expectedDigest: "sha256:expected"
         ),
         includeNearbyText: true
-      )
+      ),
+      voiceTrigger: testVoiceTriggerSettings
     )
 
     try store.save(preferences)
@@ -74,10 +75,125 @@ struct ApplicationPreferencesStoreTests {
 
     #expect(result.issue == nil)
     #expect(result.preferences.localAI == .default)
+    #expect(result.preferences.voiceTrigger == .default)
     #expect(
       result.preferences.schemaVersion
         == ApplicationPreferences.currentSchemaVersion
     )
+  }
+
+  @Test
+  func schemaThreeLoadsWithDefaultVoiceTriggerSettings() {
+    let files = PreferenceFileAccess()
+    files.data = Data(
+      """
+      {
+        "appearance": "system",
+        "schemaVersion": 3,
+        "sidebarVisibility": "expanded"
+      }
+      """.utf8
+    )
+
+    let result = makeStore(files: files).load()
+
+    #expect(result.issue == nil)
+    #expect(result.preferences.voiceTrigger == .default)
+    #expect(
+      result.preferences.schemaVersion
+        == ApplicationPreferences.currentSchemaVersion
+    )
+  }
+
+  @Test
+  func schemaThreePreservesLocalAISettings() throws {
+    let settings = LocalAISettings(
+      provider: .ollama,
+      ollamaModel: LocalAIModelSelection(name: "local-model")
+    )
+    let files = PreferenceFileAccess()
+    files.data = try JSONEncoder().encode(
+      ApplicationPreferences(
+        localAI: settings,
+        voiceTrigger: testVoiceTriggerSettings,
+        schemaVersion: 3
+      )
+    )
+
+    let result = makeStore(files: files).load()
+
+    #expect(result.preferences.localAI == settings)
+    #expect(result.preferences.voiceTrigger == .default)
+  }
+
+  @Test
+  func schemaFourPreservesVoiceTriggerAndDefaultsLegacyStyle() throws {
+    let files = PreferenceFileAccess()
+    let preferences = ApplicationPreferences(
+      localAI: LocalAISettings(provider: .ollama),
+      voiceTrigger: testVoiceTriggerSettings,
+      schemaVersion: 4
+    )
+    let encoded = try JSONEncoder().encode(preferences)
+    var object = try #require(
+      JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+    )
+    var localAI = try #require(object["localAI"] as? [String: Any])
+    localAI.removeValue(forKey: "style")
+    object["localAI"] = localAI
+    files.data = try JSONSerialization.data(withJSONObject: object)
+
+    let result = makeStore(files: files).load()
+
+    #expect(result.issue == nil)
+    #expect(result.preferences.localAI.provider == .ollama)
+    #expect(result.preferences.localAI.style == .natural)
+    #expect(result.preferences.voiceTrigger == testVoiceTriggerSettings)
+    #expect(
+      result.preferences.schemaVersion
+        == ApplicationPreferences.currentSchemaVersion
+    )
+  }
+
+  @Test
+  func schemaFiveLoadsDefaultVoiceHistoryRetention() throws {
+    let files = PreferenceFileAccess()
+    let encoded = try JSONEncoder().encode(
+      ApplicationPreferences(schemaVersion: 5)
+    )
+    var object = try #require(
+      JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+    )
+    object.removeValue(forKey: "voiceHistoryRetention")
+    files.data = try JSONSerialization.data(withJSONObject: object)
+
+    let result = makeStore(files: files).load()
+
+    #expect(result.issue == nil)
+    #expect(result.preferences.voiceHistoryRetention == .macOSDefault)
+    #expect(
+      result.preferences.schemaVersion
+        == ApplicationPreferences.currentSchemaVersion
+    )
+  }
+
+  @Test
+  func invalidVoiceHistoryRetentionIsPreservedForRecovery() throws {
+    let files = PreferenceFileAccess()
+    let encoded = try JSONEncoder().encode(ApplicationPreferences.default)
+    var object = try #require(
+      JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+    )
+    object["voiceHistoryRetention"] = ["maximumAgeDays": -1]
+    files.data = try JSONSerialization.data(withJSONObject: object)
+
+    let result = makeStore(files: files).load()
+
+    #expect(result.preferences == .default)
+    guard case .recoveredInvalidFile = try #require(result.issue) else {
+      Issue.record("Expected invalid retention recovery.")
+      return
+    }
   }
 
   /// Migrates schema 1 presentation preferences to system-default input.
@@ -369,7 +485,8 @@ struct ApplicationPreferencesModelTests {
       ollamaModel: LocalAIModelSelection(
         name: "qwen3.5:9b",
         expectedDigest: "sha256:model"
-      )
+      ),
+      style: .formal
     )
 
     #expect(model.setLocalAISettings(settings))
@@ -377,6 +494,92 @@ struct ApplicationPreferencesModelTests {
     #expect(model.localAISettings == settings)
     #expect(store.saved.map(\.localAI) == [settings])
     #expect(applied == [settings])
+  }
+
+  @Test
+  func voiceTriggerChangeIsTransactional() {
+    let store = PreferenceStore()
+    let model = ApplicationPreferencesModel(
+      arguments: [],
+      isDemoMode: false,
+      appearanceApplier: AppearanceApplier(),
+      store: store
+    )
+    var applied: [VoiceTriggerSettings] = []
+    model.setVoiceTriggerSettingsHandler { applied.append($0) }
+
+    #expect(model.setVoiceTriggerSettings(testVoiceTriggerSettings))
+
+    #expect(model.voiceTriggerSettings == testVoiceTriggerSettings)
+    #expect(store.saved.map(\.voiceTrigger) == [testVoiceTriggerSettings])
+    #expect(applied == [testVoiceTriggerSettings])
+  }
+
+  @Test
+  func failedVoiceTriggerSaveDoesNotApplyCandidate() {
+    let store = PreferenceStore(saveFails: true)
+    let model = ApplicationPreferencesModel(
+      arguments: [],
+      isDemoMode: false,
+      appearanceApplier: AppearanceApplier(),
+      store: store
+    )
+    var applied: [VoiceTriggerSettings] = []
+    model.setVoiceTriggerSettingsHandler { applied.append($0) }
+
+    #expect(!model.setVoiceTriggerSettings(testVoiceTriggerSettings))
+
+    #expect(model.voiceTriggerSettings == .default)
+    #expect(store.saved.isEmpty)
+    #expect(applied.isEmpty)
+  }
+
+  @Test
+  func voiceHistoryRetentionChangeIsTransactional() {
+    let store = PreferenceStore()
+    let model = ApplicationPreferencesModel(
+      arguments: [],
+      isDemoMode: false,
+      appearanceApplier: AppearanceApplier(),
+      store: store
+    )
+    var applied: [VoiceHistoryRetentionSettings] = []
+    model.setVoiceHistoryRetentionHandler { applied.append($0) }
+    let settings = VoiceHistoryRetentionSettings(
+      maximumAgeDays: 30,
+      maximumAudioBytes: 512 * 1_024 * 1_024,
+      maximumArtifactCount: 1_000
+    )
+
+    #expect(model.setVoiceHistoryRetention(settings))
+
+    #expect(model.voiceHistoryRetention == settings)
+    #expect(store.saved.map(\.voiceHistoryRetention) == [settings])
+    #expect(applied == [settings])
+  }
+
+  @Test
+  func failedRetentionSaveDoesNotApplyCandidate() {
+    let store = PreferenceStore(saveFails: true)
+    let model = ApplicationPreferencesModel(
+      arguments: [],
+      isDemoMode: false,
+      appearanceApplier: AppearanceApplier(),
+      store: store
+    )
+    var applied: [VoiceHistoryRetentionSettings] = []
+    model.setVoiceHistoryRetentionHandler { applied.append($0) }
+    let settings = VoiceHistoryRetentionSettings(
+      maximumAgeDays: nil,
+      maximumAudioBytes: nil,
+      maximumArtifactCount: nil
+    )
+
+    #expect(!model.setVoiceHistoryRetention(settings))
+
+    #expect(model.voiceHistoryRetention == .macOSDefault)
+    #expect(store.saved.isEmpty)
+    #expect(applied.isEmpty)
   }
 
   /// Retains a disconnected preference while reporting default fallback.
@@ -431,6 +634,13 @@ struct ApplicationPreferencesModelTests {
     )
   }
 }
+
+private let testVoiceTriggerSettings = VoiceTriggerSettings(
+  shortcut: KeyboardShortcut(
+    keyCode: 49,
+    modifiers: [.command, .option]
+  )
+)
 
 /// Returns deterministic microphone choices to the preference model.
 private struct MicrophoneDiscovery: AudioInputDeviceDiscovering {

@@ -19,6 +19,15 @@ struct LocalAISettingsSection: View {
       }
       .pickerStyle(.segmented)
 
+      Picker("Style", selection: styleBinding) {
+        ForEach(VoiceStyleKind.allCases, id: \.self) { kind in
+          Text(styleTitle(kind)).tag(kind)
+        }
+      }
+      Text(styleDescription(settings.style.kind))
+        .font(.caption)
+        .foregroundStyle(.secondary)
+
       if settings.provider == .ollama {
         Picker("Model", selection: modelBinding) {
           ForEach(modelOptions) { option in
@@ -103,7 +112,7 @@ struct LocalAISettingsSection: View {
               .stroke(.quaternary)
           }
         Text(
-          "Optional style guidance. Core accuracy, privacy, and prompt-safety rules always remain active."
+          "Optional workflow guidance. Accuracy, privacy, and prompt-safety rules always remain active."
         )
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -242,6 +251,15 @@ struct LocalAISettingsSection: View {
     )
   }
 
+  private var styleBinding: SwiftUI.Binding<VoiceStyleKind> {
+    SwiftUI.Binding(
+      get: { settings.style.kind },
+      set: { kind in
+        updateSettings { $0.style = VoiceStyle(kind: kind) }
+      }
+    )
+  }
+
   private var modelBinding: SwiftUI.Binding<String> {
     SwiftUI.Binding(
       get: { settings.ollamaModel.name },
@@ -290,7 +308,10 @@ struct LocalAISettingsSection: View {
   }
 
   private var readinessSymbol: String {
-    switch selectedReadiness.state {
+    if settings.style.kind == .verbatim {
+      return "checkmark.circle.fill"
+    }
+    return switch selectedReadiness.state {
     case .ready:
       "checkmark.circle.fill"
     case .checking:
@@ -301,11 +322,15 @@ struct LocalAISettingsSection: View {
   }
 
   private var readinessColor: Color {
-    selectedReadiness.state.canRun ? .secondary : StudioDesign.warning
+    settings.style.kind == .verbatim || selectedReadiness.state.canRun
+      ? .secondary : StudioDesign.warning
   }
 
   private var readinessDetail: String {
-    switch selectedReadiness.state {
+    if settings.style.kind == .verbatim {
+      return "Not used by Verbatim Style"
+    }
+    return switch selectedReadiness.state {
     case .checking:
       "Checking…"
     case .ready:
@@ -355,6 +380,36 @@ struct LocalAISettingsSection: View {
     return suffixes.isEmpty
       ? model.name
       : "\(model.name) — \(suffixes.joined(separator: ", "))"
+  }
+
+  private func styleTitle(_ kind: VoiceStyleKind) -> String {
+    switch kind {
+    case .natural:
+      "Natural"
+    case .casualMessage:
+      "Casual Message"
+    case .formal:
+      "Formal"
+    case .technical:
+      "Technical"
+    case .verbatim:
+      "Verbatim"
+    }
+  }
+
+  private func styleDescription(_ kind: VoiceStyleKind) -> String {
+    switch kind {
+    case .natural:
+      "Clear everyday writing that retains your voice."
+    case .casualMessage:
+      "Concise, lowercase conversational text for chats and messages."
+    case .formal:
+      "Professional grammar and complete sentences."
+    case .technical:
+      "Concise structure with commands and code preserved exactly."
+    case .verbatim:
+      "Recognition output with no generative rewriting."
+    }
   }
 
   private var normalizedVocabularyEntry: String {
@@ -427,6 +482,8 @@ extension LocalAIRefinementFailure {
       .invalidResponse(let detail),
       .generationFailed(let detail):
       detail
+    case .remoteProviderRejected:
+      "Remote-capable providers are disabled in local-only mode."
     case .modelMissing(let name):
       "\(name) is not installed."
     case .modelDigestChanged:

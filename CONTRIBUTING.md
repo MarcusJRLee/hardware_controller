@@ -7,13 +7,13 @@ scope and acceptance evidence are explicit.
 
 ## Start locally
 
-Requirements: Apple silicon, macOS 15 or later, and Xcode 26 or a compatible
-Swift 6 toolchain.
+Requirements: Apple silicon, macOS 15 or later, Xcode 26 or a compatible Swift
+6 toolchain, and rustup. The repository pins Rust 1.98.
 
 ```bash
 git clone https://github.com/MarcusJRLee/hardware_controller.git
 cd hardware_controller
-swift run HardwareController --demo
+scripts/run_demo.sh
 ```
 
 Demo mode is deterministic and requires no Device, Apple signing identity, or
@@ -41,9 +41,14 @@ test placement, hardware fixtures, and signed Device testing.
 - Do not change version or build metadata, create release artifacts, or publish
   a Release without explicit approval for that exact version.
 
-GitHub requests review from the repository owner. Automated verification and
-CodeQL must pass, review threads must be resolved, and accepted changes are
-squash-merged into `main`.
+GitHub requests review from the repository owner. Automated verification must
+pass, review threads must be resolved, and accepted changes are squash-merged.
+The `Analyze (swift)` gate performs an extended CodeQL scan when Swift or its
+build inputs change and completes without compiling Swift for unrelated
+changes. During the accepted Voice program, focused pull requests target
+`dev`; `dev` returns to `main` only after the completed program receives final
+user verification. See
+[`0029_local_voice_platform_expansion.md`](docs/decisions/0029_local_voice_platform_expansion.md).
 
 ## Privacy and hardware evidence
 

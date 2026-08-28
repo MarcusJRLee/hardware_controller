@@ -8,6 +8,28 @@ import Testing
 
 struct OwnedTranscriptionControllerTest {
   @Test
+  func forwardsCapturedAudioWithoutChangingRecognitionOwnership()
+    async throws
+  {
+    let fixture = Fixture()
+    let audioRecorder = AudioBufferRecorder()
+    let controller = fixture.makeController(
+      audioBufferHandler: audioRecorder.append
+    )
+
+    await controller.handle(.begin)
+    try await waitUntil {
+      await controller.snapshot().phase == .listening
+    }
+    fixture.microphone.emit(try makeVoiceAudioFixture())
+
+    try await waitUntil {
+      audioRecorder.count == 1
+    }
+    await controller.handle(.cancel)
+  }
+
+  @Test
   func pressStreamsSpeechAndReleaseCompletes() async throws {
     let fixture = Fixture()
     let controller = fixture.makeController()
@@ -778,7 +800,10 @@ private final class Fixture: @unchecked Sendable {
     )
   }
 
-  func makeController() -> OwnedTranscriptionController {
+  func makeController(
+    audioBufferHandler:
+      @escaping @Sendable (CapturedAudioBuffer) -> Void = { _ in }
+  ) -> OwnedTranscriptionController {
     OwnedTranscriptionController(
       factory: factory,
       microphone: microphone,
@@ -788,10 +813,12 @@ private final class Fixture: @unchecked Sendable {
       ),
       writer: writer,
       authorization: authorization,
-      finalizationTimeout: finalizationTimeout
-    ) { [snapshots] snapshot in
-      snapshots.append(snapshot)
-    }
+      finalizationTimeout: finalizationTimeout,
+      audioBufferHandler: audioBufferHandler,
+      snapshotHandler: { [snapshots] snapshot in
+        snapshots.append(snapshot)
+      }
+    )
   }
 }
 
@@ -1031,6 +1058,12 @@ private final class FakeMicrophone:
     }
   }
 
+  func emit(_ audio: CapturedAudioBuffer) {
+    _ = lock.withLock {
+      continuation?.yield(audio)
+    }
+  }
+
   /// Terminates microphone delivery with a controlled failure.
   func fail(with error: any Error) {
     lock.withLock {
@@ -1045,6 +1078,19 @@ private final class FakeMicrophone:
       continuation?.finish()
       continuation = nil
     }
+  }
+}
+
+private final class AudioBufferRecorder: @unchecked Sendable {
+  private let lock = NSLock()
+  private var storage = 0
+
+  var count: Int {
+    lock.withLock { storage }
+  }
+
+  func append(_ audio: CapturedAudioBuffer) {
+    lock.withLock { storage += 1 }
   }
 }
 
@@ -1196,7 +1242,7 @@ private final class SnapshotRecorder: @unchecked Sendable {
 }
 
 private func waitUntil(
-  timeout: Duration = .seconds(1),
+  timeout: Duration = .seconds(5),
   _ condition: @escaping @Sendable () async -> Bool
 ) async throws {
   let clock = ContinuousClock()

@@ -23,6 +23,40 @@ struct ApplicationRuntimeTest {
     #expect(!fixture.snapshots.values.isEmpty)
   }
 
+  /// Routes app UI capture through the process Voice dispatcher while active.
+  @Test
+  func voiceCaptureSubmissionFollowsRuntimeLifecycle() async {
+    let fixture = RuntimeFixture(
+      localAIReadiness: LocalAIReadinessSnapshot(
+        apple: LocalAIProviderReadiness(
+          provider: .appleOnDevice,
+          state: .ready
+        ),
+        ollama: LocalAIProviderReadiness(
+          provider: .ollama,
+          state: .unavailable("Not selected.")
+        )
+      )
+    )
+    await fixture.runtime.start(
+      snapshotHandler: fixture.snapshots.append
+    )
+
+    #expect(await fixture.runtime.submitVoiceCapture(.begin))
+    #expect(await fixture.runtime.submitVoiceCapture(.finish))
+    await fixture.runtime.prepareForSleep()
+    #expect(!(await fixture.runtime.submitVoiceCapture(.begin)))
+    await fixture.runtime.resumeAfterWake()
+    #expect(await fixture.runtime.submitVoiceCapture(.begin))
+    await fixture.runtime.stop()
+    #expect(!(await fixture.runtime.submitVoiceCapture(.finish)))
+
+    #expect(
+      fixture.process.voiceCaptureCommands
+        == [.begin, .finish, .begin]
+    )
+  }
+
   /// Starts hardware before a slow optional provider readiness check returns.
   @Test(.timeLimit(.minutes(1)))
   func localAIReadinessNeverDelaysHardwareStartup() async {
@@ -139,6 +173,38 @@ struct ApplicationRuntimeTest {
     await fixture.runtime.stop()
   }
 
+  /// Verbatim still needs speech permissions but not a formatting provider.
+  @Test
+  func verbatimStyleDoesNotRequireFormattingProvider() async {
+    let unavailable = LocalAIReadinessSnapshot(
+      apple: LocalAIProviderReadiness(
+        provider: .appleOnDevice,
+        state: .unavailable("Apple Intelligence is disabled.")
+      ),
+      ollama: LocalAIProviderReadiness(
+        provider: .ollama,
+        state: .modelMissing("qwen3.5:4b")
+      )
+    )
+    var settings = LocalAISettings.default
+    settings.provider = .ollama
+    settings.style = .verbatim
+    let fixture = RuntimeFixture(
+      localAIReadiness: unavailable,
+      localAISettings: settings
+    )
+
+    await fixture.runtime.start(
+      snapshotHandler: fixture.snapshots.append
+    )
+
+    #expect(
+      fixture.process.availabilities.last?.localAIDictationAllowed == true
+    )
+    #expect(fixture.snapshots.values.last?.localAIStyle == .verbatim)
+    await fixture.runtime.stop()
+  }
+
   /// Publishes sanitized provider-test progress and success.
   @Test
   func localAIProviderTestPublishesItsResult() async {
@@ -207,6 +273,24 @@ struct ApplicationRuntimeTest {
     #expect(
       fixture.process.preferredMicrophoneUIDs
         == ["usb-microphone"]
+    )
+    await fixture.runtime.stop()
+  }
+
+  @Test
+  func voiceTriggerSettingsReachTheProcessAfterStartup() async {
+    let fixture = RuntimeFixture()
+    await fixture.runtime.start(
+      snapshotHandler: fixture.snapshots.append
+    )
+    let settings = VoiceTriggerSettings(
+      shortcut: .suggestedControlActivation
+    )
+
+    await fixture.runtime.setVoiceTriggerSettings(settings)
+
+    #expect(
+      fixture.process.voiceTriggerSettings == [.default, settings]
     )
     await fixture.runtime.stop()
   }
@@ -550,6 +634,25 @@ struct ApplicationRuntimeTest {
     await fixture.runtime.stop()
   }
 
+  @Test
+  func voiceShortcutFailureFlowsThroughRuntime() async throws {
+    let fixture = RuntimeFixture()
+    await fixture.runtime.start(
+      snapshotHandler: fixture.snapshots.append
+    )
+    let failure = VoiceShortcutRegistrationFailure(
+      shortcut: .suggestedControlActivation,
+      systemCode: -1
+    )
+
+    fixture.process.publish(.voiceShortcutFailure(failure))
+    try await waitUntil {
+      fixture.snapshots.values.last?.voiceShortcutFailure == failure
+    }
+
+    await fixture.runtime.stop()
+  }
+
   /// Publishes a new active Profile only after the process installs it.
   @Test
   func activationAndActiveDeletionReplaceRuntimeProfile() async throws {
@@ -707,6 +810,7 @@ private final class RuntimeFixture {
     loadedIssue: ProfileStoreIssue? = nil,
     loadsProfileOnStart: Bool = false,
     localAIReadiness: LocalAIReadinessSnapshot = .checking,
+    localAISettings: LocalAISettings = .default,
     blocksLocalAIReadiness: Bool = false,
     blocksLocalAIProviderTest: Bool = false,
     systemState: ApplicationSystemState =
@@ -732,6 +836,8 @@ private final class RuntimeFixture {
       speechRecognitionPermission:
         systemState.speechRecognitionPermission,
       transcription: .idle,
+      localAIProvider: localAISettings.provider,
+      localAIStyle: localAISettings.style,
       launchAtLogin: systemState.launchAtLogin
     )
     let process = self.process
@@ -746,8 +852,10 @@ private final class RuntimeFixture {
         saveFails: profileSaveFails
       ),
       system: system,
+      localAISettings: localAISettings,
       loadsProfileOnStart: loadsProfileOnStart,
       processFactory: {
+        _,
         _,
         _,
         _,
@@ -823,6 +931,8 @@ private final class FakeApplicationProcess:
   private var profileStorage: [Profile] = []
   private var retryStorage = HardwareInputStartResult.started
   private var preferredMicrophoneUIDStorage: [String?] = []
+  private var voiceTriggerSettingsStorage: [VoiceTriggerSettings] = []
+  private var voiceCaptureCommandStorage: [DictationCommand] = []
   private var localAIReadinessStorage = LocalAIReadinessSnapshot.checking
   private var localAIReadinessContinuation: CheckedContinuation<Void, Never>?
   private var localAIReadinessObservers: [CheckedContinuation<Void, Never>] = []
@@ -868,6 +978,14 @@ private final class FakeApplicationProcess:
 
   var preferredMicrophoneUIDs: [String?] {
     lock.withLock { preferredMicrophoneUIDStorage }
+  }
+
+  var voiceTriggerSettings: [VoiceTriggerSettings] {
+    lock.withLock { voiceTriggerSettingsStorage }
+  }
+
+  var voiceCaptureCommands: [DictationCommand] {
+    lock.withLock { voiceCaptureCommandStorage }
   }
 
   var retryResult: HardwareInputStartResult {
@@ -1007,6 +1125,16 @@ private final class FakeApplicationProcess:
     return localAIReadinessResult
   }
 
+  /// Records each independent Voice trigger configuration.
+  func setVoiceTriggerSettings(
+    _ settings: VoiceTriggerSettings
+  ) async throws -> VoiceShortcutRegistrationFailure? {
+    lock.withLock {
+      voiceTriggerSettingsStorage.append(settings)
+    }
+    return nil
+  }
+
   /// Returns deterministic provider readiness without external processes.
   func localAIReadiness() async -> LocalAIReadinessSnapshot {
     if blocksLocalAIReadiness {
@@ -1037,6 +1165,14 @@ private final class FakeApplicationProcess:
     return nil
   }
 
+  /// Records commands sent through the process Voice dispatcher.
+  func submitVoiceCapture(_ command: DictationCommand) -> Bool {
+    lock.withLock {
+      voiceCaptureCommandStorage.append(command)
+    }
+    return true
+  }
+
   /// Accepts a deterministic test request.
   func testBinding(_ controlID: ControlID) {}
 
@@ -1060,6 +1196,8 @@ private final class FakeApplicationProcess:
       relay?.publishLocalAIDictation(snapshot)
     case .keyboardFallbackFailures(let failures):
       relay?.publishKeyboardFallbackFailures(failures)
+    case .voiceShortcutFailure(let failure):
+      relay?.publishVoiceShortcutFailure(failure)
     }
   }
 }

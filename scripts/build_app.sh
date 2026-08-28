@@ -10,6 +10,7 @@ contents="$app_bundle/Contents"
 iconset=".build/AppIcon.iconset"
 sign_identity="${HC_CODE_SIGN_IDENTITY:--}"
 
+scripts/build_rust_ffi.sh
 swift build -c release --product HardwareController
 binary_directory="$(swift build -c release --show-bin-path)"
 

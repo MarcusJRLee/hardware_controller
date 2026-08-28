@@ -4,6 +4,8 @@
 - **Date:** 2026-08-17
 - **Amends:**
   [`0005_app_owned_transcription.md`](0005_app_owned_transcription.md)
+- **Future persistence/provider scope amended by:**
+  [`0029_local_voice_platform_expansion.md`](0029_local_voice_platform_expansion.md)
 
 ## Context
 

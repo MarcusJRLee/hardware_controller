@@ -3,7 +3,7 @@ import HardwareControllerCore
 import SwiftUI
 
 struct ShortcutRecorderButton: View {
-  let shortcut: HardwareControllerCore.KeyboardShortcut
+  let shortcut: HardwareControllerCore.KeyboardShortcut?
   let onChange: (HardwareControllerCore.KeyboardShortcut) -> Void
 
   @State private var isRecording = false
@@ -27,7 +27,7 @@ struct ShortcutRecorderButton: View {
         Text(
           isRecording
             ? "Press shortcut…"
-            : shortcut.displayName
+            : shortcut?.displayName ?? "Not set"
         )
         .font(
           .system(
@@ -78,7 +78,10 @@ struct ShortcutRecorderButton: View {
     }
     .accessibilityLabel("Keyboard shortcut")
     .accessibilityValue(
-      isRecording ? "Recording" : shortcut.displayName
+      isRecording
+        ? "Recording"
+        : shortcut?.displayName
+          ?? "Not set"
     )
   }
 

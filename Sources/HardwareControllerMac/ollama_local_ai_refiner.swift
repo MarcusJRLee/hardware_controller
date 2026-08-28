@@ -93,6 +93,10 @@ public enum OllamaValidatedModelCatalog {
 }
 
 public actor OllamaLocalAIRefiner: TranscriptRefining {
+  public nonisolated let capability = LocalAIProviderCapability(
+    provider: .ollama,
+    locality: .fixedLoopback
+  )
   private let baseURL: URL
   private let transport: any OllamaTransporting
   private let promptBuilder: VersionedLocalAIPromptBuilder
