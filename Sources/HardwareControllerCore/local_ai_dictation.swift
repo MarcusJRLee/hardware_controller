@@ -45,42 +45,6 @@ public struct LocalAIModelSelection: Codable, Equatable, Sendable {
   }
 }
 
-public struct PersonalDictionaryReplacement:
-  Codable,
-  Equatable,
-  Identifiable,
-  Sendable
-{
-  public let id: UUID
-  public var spokenForm: String
-  public var replacement: String
-
-  public init(
-    id: UUID = UUID(),
-    spokenForm: String,
-    replacement: String
-  ) {
-    self.id = id
-    self.spokenForm = spokenForm
-    self.replacement = replacement
-  }
-}
-
-public struct PersonalDictionary: Codable, Equatable, Sendable {
-  public var vocabulary: [String]
-  public var replacements: [PersonalDictionaryReplacement]
-
-  public init(
-    vocabulary: [String] = [],
-    replacements: [PersonalDictionaryReplacement] = []
-  ) {
-    self.vocabulary = vocabulary
-    self.replacements = replacements
-  }
-
-  public static let empty = PersonalDictionary()
-}
-
 public struct LocalAISettings: Codable, Equatable, Sendable {
   public static let defaultRecommendedModelName = "qwen3.5:4b"
 
@@ -91,6 +55,7 @@ public struct LocalAISettings: Codable, Equatable, Sendable {
   public var dictionary: PersonalDictionary
   public var additionalInstructions: String
   public var style: VoiceStyle
+  public var casingPolicy: VoiceCasingPolicy
 
   public init(
     provider: LocalAIProviderKind = .appleOnDevice,
@@ -101,7 +66,8 @@ public struct LocalAISettings: Codable, Equatable, Sendable {
     includeNearbyText: Bool = false,
     dictionary: PersonalDictionary = .empty,
     additionalInstructions: String = "",
-    style: VoiceStyle = .natural
+    style: VoiceStyle = .natural,
+    casingPolicy: VoiceCasingPolicy = .styleDefault
   ) {
     self.provider = provider
     self.ollamaModel = ollamaModel
@@ -110,6 +76,7 @@ public struct LocalAISettings: Codable, Equatable, Sendable {
     self.dictionary = dictionary
     self.additionalInstructions = additionalInstructions
     self.style = style
+    self.casingPolicy = casingPolicy
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -120,6 +87,7 @@ public struct LocalAISettings: Codable, Equatable, Sendable {
     case dictionary
     case additionalInstructions
     case style
+    case casingPolicy
   }
 
   public init(from decoder: any Decoder) throws {
@@ -140,6 +108,11 @@ public struct LocalAISettings: Codable, Equatable, Sendable {
       forKey: .additionalInstructions
     )
     style = try container.decodeIfPresent(VoiceStyle.self, forKey: .style) ?? .natural
+    casingPolicy =
+      try container.decodeIfPresent(
+        VoiceCasingPolicy.self,
+        forKey: .casingPolicy
+      ) ?? .styleDefault
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -151,6 +124,7 @@ public struct LocalAISettings: Codable, Equatable, Sendable {
     try container.encode(dictionary, forKey: .dictionary)
     try container.encode(additionalInstructions, forKey: .additionalInstructions)
     try container.encode(style, forKey: .style)
+    try container.encode(casingPolicy, forKey: .casingPolicy)
   }
 
   public static let `default` = LocalAISettings()
@@ -170,6 +144,23 @@ public enum LocalAISettingsValidationError: Error, Equatable, Sendable {
 }
 
 extension LocalAISettings {
+  public var effectiveCasingPolicy: VoiceCasingPolicy {
+    guard casingPolicy == .styleDefault else {
+      return casingPolicy
+    }
+    let instruction =
+      additionalInstructions
+      .split(whereSeparator: { $0.isWhitespace })
+      .joined(separator: " ")
+      .lowercased()
+    let requestsOnlyLowercase =
+      instruction.contains("only provide text in lowercase")
+      || instruction.contains("only use lowercase")
+      || instruction.contains("all lowercase")
+      || instruction.contains("lowercase only")
+    return requestsOnlyLowercase ? .strictLowercase : .styleDefault
+  }
+
   public func validate() throws {
     guard style.revision == VoiceStyle.currentRevision else {
       throw LocalAISettingsValidationError.unsupportedStyleRevision(
@@ -257,6 +248,8 @@ public struct LocalAIRefinementRequest: Equatable, Sendable {
   public let dictionary: PersonalDictionary
   public let additionalInstructions: String
   public let style: VoiceStyle
+  public let casingPolicy: VoiceCasingPolicy
+  public let listIntent: VoiceListIntent
 
   public init(
     sessionID: UUID,
@@ -264,7 +257,9 @@ public struct LocalAIRefinementRequest: Equatable, Sendable {
     context: LocalAITargetContext,
     dictionary: PersonalDictionary,
     additionalInstructions: String,
-    style: VoiceStyle = .natural
+    style: VoiceStyle = .natural,
+    casingPolicy: VoiceCasingPolicy = .styleDefault,
+    listIntent: VoiceListIntent? = nil
   ) {
     self.sessionID = sessionID
     self.transcript = transcript
@@ -272,6 +267,9 @@ public struct LocalAIRefinementRequest: Equatable, Sendable {
     self.dictionary = dictionary
     self.additionalInstructions = additionalInstructions
     self.style = style
+    self.casingPolicy = casingPolicy
+    self.listIntent =
+      listIntent ?? VoiceListIntentDetector().detect(in: transcript)
   }
 }
 

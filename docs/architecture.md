@@ -394,7 +394,8 @@ Current executors:
   microphone and Apple recognition controller in final-only mode. It warms the
   selected provider while speech continues, applies typed spoken-edit operations
   to Raw before deterministic Dictionary replacements, sends immutable typed
-  context to one local refiner, validates protected content and semantic bounds, parses
+  context including normalized list intent and casing policy to one local
+  refiner, validates protected content and semantic bounds, parses
   evidence-backed paragraph and list blocks, then renders target-safe refined
   or Edited fallback text exactly once. Verbatim Style bypasses provider
   preparation and generation.
@@ -463,17 +464,21 @@ to an ordered-list block and validation runs again on the canonical rendering.
 The sanitized provider test shares the three-second preparation-plus-generation
 deadline; settings changes and shutdown cancel it and suppress stale results.
 
-The revision-1 Swift spoken-edit engine recognizes only exact, case-insensitive
+The revision-2 Swift spoken-edit engine recognizes only exact, case-insensitive
 command phrases in immutable Raw text, so a Dictionary replacement cannot
 synthesize a destructive command. Each accepted command records its source
 UTF-8 range, affected pre-Dictionary suffix, typed operation, and replacement.
 Replay rejects unsupported revisions, noncanonical command evidence,
 overlapping source evidence, non-suffix destructive ranges, invalid structure
 replacements, and mismatched stored results. Clause and sentence deletion stop at explicit
-stable punctuation or a list-item marker. In ordered-list mode, `new paragraph`
-begins the next numbered item; `literal` preserves one immediately following
-exact command. An inapplicable destructive/list command and every near-match
-remain ordinary transcript text. The model receives only the resulting Edited
+stable punctuation or a list-item marker. Ordered and unordered modes accept
+`new paragraph` or `next item`; unordered mode also accepts `bullet`. Exact
+`start a bullet list` and `start a bulleted list` phrases enter unordered mode.
+A bare `bullet` starts a list only at the start of text or after a list cue, so
+ordinary noun use remains text. `literal` preserves one immediately following
+exact command. Revision-1 traces retain their original command vocabulary and
+remain replayable. An inapplicable destructive/list command and every
+near-match remain ordinary transcript text. The model receives only the resulting Edited
 text. If all Edited text is removed, the session completes without generation
 or insertion while retaining its Raw evidence. Dictionary replacements then
 produce the final Edited text.
@@ -571,12 +576,13 @@ Schema 5 adds the Local AI Dictation Action identity. Schema-4 Profiles migrate
 without changing any Action, Binding, interaction mode, or fallback.
 
 Application appearance, sidebar visibility, microphone identity, Local AI
-settings, and the Voice chord use a separate schema-5 `preferences.json` file.
+settings, and the Voice chord use a separate schema-7 `preferences.json` file.
 Earlier schemas
 migrate with System Default microphone and conservative Local AI defaults:
 Apple On-Device, recommended Ollama model identity, five-minute retention,
 nearby context off, empty dictionary, no additional instructions, and the Voice
-chord disabled. A valid
+chord disabled. Schema 7 adds typed casing; schema 6 defaults it to Style
+Default without changing prior output. A valid
 future preference schema is preserved and never overwritten. This store uses
 the same atomic-write and corruption-preservation policy because application
 preferences are not work-mode data.

@@ -75,4 +75,22 @@ final class VoiceInputDocumentPipelineTest: XCTestCase {
     XCTAssertEqual(result.spokenEdits.operations, [])
     XCTAssertEqual(result.formattedDocument.blocks.map(\.kind), [.verbatim])
   }
+
+  func testStrictLowercaseAppliesAfterSpokenEdits() throws {
+    let raw = VoiceInputRawTranscript(
+      text: "Buy Milk new paragraph Call parseJSON",
+      segments: [],
+      modelPackageID: "model",
+      modelVersion: "1"
+    )
+
+    let result = try VoiceInputDocumentPipeline().process(
+      raw,
+      style: .natural,
+      casingPolicy: .strictLowercase
+    )
+
+    XCTAssertEqual(result.editedText, "Buy Milk\n\nCall parseJSON")
+    XCTAssertEqual(result.formattedText, "buy milk\n\ncall parseJSON")
+  }
 }

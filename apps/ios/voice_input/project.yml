@@ -73,6 +73,8 @@ targets:
     sources:
       - path: ../../../Sources/HardwareControllerCore/local_ai_provider_kind.swift
         group: portable_voice_core
+      - path: ../../../Sources/HardwareControllerCore/personal_dictionary.swift
+        group: portable_voice_core
       - path: ../../../Sources/HardwareControllerCore/voice_formatted_document_builder.swift
         group: portable_voice_core
       - path: ../../../Sources/HardwareControllerCore/voice_formatted_text_renderer.swift
@@ -80,6 +82,10 @@ targets:
       - path: ../../../Sources/HardwareControllerCore/voice_formatting.swift
         group: portable_voice_core
       - path: ../../../Sources/HardwareControllerCore/voice_history_retention.swift
+        group: portable_voice_core
+      - path: ../../../Sources/HardwareControllerCore/voice_casing.swift
+        group: portable_voice_core
+      - path: ../../../Sources/HardwareControllerCore/voice_list_intent.swift
         group: portable_voice_core
       - path: ../../../Sources/HardwareControllerCore/voice_spoken_edit.swift
         group: portable_voice_core

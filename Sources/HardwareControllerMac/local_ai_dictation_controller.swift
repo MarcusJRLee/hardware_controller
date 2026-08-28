@@ -45,6 +45,7 @@ public actor LocalAIDictationController {
   private let refiner: any LocalAIRefinementRouting
   private let validator: RefinedTranscriptValidator
   private let polisher: DeterministicTranscriptPolisher
+  private let casingTransformer: VoiceCasingTransformer
   private let replacementApplier: PersonalDictionaryReplacementApplier
   private let spokenEditEngine: VoiceSpokenEditEngine
   private let formattedDocumentBuilder: VoiceFormattedDocumentBuilder
@@ -117,6 +118,7 @@ public actor LocalAIDictationController {
     self.refiner = refiner
     validator = RefinedTranscriptValidator()
     polisher = DeterministicTranscriptPolisher()
+    casingTransformer = VoiceCasingTransformer()
     replacementApplier = PersonalDictionaryReplacementApplier()
     spokenEditEngine = VoiceSpokenEditEngine()
     formattedDocumentBuilder = VoiceFormattedDocumentBuilder()
@@ -211,17 +213,22 @@ public actor LocalAIDictationController {
         dictionary: .empty,
         additionalInstructions:
           currentSettings.additionalInstructions,
-        style: currentSettings.style
+        style: currentSettings.style,
+        casingPolicy: currentSettings.effectiveCasingPolicy
       )
       let response = try await responseBeforeTimeout(
         request,
         settings: currentSettings,
         preparationTask: preparationTask
       )
-      let polished = polishedText(
-        response.text,
+      let polished = casedText(
+        polishedText(
+          response.text,
+          preserving: transcript,
+          style: currentSettings.style
+        ),
         preserving: transcript,
-        style: currentSettings.style
+        settings: currentSettings
       )
       _ = try validator.validate(
         polished,
@@ -514,7 +521,8 @@ public actor LocalAIDictationController {
       dictionary: currentSettings.dictionary,
       additionalInstructions:
         currentSettings.additionalInstructions,
-      style: currentSettings.style
+      style: currentSettings.style,
+      casingPolicy: currentSettings.effectiveCasingPolicy
     )
     let start = MonotonicClock.nowNanoseconds()
 
@@ -523,7 +531,11 @@ public actor LocalAIDictationController {
       let candidate: String
       if currentSettings.style.kind == .verbatim {
         response = nil
-        candidate = normalizedTranscript
+        candidate = casedText(
+          normalizedTranscript,
+          preserving: normalizedTranscript,
+          settings: currentSettings
+        )
       } else {
         let modelResponse = try await responseBeforeTimeout(
           request,
@@ -531,10 +543,14 @@ public actor LocalAIDictationController {
           preparationTask: preparationTask
         )
         response = modelResponse
-        candidate = polishedText(
-          modelResponse.text,
+        candidate = casedText(
+          polishedText(
+            modelResponse.text,
+            preserving: normalizedTranscript,
+            style: currentSettings.style
+          ),
           preserving: normalizedTranscript,
-          style: currentSettings.style
+          settings: currentSettings
         )
       }
       guard !Task.isCancelled, state.sessionID == sessionID else {
@@ -738,14 +754,19 @@ public actor LocalAIDictationController {
     }
     do {
       replace(phase: .delivering, refinedText: "")
+      let casedFallbackText = casedText(
+        fallbackText,
+        preserving: fallbackText,
+        settings: settings
+      )
       let fallbackDocument = try? formattedDocumentBuilder.build(
-        formattedText: fallbackText,
+        formattedText: casedFallbackText,
         rawText: rawText,
         style: settings.style,
         validationStatus: .sourceFallback
       )
       let deliveredFallback = deterministicFallbackText(
-        fallbackText,
+        casedFallbackText,
         supportsMultiline: targetContext?.supportsMultilineText
           ?? target.supportsMultilineText
       )
@@ -754,7 +775,7 @@ public actor LocalAIDictationController {
         sessionID: sessionID,
         rawText: rawText,
         editedText: fallbackText,
-        formattedText: fallbackText,
+        formattedText: casedFallbackText,
         deliveredText: deliveredFallback,
         targetApplicationName: target.applicationName,
         deliveryOutcome: .inserted,
@@ -989,6 +1010,19 @@ public actor LocalAIDictationController {
     case .natural, .formal, .technical:
       polisher.polish(text, preserving: source)
     }
+  }
+
+  private func casedText(
+    _ text: String,
+    preserving source: String,
+    settings: LocalAISettings
+  ) -> String {
+    casingTransformer.apply(
+      settings.effectiveCasingPolicy,
+      to: text,
+      preserving: source,
+      dictionary: settings.dictionary
+    )
   }
 
   private func deterministicFallbackText(

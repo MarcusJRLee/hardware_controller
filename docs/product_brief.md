@@ -109,9 +109,15 @@ failure path.
   generative refinement.
 - Accept machine-wide recognition vocabulary, deterministic exact
   replacements, and optional formatting instructions.
+- Apply a typed Style Default, Lowercase Prose, or Strict Lowercase policy after
+  formatting and on deterministic fallback. Preserve intentional operational
+  tokens; Lowercase Prose also preserves source-signaled names and acronyms.
 - Apply exact `scratch that`, `delete that sentence`, `new paragraph`, `start a
-  numbered list`, and `end list` commands before formatting. `literal` preserves
-  the immediately following exact command phrase; near-misses remain text.
+  numbered list`, `start a bullet list`, `bullet`, `next item`, and `end list`
+  commands before formatting. `literal` preserves the immediately following
+  exact command phrase; near-misses and ordinary uses remain text.
+- Normalize explicit markers, sequential ordinals, and conservatively delimited
+  grocery, shopping, packing, task, or to-do list cues into typed list intent.
 - Optionally use a bounded caret window from the current nonsecure multiline
   target. Never read browser URLs, terminal contents, whole documents,
   screenshots, the pasteboard, or secure fields.

@@ -9,6 +9,8 @@ public enum VoiceSpokenEditOperationKind:
   case insertParagraphBreak
   case beginOrderedList
   case beginOrderedListItem
+  case beginUnorderedList
+  case beginUnorderedListItem
   case endList
   case preserveLiteralCommand
 }
@@ -39,7 +41,7 @@ public struct VoiceSpokenEditOperation: Codable, Equatable, Sendable {
 }
 
 public struct VoiceSpokenEditResult: Codable, Equatable, Sendable {
-  public static let currentRevision = 1
+  public static let currentRevision = 2
 
   public let revision: Int
   public let sourceText: String

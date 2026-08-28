@@ -107,4 +107,25 @@ struct LocalAIDictationTests {
       !LocalAIProviderLocality.remoteCapable.permitsContentInLocalOnlyMode
     )
   }
+
+  @Test
+  func refinementRequestNormalizesListIntent() {
+    let request = LocalAIRefinementRequest(
+      sessionID: UUID(),
+      transcript: "grocery list: apples, bananas, and coffee",
+      context: LocalAITargetContext(
+        localeIdentifier: "en_US",
+        profileName: "Default",
+        applicationName: "Notes",
+        applicationBundleIdentifier: nil,
+        targetRole: nil,
+        supportsMultilineText: true,
+        nearbyText: nil
+      ),
+      dictionary: .empty,
+      additionalInstructions: ""
+    )
+
+    #expect(request.listIntent == .unordered)
+  }
 }
