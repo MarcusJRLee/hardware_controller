@@ -42,19 +42,18 @@ evidence is retained in [`release_validation.md`](release_validation.md).
 | Model recommendation | Qwen 3.5 4B is digest-pinned from the fixed evaluation corpus. | [`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md) |
 | Profiles | Transactional named Profiles with independent per-Device setups and active-Action cleanup. | [`decisions/0014_multi_profile_device_configuration.md`](decisions/0014_multi_profile_device_configuration.md) |
 | Application | Controller, History, Profiles, and General in one native foreground window with Dock and menu-bar presence. | [`ux_spec.md`](ux_spec.md) |
-| Release | Version 1.4.1 build 17 is installed as an unreleased personal QA candidate; routine installs preserve both values and no release promotion is authorized. | [`decisions/0023_stable_personal_build_metadata.md`](decisions/0023_stable_personal_build_metadata.md) |
+| Release | Version 1.5.0 build 18 is the approved unreleased personal QA candidate; no release promotion is authorized. | [`decisions/0051_unreleased_voice_integration_build.md`](decisions/0051_unreleased_voice_integration_build.md) |
 | Public source | Open source under Apache License 2.0 with Marcus John Rice Lee as copyright owner, inbound Apache contributions, provisional Signal Bridge identity, and active GitHub security controls. | [`decisions/0028_apache_open_source_and_contributions.md`](decisions/0028_apache_open_source_and_contributions.md) |
 
 ## Approved next program
 
-The local Voice expansion is accepted; macOS M1–M15, iOS Gate K0, I1 local
-onboarding and Model admission, and I2 through Style-qualified local formatting,
-History, warm keyboard delivery, target-safe field handling, I7 lifecycle
-recovery, I8 stale-service recovery, and I9 bounded insertion recovery are
-implemented across the current stacked branches. I10 offline storage and I11
-system-surface capture are implemented in source on focused branches. macOS and
-iOS are the active roadmap; Android, Windows, and Linux remain architectural
-line-of-sight platforms; web and mobile web are deferred.
+The local Voice expansion is accepted and integrated into `dev`: macOS M1–M15,
+iOS Gate K0, I1 local onboarding and Model admission, I2 local formatting and
+History, Style-qualified keyboard delivery, target-safe field handling, I7
+lifecycle recovery, I8 stale-service recovery, I9 bounded insertion recovery,
+I10 offline storage, and I11 system-surface capture. macOS and iOS are the
+active roadmap; Android, Windows, and Linux remain architectural line-of-sight
+platforms; web and mobile web are deferred.
 The acceptance and execution authorities are:
 
 | Authority | Purpose |
@@ -64,10 +63,9 @@ The acceptance and execution authorities are:
 | [`voice_platform_design.md`](voice_platform_design.md) | Model, runtime, iOS keyboard, storage, performance, and milestone design. |
 | [`voice_implementation_goal_prompt.md`](voice_implementation_goal_prompt.md) | Autonomous worktree/PR execution contract and definition of done. |
 
-Implementation integrates focused vertical PRs into `dev`. `main`, release
-metadata, tags, distribution artifacts, and store submission remain unchanged
-until the user verifies the finished `dev` state and separately approves
-promotion.
+Focused vertical PRs are integrated into `dev`. `main`, tags, distribution
+artifacts, and store submission remain unchanged until the user verifies the
+finished `dev` state and separately approves promotion.
 
 ## Quality gates
 
@@ -96,16 +94,13 @@ Reference Local AI measurements and reproduction commands are in
 high-end reference Mac do not establish lower-tier support.
 
 The canonical `/Applications/Hardware Controller.app` contains current-source
-version 1.4.1 build 17 under `com.longdevity.hardwarecontroller`, signed by the
-private Apple Development Team configured in `.env.local`. Its
-installed binary is byte-identical to the verified candidate and passed strict
-signature, audio-input entitlement, hardened-runtime, architecture, and
-Apple-only dependency checks. In normal mode it runs from the canonical path,
-matches the connected VEC USB Footpedal, reports existing permissions ready,
-and preserves the accepted Profile. Both provider tests passed before install.
-With Ollama **Until app quits**, the app-owned model reported indefinite
-retention while the candidate ran and no resident model after quit. The
-physical Control has not been actuated against build 17.
+version 1.5.0 build 18 under `com.longdevity.hardwarecontroller`, signed by the
+private Apple Development Team configured in `.env.local`. Its installed
+binary is byte-identical to the verified candidate and passed strict signature,
+version, Team, and launch checks. In normal mode it runs from the canonical
+path, matches the connected VEC USB Footpedal, reports both Dictation paths
+ready, and preserves the accepted Profile. The physical Control has not been
+actuated against build 18.
 
 The signed M7 packaged UI exposes stable accessibility identifiers for each
 retention picker, exact MiB/GiB choices, default and `Unlimited` states, and a
@@ -152,17 +147,16 @@ dependencies, connected Device, active Profile, and both Dictation readiness
 states pass. At M14, the Rust archive verifier remained deliberately outside
 the Swift app binary pending the shared Apple wrapper.
 
-The signed current canonical app preserves version 1.4.1 build 17 and statically
+The signed current canonical app uses version 1.5.0 build 18 and statically
 contains `voice_history_archive_validate_v1` and the active
 `voice_model_package_validate_v2`; the portable library retains the frozen V1
 Model output for binary compatibility. The installed arm64 executable is byte-
 identical to the verified candidate with SHA-256
-`f5c4098019dc130cc26908f80f10790a4528b7b5aec1fd5540b7bf8388273ff2` and
-CDHash `7c714c0c4ce16b59e5184d953740feb8899ceb3f`. Strict signature, Team
-`J4NB9RR32B`, hardened runtime, audio-input-only entitlement, and Apple/system-
+`bdce10264a041ee43df89f99379f64107abcb08d36d39cd94ae7f1a339a053f1` and
+CDHash `8529a579df1cf69c81cd9e1bbdd9ec5f97cd0202`. Strict signature, private
+Team match, hardened runtime, audio-input-only entitlement, and Apple/system-
 only dynamic dependencies pass. The exact Applications bundle launches with
-the connected Device, active Profile, and both Dictation readiness states; its
-archive chooser cancels without mutating empty History.
+the connected Device, active Profile, and both Dictation readiness states.
 
 ## Remaining evidence
 

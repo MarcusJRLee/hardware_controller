@@ -31,6 +31,7 @@ identity, or privacy permission.
 | Contribute | `scripts/check.sh` | Xcode 26 or compatible Swift 6 toolchain |
 | Verify only the portable core | `scripts/check_rust.sh` | rustup and a C17 compiler |
 | Verify the iOS app | `scripts/check_ios.sh` | Xcode 26, XcodeGen, iOS simulator, and Rust iOS targets |
+| Install the iOS app | `scripts/install_ios.sh` | Connected unlocked iPhone, Developer Mode, Apple Development identity, and private Team ID |
 | Build the iOS app | `scripts/build_ios_device.sh` | Rust iOS targets, Apple Development identity, and private Team ID |
 | Prepare the iOS starter model | `scripts/prepare_ios_whisper_model_package.sh /path/to/output` | 130 MB free build space and HTTPS during preparation |
 | Use real hardware | [Signed hardware build](#signed-hardware-build) | Apple Development identity and supported Device |
@@ -46,6 +47,21 @@ scripts/check.sh
 
 `scripts/check_ios.sh` additionally rejects network clients and network/cloud
 capabilities in iOS product sources before building or testing.
+
+## Install the iOS app
+
+Configure the ignored `.env.local` signing values, connect and unlock an iPhone,
+then run:
+
+```bash
+scripts/install_ios.sh
+```
+
+The command asks which available iPhone and configuration to use, then builds,
+installs, and launches Voice Input. **Development** is the default Debug build.
+**Local QA** is an optimized Release build that remains Apple Development
+signed; it is not an App Store or production release. Automation may use
+`--device <identifier-or-name> --config <development|local_qa>`.
 
 See the [contributor guide](docs/contributor_guide.md) for source ownership,
 test placement, Driver additions, and opt-in system checks.

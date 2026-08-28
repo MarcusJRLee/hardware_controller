@@ -5,6 +5,47 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
+usage() {
+  print "Usage: scripts/build_ios_device.sh [--config <development|local_qa>]"
+}
+
+build_configuration="Debug"
+build_product_directory="Debug-iphoneos"
+while (( $# > 0 )); do
+  case "$1" in
+    --config)
+      (( $# >= 2 )) || {
+        print -u2 "--config requires a value."
+        exit 1
+      }
+      case "$2" in
+        development)
+          build_configuration="Debug"
+          build_product_directory="Debug-iphoneos"
+          ;;
+        local_qa)
+          build_configuration="Release"
+          build_product_directory="Release-iphoneos"
+          ;;
+        *)
+          print -u2 "Unsupported config '$2'. Use development or local_qa."
+          exit 1
+          ;;
+      esac
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      print -u2 "Unknown option: $1"
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+
 if [[ -f .env.local ]]; then
   set -a
   source .env.local
@@ -23,13 +64,13 @@ xcodebuild build -quiet \
   -allowProvisioningUpdates \
   -project apps/ios/voice_input/VoiceInput.xcodeproj \
   -scheme VoiceInput \
-  -configuration Debug \
+  -configuration "$build_configuration" \
   -destination "generic/platform=iOS" \
   -derivedDataPath "$derived_data" \
   DEVELOPMENT_TEAM="$HC_EXPECTED_TEAM_ID" \
   CODE_SIGN_STYLE=Automatic
 
-app_bundle="$derived_data/Build/Products/Debug-iphoneos/VoiceInput.app"
+app_bundle="$derived_data/Build/Products/$build_product_directory/VoiceInput.app"
 scripts/check_ios_system_capture_metadata.sh "$app_bundle"
 codesign --verify --deep --strict --verbose=2 "$app_bundle"
 linked_symbols="$(nm -gU "$app_bundle/VoiceInput" 2>/dev/null || true)"
