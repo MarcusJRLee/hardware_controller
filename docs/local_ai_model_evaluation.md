@@ -76,16 +76,17 @@ before changing the default. The result reinforces that a model swap alone
 cannot replace deterministic casing, typed list normalization, validation, and
 fallback.
 
-## Historical controller benchmark
+## Prompt 6 production-controller benchmark
 
-The prompt-5 recommended-model benchmark explicitly prepared Qwen 3.5 4B before
-timing 17 production-controller samples:
+The benchmark explicitly prepared Qwen 3.5 4B before timing all 19 prompt-6
+cases through the production controller:
 
 ```bash
 HC_RUN_LOCAL_AI_END_TO_END_BENCHMARK=1 \
   swift test --filter measuresWarmReleaseToInsertionWithTheRecommendedModel
 ```
 
-It measured release-to-insertion p50 0.773 seconds and p95/p99/maximum 1.004
-seconds with one insertion per case. Re-run this benchmark before making a
-prompt-6 production-latency claim.
+It measured release-to-insertion p50 1.108 seconds and p95/p99/maximum 1.313
+seconds with one insertion per case. The warm p95 passes the 1.5-second gate.
+The controller result includes deterministic normalization, validation,
+fallback, and insertion; it does not replace the provider-only latency row.
