@@ -25,17 +25,17 @@ identity, or privacy permission.
 
 ## Choose a path
 
-| Goal | Start here | Additional requirement |
-| --- | --- | --- |
-| Explore the app | `scripts/run_demo.sh` | rustup |
-| Contribute | `scripts/check.sh` | Xcode 26 or compatible Swift 6 toolchain |
-| Verify only the portable core | `scripts/check_rust.sh` | rustup and a C17 compiler |
-| Verify the iOS app | `scripts/check_ios.sh` | Xcode 26, XcodeGen, iOS simulator, and Rust iOS targets |
-| Install the iOS app | `scripts/install_ios.sh` | Connected unlocked iPhone, Developer Mode, Apple Development identity, and private Team ID |
-| Build the iOS app | `scripts/build_ios_device.sh` | Rust iOS targets, Apple Development identity, and private Team ID |
-| Prepare the iOS starter model | `scripts/prepare_ios_whisper_model_package.sh /path/to/output` | 130 MB free build space and HTTPS during preparation |
-| Use real hardware | [Signed hardware build](#signed-hardware-build) | Apple Development identity and supported Device |
-| Install as a nondeveloper | [Public distribution](docs/public_distribution.md) | Notarized public release; not yet available |
+| Goal                          | Start here                                                     | Additional requirement                                                                     |
+| ----------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Explore the app               | `scripts/run_demo.sh`                                          | rustup                                                                                     |
+| Contribute                    | `scripts/check.sh`                                             | Xcode 26 or compatible Swift 6 toolchain                                                   |
+| Verify only the portable core | `scripts/check_rust.sh`                                        | rustup and a C17 compiler                                                                  |
+| Verify the iOS app            | `scripts/check_ios.sh`                                         | Xcode 26, XcodeGen, iOS simulator, and Rust iOS targets                                    |
+| Install the iOS app           | `scripts/install_ios.sh`                                       | Connected unlocked iPhone, Developer Mode, Apple Development identity, and private Team ID |
+| Build the iOS app             | `scripts/build_ios_device.sh`                                  | Rust iOS targets, Apple Development identity, and private Team ID                          |
+| Prepare the iOS starter model | `scripts/prepare_ios_whisper_model_package.sh /path/to/output` | 130 MB free build space and HTTPS during preparation                                       |
+| Use real hardware             | [Signed hardware build](#signed-hardware-build)                | Apple Development identity and supported Device                                            |
+| Install as a nondeveloper     | [Public distribution](docs/public_distribution.md)             | Notarized public release; not yet available                                                |
 
 ## Verify a change
 
@@ -185,9 +185,9 @@ Swift restore logic. Import never delivers text.
 
 ## Dictation Actions
 
-| Action | Result | Model dependency |
-| --- | --- | --- |
-| Local Dictation | Reversible live text where safe, otherwise guarded final text. | Apple on-device speech recognition. |
+| Action             | Result                                                          | Model dependency                                              |
+| ------------------ | --------------------------------------------------------------- | ------------------------------------------------------------- |
+| Local Dictation    | Reversible live text where safe, otherwise guarded final text.  | Apple on-device speech recognition.                           |
 | Local AI Dictation | One corrected and automatically formatted result after release. | Apple speech plus Apple On-Device or local Ollama refinement. |
 
 Both Actions reuse the same microphone, recognition, target, permission, and
@@ -337,26 +337,26 @@ documented in [release validation](docs/release_validation.md).
 
 ## Documentation
 
-| Path | Authority |
-| --- | --- |
-| [License](LICENSE) | Apache License 2.0 terms. |
-| [Notice](NOTICE) | Marcus John Rice Lee attribution retained by Apache redistributors. |
-| [Contributing](CONTRIBUTING.md) | Development workflow, privacy rules, and inbound Apache licensing. |
-| [Contributor guide](docs/contributor_guide.md) | Local paths, source ownership, test placement, and Driver work. |
-| [Branding](BRANDING.md) | Canonical-project and modified-build identification. |
-| [User guide](docs/user_guide.md) | Installation, setup, use, and troubleshooting. |
-| [Product brief](docs/product_brief.md) | Product scope, domain language, and acceptance stories. |
-| [Voice platform design](docs/voice_platform_design.md) | Accepted local Voice roadmap for the existing macOS app and iOS. |
-| [Voice CUJs](docs/voice_cujs.md) | Accepted test-first macOS and iOS behavior contract. |
-| [Voice implementation goal](docs/voice_implementation_goal_prompt.md) | Copy-paste autonomous execution prompt and definition of done. |
-| [Game plan](docs/game_plan.md) | Current quality gates and remaining evidence. |
-| [Public distribution](docs/public_distribution.md) | Gated Developer ID, notarization, and free-DMG runbook. |
-| [Public repository migration](docs/public_repository_migration.md) | Completed clean-history replacement record and GitHub controls. |
-| [Architecture](docs/architecture.md) | Component, concurrency, persistence, privacy, and failure boundaries. |
-| [Implementation context](CONTEXT.md) | Stable names for deep implementation modules. |
-| [UX specification](docs/ux_spec.md) | Current visual and accessibility behavior. |
-| [Infinity 3 evidence](docs/hardware/infinity_3.md) | Device protocol evidence and physical checks. |
-| [Decisions](docs/decisions/) | Durable product and architecture decisions. |
+| Path                                                                  | Authority                                                             |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| [License](LICENSE)                                                    | Apache License 2.0 terms.                                             |
+| [Notice](NOTICE)                                                      | Marcus John Rice Lee attribution retained by Apache redistributors.   |
+| [Contributing](CONTRIBUTING.md)                                       | Development workflow, privacy rules, and inbound Apache licensing.    |
+| [Contributor guide](docs/contributor_guide.md)                        | Local paths, source ownership, test placement, and Driver work.       |
+| [Branding](BRANDING.md)                                               | Canonical-project and modified-build identification.                  |
+| [User guide](docs/user_guide.md)                                      | Installation, setup, use, and troubleshooting.                        |
+| [Product brief](docs/product_brief.md)                                | Product scope, domain language, and acceptance stories.               |
+| [Voice platform design](docs/voice_platform_design.md)                | Accepted local Voice roadmap for the existing macOS app and iOS.      |
+| [Voice CUJs](docs/voice_cujs.md)                                      | Accepted test-first macOS and iOS behavior contract.                  |
+| [Voice implementation goal](docs/voice_implementation_goal_prompt.md) | Copy-paste autonomous execution prompt and definition of done.        |
+| [Game plan](docs/game_plan.md)                                        | Current quality gates and remaining evidence.                         |
+| [Public distribution](docs/public_distribution.md)                    | Gated Developer ID, notarization, and free-DMG runbook.               |
+| [Public repository migration](docs/public_repository_migration.md)    | Completed clean-history replacement record and GitHub controls.       |
+| [Architecture](docs/architecture.md)                                  | Component, concurrency, persistence, privacy, and failure boundaries. |
+| [Implementation context](CONTEXT.md)                                  | Stable names for deep implementation modules.                         |
+| [UX specification](docs/ux_spec.md)                                   | Current visual and accessibility behavior.                            |
+| [Infinity 3 evidence](docs/hardware/infinity_3.md)                    | Device protocol evidence and physical checks.                         |
+| [Decisions](docs/decisions/)                                          | Durable product and architecture decisions.                           |
 
 The project is open source under the [Apache License 2.0](LICENSE). Copyright
 remains with Marcus John Rice Lee; intentional contributions are accepted
