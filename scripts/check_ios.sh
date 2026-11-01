@@ -35,8 +35,11 @@ git diff --exit-code -- apps/ios/voice_input/VoiceInput.xcodeproj
 scripts/check_ios_local_only.sh
 swift format lint --recursive --strict apps/ios/voice_input
 plutil -lint apps/ios/voice_input/config/*.plist >/dev/null
-scripts/check_voice_whisper_bridge.sh
-scripts/prepare_ios_whisper_model_package_test.sh
+# CI runs these in the Verify job; standalone runs keep them.
+if [[ "${HC_IOS_SKIP_SHARED_CHECKS:-0}" != "1" ]]; then
+  scripts/check_voice_asr_bridge.sh
+  scripts/prepare_ios_asr_model_package_test.sh
+fi
 
 xcode_test_flags=(
   -project apps/ios/voice_input/VoiceInput.xcodeproj

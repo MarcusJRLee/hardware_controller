@@ -110,11 +110,7 @@ jobs:
         run: |
           rustup target add aarch64-apple-ios aarch64-apple-ios-sim
           scripts/build_ios_rust_ffi.sh
-          if [[ -x scripts/fetch_asr_runtime.sh ]]; then
-            scripts/fetch_asr_runtime.sh
-          else
-            scripts/fetch_ios_asr_runtime.sh
-          fi
+          scripts/fetch_asr_runtime.sh
       - name: Initialize CodeQL
         uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:

@@ -67,6 +67,7 @@ enum VoiceFFIBridgeModelRuntimeV1 {
   VoiceFFIBridgeModelRuntimeWhisperCpp = VOICE_MODEL_RUNTIME_WHISPER_CPP,
   VoiceFFIBridgeModelRuntimeMistralRs = VOICE_MODEL_RUNTIME_MISTRAL_RS,
   VoiceFFIBridgeModelRuntimeLlamaCpp = VOICE_MODEL_RUNTIME_LLAMA_CPP,
+  VoiceFFIBridgeModelRuntimeTranscribeCpp = VOICE_MODEL_RUNTIME_TRANSCRIBE_CPP,
 };
 
 enum VoiceFFIBridgeModelStageV1 {

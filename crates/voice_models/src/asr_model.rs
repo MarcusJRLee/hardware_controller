@@ -8,7 +8,7 @@ use crate::{
     ModelStage, validate_model_package,
 };
 
-/// A package that is ready for one completed-file ASR runtime.
+/// A package that is ready for the completed-file ASR runtime.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ResolvedASRModel {
     /// Stable package identifier.
@@ -19,6 +19,8 @@ pub struct ResolvedASRModel {
     pub manifest_sha256: [u8; 32],
     /// Verified absolute model payload path.
     pub model_path: PathBuf,
+    /// Verified absolute speech-detection payload path, when packaged.
+    pub speech_detection_path: Option<PathBuf>,
 }
 
 /// Failure to resolve one installed package for completed-file ASR.
@@ -34,6 +36,8 @@ pub enum ASRModelError {
     MissingFileCapability,
     /// The runtime cannot choose one unambiguous model payload.
     AmbiguousModelPayload,
+    /// The package declares more than one speech-detection payload.
+    AmbiguousSpeechDetectionPayload,
 }
 
 impl fmt::Display for ASRModelError {
@@ -44,22 +48,22 @@ impl fmt::Display for ASRModelError {
 
 impl std::error::Error for ASRModelError {}
 
-/// Revalidates and resolves one whisper.cpp completed-file ASR package.
+/// Revalidates and resolves one transcribe.cpp completed-file ASR package.
 ///
-/// The returned path remains trustworthy only while the caller prevents
+/// The returned paths remain trustworthy only while the caller prevents
 /// concurrent mutation of the private installed package.
 ///
 /// # Errors
 ///
 /// Returns a typed failure for any package-integrity or compatibility error.
-pub fn resolve_whisper_file_asr_model(
+pub fn resolve_file_asr_model(
     root: &Path,
     limits: ModelPackageLimits,
     expected_manifest_sha256: [u8; 32],
 ) -> Result<ResolvedASRModel, ASRModelError> {
     let package = validate_model_package(root, limits, Some(expected_manifest_sha256))
         .map_err(ASRModelError::Package)?;
-    if package.runtime != ModelRuntime::WhisperCpp {
+    if package.runtime != ModelRuntime::TranscribeCpp {
         return Err(ASRModelError::UnsupportedRuntime);
     }
     if package.stage != ModelStage::Asr {
@@ -68,19 +72,28 @@ pub fn resolve_whisper_file_asr_model(
     if !package.capabilities.contains(&ModelCapability::FileAsr) {
         return Err(ASRModelError::MissingFileCapability);
     }
-    let model_paths = package
-        .files
-        .iter()
-        .filter(|file| file.role == ModelFileRole::Model)
-        .map(|file| root.join(&file.path))
-        .collect::<Vec<_>>();
+    let paths_with_role = |role: ModelFileRole| {
+        package
+            .files
+            .iter()
+            .filter(|file| file.role == role)
+            .map(|file| root.join(&file.path))
+            .collect::<Vec<_>>()
+    };
+    let model_paths = paths_with_role(ModelFileRole::Model);
     let [model_path] = model_paths.as_slice() else {
         return Err(ASRModelError::AmbiguousModelPayload);
+    };
+    let speech_detection_path = match paths_with_role(ModelFileRole::SpeechDetection).as_slice() {
+        [] => None,
+        [path] => Some(path.clone()),
+        _ => return Err(ASRModelError::AmbiguousSpeechDetectionPayload),
     };
     Ok(ResolvedASRModel {
         package_id: package.package_id,
         version: package.version,
         manifest_sha256: package.manifest_sha256,
         model_path: model_path.clone(),
+        speech_detection_path,
     })
 }

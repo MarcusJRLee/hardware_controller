@@ -337,12 +337,14 @@ dependency-free Rust domain imports no Apple type. Reevaluate UniFFI for a later
 object-heavy or asynchronous boundary when its Swift 6 `Sendable` support meets
 the same gates. WASM compatibility is not a current selection gate.
 
-Decision [0042](decisions/0042_ios_whisper_file_asr.md) selects the official
-whisper.cpp `b4938` XCFramework for the first iOS completed-file adapter. Rust
-revalidates the active package and resolves the digest-verified model role; a
-Swift actor exclusively owns the opaque C runtime context and prewarms it.
-Framework and model binaries stay out of source control. sherpa-onnx remains
-the streaming challenger and must beat the same physical-device corpus.
+Decision [0055](decisions/0055_transcribe_cpp_asr_runtime.md) replaces the
+whisper.cpp runtime from [0042](decisions/0042_ios_whisper_file_asr.md) with
+the official transcribe.cpp `v0.4.1` XCFramework: one ggml runtime for Whisper,
+Parakeet, Moonshine, and Silero speech detection. Rust revalidates the active
+package and resolves the digest-verified model and optional speech-detection
+roles; a Swift actor exclusively owns the opaque C runtime context and prewarms
+it. Framework and model binaries stay out of source control. sherpa-onnx remains
+the streaming comparator and must beat the same physical-device corpus.
 
 Decision [0043](decisions/0043_ios_local_formatting_and_history.md) compiles the
 existing deterministic spoken-edit, semantic-document, renderer, Style, and
@@ -665,7 +667,7 @@ test first or batch the entire implementation behind mocked internals.
   surface.
 - **Current ASR evidence:** one compatible package can become the persisted
   active ASR model; app launch, selection, and capture prewarm its exclusive
-  whisper.cpp context. Rust revalidates the exact manifest and every payload
+  transcribe.cpp context. Rust revalidates the exact manifest and every payload
   before returning one model path. Stop converts the real CAF to timed Raw text
   through bounded caller-owned buffers. A pinned native integration corpus
   measured warm CPU RTF 0.0111 on the reference Mac; the UI fails explicitly

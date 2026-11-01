@@ -1,4 +1,0 @@
-framework module VoiceWhisperBridge {
-  header "voice_whisper_bridge.h"
-  export *
-}

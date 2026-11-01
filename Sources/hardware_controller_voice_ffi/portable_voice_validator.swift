@@ -76,6 +76,7 @@ public enum PortableModelRuntime: UInt32, Equatable, Sendable {
   case whisperCPP = 2
   case mistralRS = 3
   case llamaCPP = 4
+  case transcribeCPP = 5
 }
 
 public enum PortableModelStage: UInt32, Equatable, Sendable {
@@ -181,12 +182,23 @@ public protocol PortableVoiceHistoryArchiveValidating: Sendable {
   ) throws -> PortableVoiceHistoryArchive
 }
 
+/// Runtime inputs revalidated immediately before an ASR context loads them.
+public struct PortableResolvedASRModel: Equatable, Sendable {
+  public let modelURL: URL
+  public let speechDetectionURL: URL?
+
+  public init(modelURL: URL, speechDetectionURL: URL?) {
+    self.modelURL = modelURL
+    self.speechDetectionURL = speechDetectionURL
+  }
+}
+
 public protocol PortableASRModelResolving: Sendable {
-  func resolveWhisperASRModel(
+  func resolveFileASRModel(
     at root: URL,
     limits: PortableModelPackageLimits,
     expectedManifestSHA256: Data
-  ) throws -> URL
+  ) throws -> PortableResolvedASRModel
 }
 
 public struct RustPortableVoiceValidator:
@@ -255,11 +267,11 @@ public struct RustPortableVoiceValidator:
     )
   }
 
-  public func resolveWhisperASRModel(
+  public func resolveFileASRModel(
     at root: URL,
     limits: PortableModelPackageLimits,
     expectedManifestSHA256: Data
-  ) throws -> URL {
+  ) throws -> PortableResolvedASRModel {
     guard expectedManifestSHA256.count == 32 else {
       throw PortableVoiceValidationError.invalidArgument
     }
@@ -274,32 +286,44 @@ public struct RustPortableVoiceValidator:
       expectedManifestSHA256.copyBytes(to: target)
     }
     var modelPath = Data(count: 4_096)
-    let length = try modelPath.withUnsafeMutableBytes { modelPathBytes in
-      var output = VoiceASRModelInfoV1()
-      output.model_path = Self.utf8Buffer(modelPathBytes)
-      let status = pathBytes.withUnsafeBufferPointer { path in
-        request.root_path_utf8 = path.baseAddress
-        return voice_asr_model_resolve_v1(&request, &output)
-      }
-      guard status == VoiceFFIBridgeStatusOK.rawValue else {
-        if status == VoiceFFIBridgeStatusBufferTooSmall.rawValue {
+    var speechPath = Data(count: 4_096)
+    let lengths = try modelPath.withUnsafeMutableBytes { modelPathBytes in
+      try speechPath.withUnsafeMutableBytes { speechPathBytes in
+        var output = VoiceASRModelInfoV2()
+        output.model_path = Self.utf8Buffer(modelPathBytes)
+        output.speech_detection_path = Self.utf8Buffer(speechPathBytes)
+        let status = pathBytes.withUnsafeBufferPointer { path in
+          request.root_path_utf8 = path.baseAddress
+          return voice_asr_model_resolve_v2(&request, &output)
+        }
+        guard status == VoiceFFIBridgeStatusOK.rawValue else {
+          if status == VoiceFFIBridgeStatusBufferTooSmall.rawValue {
+            throw PortableVoiceValidationError.internalFailure
+          }
+          throw Self.error(for: status)
+        }
+        guard
+          output.model_path.length <= modelPathBytes.count,
+          output.speech_detection_path.length <= speechPathBytes.count,
+          output.has_speech_detection <= 1,
+          (output.has_speech_detection == 1) == (output.speech_detection_path.length > 0),
+          Self.data(from: output.manifest_sha256) == expectedManifestSHA256
+        else {
           throw PortableVoiceValidationError.internalFailure
         }
-        throw Self.error(for: status)
+        return (output.model_path.length, output.speech_detection_path.length)
       }
-      guard
-        output.model_path.length <= modelPathBytes.count,
-        Self.data(from: output.manifest_sha256) == expectedManifestSHA256
-      else {
-        throw PortableVoiceValidationError.internalFailure
-      }
-      return output.model_path.length
     }
-    let resolvedPath = String(decoding: modelPath.prefix(length), as: UTF8.self)
-    guard !resolvedPath.isEmpty else {
+    let resolvedModelPath = String(decoding: modelPath.prefix(lengths.0), as: UTF8.self)
+    guard !resolvedModelPath.isEmpty else {
       throw PortableVoiceValidationError.internalFailure
     }
-    return URL(fileURLWithPath: resolvedPath)
+    let resolvedSpeechPath = String(decoding: speechPath.prefix(lengths.1), as: UTF8.self)
+    return PortableResolvedASRModel(
+      modelURL: URL(fileURLWithPath: resolvedModelPath),
+      speechDetectionURL: resolvedSpeechPath.isEmpty
+        ? nil : URL(fileURLWithPath: resolvedSpeechPath)
+    )
   }
 
   private static func error(for status: UInt32) -> PortableVoiceValidationError {
@@ -372,6 +396,8 @@ public struct RustPortableVoiceValidator:
         == VoiceFFIBridgeModelRuntimeMistralRs.rawValue,
       PortableModelRuntime.llamaCPP.rawValue
         == VoiceFFIBridgeModelRuntimeLlamaCpp.rawValue,
+      PortableModelRuntime.transcribeCPP.rawValue
+        == VoiceFFIBridgeModelRuntimeTranscribeCpp.rawValue,
       PortableModelStage.asr.rawValue == VoiceFFIBridgeModelStageAsr.rawValue,
       PortableModelStage.formatting.rawValue
         == VoiceFFIBridgeModelStageFormatting.rawValue,

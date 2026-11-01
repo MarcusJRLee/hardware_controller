@@ -92,7 +92,7 @@ final class VoiceInputModelLibraryModelTest: XCTestCase {
     let manifest = try String(contentsOf: manifestURL, encoding: .utf8)
     try manifest.replacingOccurrences(
       of: "\"runtime\": \"sherpa_onnx\"",
-      with: "\"runtime\": \"whisper_cpp\""
+      with: "\"runtime\": \"transcribe_cpp\""
     ).write(to: manifestURL, atomically: true, encoding: .utf8)
     let installer = VoiceInputModelPackageInstaller(
       rootURL: temporary.appendingPathComponent("models")

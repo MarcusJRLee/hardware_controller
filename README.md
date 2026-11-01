@@ -25,17 +25,17 @@ identity, or privacy permission.
 
 ## Choose a path
 
-| Goal                          | Start here                                                     | Additional requirement                                                                     |
-| ----------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Explore the app               | `scripts/run_demo.sh`                                          | rustup                                                                                     |
-| Contribute                    | `scripts/check.sh`                                             | Xcode 26 or compatible Swift 6 toolchain                                                   |
-| Verify only the portable core | `scripts/check_rust.sh`                                        | rustup and a C17 compiler                                                                  |
-| Verify the iOS app            | `scripts/check_ios.sh`                                         | Xcode 26, XcodeGen, iOS simulator, and Rust iOS targets                                    |
-| Install the iOS app           | `scripts/install_ios.sh`                                       | Connected unlocked iPhone, Developer Mode, Apple Development identity, and private Team ID |
-| Build the iOS app             | `scripts/build_ios_device.sh`                                  | Rust iOS targets, Apple Development identity, and private Team ID                          |
-| Prepare the iOS starter model | `scripts/prepare_ios_whisper_model_package.sh /path/to/output` | 130 MB free build space and HTTPS during preparation                                       |
-| Use real hardware             | [Signed hardware build](#signed-hardware-build)                | Apple Development identity and supported Device                                            |
-| Install as a nondeveloper     | [Public distribution](docs/public_distribution.md)             | Notarized public release; not yet available                                                |
+| Goal                          | Start here                                                 | Additional requirement                                                                     |
+| ----------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Explore the app               | `scripts/run_demo.sh`                                      | rustup                                                                                     |
+| Contribute                    | `scripts/check.sh`                                         | Xcode 26 or compatible Swift 6 toolchain                                                   |
+| Verify only the portable core | `scripts/check_rust.sh`                                    | rustup and a C17 compiler                                                                  |
+| Verify the iOS app            | `scripts/check_ios.sh`                                     | Xcode 26, XcodeGen, iOS simulator, and Rust iOS targets                                    |
+| Install the iOS app           | `scripts/install_ios.sh`                                   | Connected unlocked iPhone, Developer Mode, Apple Development identity, and private Team ID |
+| Build the iOS app             | `scripts/build_ios_device.sh`                              | Rust iOS targets, Apple Development identity, and private Team ID                          |
+| Prepare the iOS starter model | `scripts/prepare_ios_asr_model_package.sh /path/to/output` | 100 MB free build space and HTTPS during preparation                                       |
+| Use real hardware             | [Signed hardware build](#signed-hardware-build)            | Apple Development identity and supported Device                                            |
+| Install as a nondeveloper     | [Public distribution](docs/public_distribution.md)         | Notarized public release; not yet available                                                |
 
 ## Verify a change
 
@@ -67,8 +67,9 @@ See the [contributor guide](docs/contributor_guide.md) for source ownership,
 test placement, Driver additions, and opt-in system checks.
 
 The iOS app performs capture and inference locally and has no model-download
-path. To exercise its first speech-to-text adapter, prepare the pinned Whisper
-Tiny English package on the Mac, move that folder into Files on the iPhone,
+path. To exercise its speech-to-text adapter, prepare the pinned Whisper Tiny
+English package (transcribe.cpp runtime with Silero speech detection) on the
+Mac, move that folder into Files on the iPhone,
 then use **Voice Input → Local models → Import Model package → Use for speech to
 text**. Runtime/model downloads occur only in repository build preparation;
 the installed app does not require a network connection.
@@ -329,8 +330,22 @@ HC_RUN_LOCAL_AI_MODEL_EVALUATION=1 swift test \
 HC_RUN_LOCAL_AI_END_TO_END_BENCHMARK=1 swift test \
   --filter measuresWarmReleaseToInsertionWithTheRecommendedModel
 
-HC_RUN_IOS_ASR_PERFORMANCE=1 scripts/check_voice_whisper_bridge.sh
+HC_RUN_IOS_ASR_PERFORMANCE=1 scripts/check_voice_asr_bridge.sh
 ```
+
+Compare local ASR models through the production bridge. Without `--manifest`,
+the script generates a synthetic corpus with `say`; that measures cost, not
+quality. For quality, record your own clips and list them in an ignored
+`manifest.tsv` as `id<TAB>clip.wav<TAB>human-written reference`:
+
+```bash
+scripts/benchmark_asr.sh
+scripts/benchmark_asr.sh --model /path/to/parakeet-tdt-0.6b-v3-Q8_0.gguf
+scripts/benchmark_asr.sh --manifest .build/my_corpus/manifest.tsv --passes 7
+```
+
+Each run prints one JSONL summary with sample count, p50, p95, p99, maximum,
+median real-time factor, and word error rate.
 
 The web, terminal, foreground-event, and complete speech-to-field commands are
 documented in [release validation](docs/release_validation.md).

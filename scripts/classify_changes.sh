@@ -38,9 +38,9 @@ for file in "${changed[@]}"; do
   lane[macos]=true
   case "$file" in
     # Only inputs to the traced iOS build need the iOS CodeQL lane.
-    apps/ios/*|scripts/build_ios_rust_ffi.sh|scripts/fetch_*asr_runtime.sh|scripts/generate_ios_project.sh)
+    apps/ios/*|scripts/build_ios_rust_ffi.sh|scripts/fetch_asr_runtime.sh|scripts/generate_ios_project.sh)
       lane[ios]=true; lane[codeql_ios]=true ;;
-    scripts/*ios*|scripts/*asr*|scripts/*whisper*)
+    scripts/*ios*|scripts/*asr*)
       lane[ios]=true ;;
     Sources/HardwareControllerCore/*|Sources/hardware_controller_voice_ffi/*|Sources/voice_*|crates/*|Cargo.*|rust-toolchain.toml|scripts/build_rust_ffi.sh)
       # Shared by both apps.

@@ -130,9 +130,7 @@ struct VoiceInputModelLibraryView: View {
   }
 
   private func canSelectForASR(_ package: PortableModelPackage) -> Bool {
-    package.runtime == .whisperCPP
-      && package.stage == .asr
-      && package.capabilities.contains(.fileASR)
+    VoiceInputASRModelRegistry.isCompatible(package)
   }
 
   private func packageSummary(_ package: PortableModelPackage) -> String {
@@ -161,6 +159,7 @@ struct VoiceInputModelLibraryView: View {
     case .whisperCPP: "whisper.cpp"
     case .mistralRS: "mistral.rs"
     case .llamaCPP: "llama.cpp"
+    case .transcribeCPP: "transcribe.cpp"
     }
   }
 

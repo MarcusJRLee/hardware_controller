@@ -12,11 +12,11 @@ use crate::{
     VOICE_STATUS_HISTORY_ARCHIVE_LIMIT_EXCEEDED, VOICE_STATUS_INVALID_ARGUMENT,
     VOICE_STATUS_INVALID_RECLAIM_REQUEST, VOICE_STATUS_INVALID_UTF8_PATH,
     VOICE_STATUS_MODEL_PACKAGE_DIGEST_MISMATCH, VOICE_STATUS_NULL_POINTER, VOICE_STATUS_OK,
-    VoiceASRModelInfoV1, VoiceHistoryArchiveInfoV1, VoiceHistoryArchiveRequestV1,
+    VoiceASRModelInfoV2, VoiceHistoryArchiveInfoV1, VoiceHistoryArchiveRequestV1,
     VoiceModelPackageInfoV1, VoiceModelPackageInfoV2, VoiceModelPackageRequestV1,
     VoiceRetentionCandidateV1, VoiceRetentionDecisionV1, VoiceRetentionPlanV1,
     VoiceRetentionRequestV1, VoiceRetentionSettingsV1, VoiceSessionIdV1, VoiceUtf8BufferV1,
-    voice_asr_model_resolve_v1, voice_history_archive_validate_v1, voice_model_package_validate_v1,
+    voice_asr_model_resolve_v2, voice_history_archive_validate_v1, voice_model_package_validate_v1,
     voice_model_package_validate_v2, voice_retention_plan_v1,
 };
 
@@ -204,7 +204,7 @@ fn model_package_failures_remain_typed_across_the_abi() {
 }
 
 #[test]
-fn asr_model_resolution_revalidates_digest_and_returns_only_whisper_model_path() {
+fn asr_model_resolution_revalidates_digest_and_returns_transcribe_model_path() {
     let temporary = temporary_package();
     let manifest_path = temporary.join("manifest.json");
     let manifest = std::fs::read_to_string(&manifest_path).expect("manifest readable");
@@ -212,7 +212,7 @@ fn asr_model_resolution_revalidates_digest_and_returns_only_whisper_model_path()
         &manifest_path,
         manifest.replace(
             "\"runtime\": \"sherpa_onnx\"",
-            "\"runtime\": \"whisper_cpp\"",
+            "\"runtime\": \"transcribe_cpp\"",
         ),
     )
     .expect("manifest writable");
@@ -232,15 +232,18 @@ fn asr_model_resolution_revalidates_digest_and_returns_only_whisper_model_path()
     validation_request.has_expected_manifest_sha256 = 1;
     validation_request.expected_manifest_sha256 = validation_output.manifest_sha256;
     let mut model_path = [0_u8; 4_096];
-    let mut output = VoiceASRModelInfoV1 {
+    let mut speech_path = [0_u8; 4_096];
+    let mut output = VoiceASRModelInfoV2 {
         model_path: utf8_buffer(&mut model_path),
+        speech_detection_path: utf8_buffer(&mut speech_path),
         manifest_sha256: [0; 32],
-        reserved: [1; 8],
+        has_speech_detection: 1,
+        reserved: [1; 7],
     };
 
     // Safety: Input and output remain live and nonoverlapping for the call.
     let status =
-        unsafe { voice_asr_model_resolve_v1(&raw const validation_request, &raw mut output) };
+        unsafe { voice_asr_model_resolve_v2(&raw const validation_request, &raw mut output) };
 
     assert_eq!(status, VOICE_STATUS_OK);
     assert_eq!(
@@ -248,7 +251,9 @@ fn asr_model_resolution_revalidates_digest_and_returns_only_whisper_model_path()
         temporary.join("model.bin").to_string_lossy()
     );
     assert_eq!(output.manifest_sha256, validation_output.manifest_sha256);
-    assert_eq!(output.reserved, [0; 8]);
+    assert_eq!(output.has_speech_detection, 0);
+    assert_eq!(output.speech_detection_path.length, 0);
+    assert_eq!(output.reserved, [0; 7]);
     std::fs::remove_dir_all(temporary).expect("temporary package removable");
 }
 
@@ -258,14 +263,17 @@ fn asr_model_resolution_rejects_unpinned_or_wrong_runtime_packages() {
     let path = root.to_string_lossy();
     let mut request = model_request(path.as_bytes());
     let mut model_path = [0_u8; 4_096];
-    let mut output = VoiceASRModelInfoV1 {
+    let mut speech_path = [0_u8; 4_096];
+    let mut output = VoiceASRModelInfoV2 {
         model_path: utf8_buffer(&mut model_path),
+        speech_detection_path: utf8_buffer(&mut speech_path),
         manifest_sha256: [1; 32],
-        reserved: [1; 8],
+        has_speech_detection: 1,
+        reserved: [1; 7],
     };
     // Safety: Input and output remain live and nonoverlapping for each call.
     assert_eq!(
-        unsafe { voice_asr_model_resolve_v1(&raw const request, &raw mut output) },
+        unsafe { voice_asr_model_resolve_v2(&raw const request, &raw mut output) },
         VOICE_STATUS_INVALID_ARGUMENT
     );
 
@@ -277,7 +285,7 @@ fn asr_model_resolution_rejects_unpinned_or_wrong_runtime_packages() {
     request.expected_manifest_sha256 = validation_output.manifest_sha256;
     // Safety: Input and output remain live and nonoverlapping for the call.
     assert_eq!(
-        unsafe { voice_asr_model_resolve_v1(&raw const request, &raw mut output) },
+        unsafe { voice_asr_model_resolve_v2(&raw const request, &raw mut output) },
         VOICE_STATUS_ASR_RUNTIME_UNSUPPORTED
     );
 }
@@ -378,7 +386,7 @@ fn version_one_layout_is_fixed() {
     assert_eq!(size_of::<VoiceModelPackageRequestV1>(), 72);
     assert_eq!(size_of::<VoiceModelPackageInfoV1>(), 224);
     assert_eq!(size_of::<VoiceModelPackageInfoV2>(), 248);
-    assert_eq!(size_of::<VoiceASRModelInfoV1>(), 64);
+    assert_eq!(size_of::<VoiceASRModelInfoV2>(), 88);
     assert_eq!(size_of::<VoiceHistoryArchiveRequestV1>(), 48);
     assert_eq!(size_of::<VoiceHistoryArchiveInfoV1>(), 64);
 }

@@ -58,11 +58,9 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
-            .build/ios_asr_runtime
-            .build/ios_asr_test_assets
             .build/asr_runtime
             .build/asr_test_assets
-          key: asr-assets-${{ hashFiles('scripts/fetch_*asr*.sh') }}
+          key: asr-assets-${{ hashFiles('scripts/fetch_asr_runtime.sh', 'scripts/fetch_asr_test_assets.sh') }}
       - name: Run repository checks
         if: needs.changes.outputs.macos == 'true'
         run: scripts/check.sh
@@ -82,11 +80,9 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
-            .build/ios_asr_runtime
-            .build/ios_asr_test_assets
             .build/asr_runtime
             .build/asr_test_assets
-          key: asr-assets-${{ hashFiles('scripts/fetch_*asr*.sh') }}
+          key: asr-assets-${{ hashFiles('scripts/fetch_asr_runtime.sh', 'scripts/fetch_asr_test_assets.sh') }}
       - name: Install iOS build tools
         run: |
           brew install ripgrep xcodegen

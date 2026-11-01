@@ -26,7 +26,7 @@ targets:
       - target: HardwareControllerCore
       - target: HardwareControllerVoiceFFI
         embed: false
-      - target: VoiceWhisperBridge
+      - target: VoiceASRBridge
         embed: false
       - target: VoiceInputKeyboard
         embed: true
@@ -34,7 +34,7 @@ targets:
         embed: true
       - framework: ../../../.build/ios_voice_ffi/VoiceFFI.xcframework
         embed: false
-      - framework: ../../../.build/ios_asr_runtime/build-apple/whisper.xcframework
+      - framework: ../../../.build/asr_runtime/TranscribeCpp.xcframework
         embed: true
     entitlements:
       path: config/app.entitlements
@@ -117,25 +117,25 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.voiceffi
 
-  VoiceWhisperBridge:
+  VoiceASRBridge:
     type: framework.static
     platform: iOS
     sources:
-      - path: ../../../Sources/voice_whisper_bridge/voice_whisper_bridge.c
+      - path: ../../../Sources/voice_asr_bridge/voice_asr_bridge.c
         group: portable
         createIntermediateGroups: false
-      - path: ../../../Sources/voice_whisper_bridge/include/voice_whisper_bridge.h
+      - path: ../../../Sources/voice_asr_bridge/include/voice_asr_bridge.h
         group: portable
         headerVisibility: public
     dependencies:
-      - framework: ../../../.build/ios_asr_runtime/build-apple/whisper.xcframework
+      - framework: ../../../.build/asr_runtime/TranscribeCpp.xcframework
     settings:
       base:
         DEFINES_MODULE: YES
         GENERATE_INFOPLIST_FILE: YES
-        HEADER_SEARCH_PATHS: $(inherited) $(SRCROOT)/../../../Sources/voice_whisper_bridge/include
-        MODULEMAP_FILE: $(SRCROOT)/../../../Sources/voice_whisper_bridge/include/module.modulemap
-        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.whisperbridge
+        HEADER_SEARCH_PATHS: $(inherited) $(SRCROOT)/../../../Sources/voice_asr_bridge/include
+        MODULEMAP_FILE: $(SRCROOT)/../../../Sources/voice_asr_bridge/include/module.modulemap
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.asrbridge
 
   VoiceInputKeyboard:
     type: app-extension

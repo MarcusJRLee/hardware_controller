@@ -112,11 +112,11 @@ private struct TranscriptionCall: Equatable, Sendable {
 func makeInstalledASRPackage() -> VoiceInputInstalledModelPackage {
   VoiceInputInstalledModelPackage(
     package: PortableModelPackage(
-      packageID: "com.longdevity.test.whisper",
+      packageID: "com.longdevity.test.asr",
       version: "1",
-      displayName: "Test Whisper",
+      displayName: "Test ASR",
       languages: ["en-US"],
-      runtime: .whisperCPP,
+      runtime: .transcribeCPP,
       stage: .asr,
       capabilities: [.fileASR],
       spdxExpression: "MIT",
