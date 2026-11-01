@@ -54,7 +54,7 @@ jobs:
           key: asr-assets-${{ hashFiles('scripts/fetch_ios_asr_runtime.sh', 'scripts/fetch_ios_asr_test_assets.sh') }}
       - name: Install iOS build tools
         run: |
-          brew install xcodegen
+          brew install ripgrep xcodegen
           rustup target add aarch64-apple-ios aarch64-apple-ios-sim
       - name: Run iOS checks
         run: scripts/check_ios.sh
