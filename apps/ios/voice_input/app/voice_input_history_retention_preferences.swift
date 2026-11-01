@@ -1,5 +1,5 @@
 import Foundation
-import HardwareControllerVoiceCore
+import HardwareControllerCore
 
 enum VoiceInputHistoryRetentionPreferenceError:
   Error,

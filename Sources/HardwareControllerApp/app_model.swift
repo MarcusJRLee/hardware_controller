@@ -289,7 +289,7 @@ final class AppModel {
     transcriptionIndicator.start()
     refreshTranscriptionIndicator()
 
-    startTask = Task { [runtime] in
+    startTask = Task { [weak self, runtime] in
       guard !Task.isCancelled else {
         return
       }

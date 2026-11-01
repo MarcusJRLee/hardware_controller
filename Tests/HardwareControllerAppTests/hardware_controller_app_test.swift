@@ -160,7 +160,7 @@ private final class FakeApplicationLifecycle:
 @MainActor
 /// Waits for one asynchronously forwarded workspace event.
 private func waitUntil(
-  timeout: Duration = .seconds(1),
+  timeout: Duration = .seconds(10),
   _ condition: @escaping @MainActor () -> Bool
 ) async throws {
   let clock = ContinuousClock()

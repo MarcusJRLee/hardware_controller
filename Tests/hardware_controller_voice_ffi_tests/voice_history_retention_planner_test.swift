@@ -1,13 +1,13 @@
 import Foundation
+import HardwareControllerCore
+import HardwareControllerVoiceFFI
 import Testing
-
-@testable import HardwareControllerCore
 
 struct VoiceHistoryRetentionPlannerTest {
   private let now = Date(timeIntervalSince1970: 2_000_000_000)
 
   @Test
-  func portableFixtureMatchesSwiftPolicy() throws {
+  func portableFixtureMatchesTheLinkedRustPolicy() throws {
     let fixtureURL = URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent()
       .deletingLastPathComponent()
@@ -35,7 +35,7 @@ struct VoiceHistoryRetentionPlannerTest {
           )
         )
       }
-      let plan = try VoiceHistoryRetentionPlanner.plan(
+      let plan = try RustVoiceHistoryRetentionPlanner().plan(
         candidates: candidates,
         settings: VoiceHistoryRetentionSettings(
           maximumAgeDays: fixtureCase.settings.maximumAgeDays,
@@ -93,7 +93,7 @@ struct VoiceHistoryRetentionPlannerTest {
     let recovery = candidate(id: 4, daysAgo: 100, isRecovery: true)
     let exactCutoff = candidate(id: 5, daysAgo: 90)
 
-    let plan = try VoiceHistoryRetentionPlanner.plan(
+    let plan = try RustVoiceHistoryRetentionPlanner().plan(
       candidates: [exactCutoff, recovery, active, pinned, old],
       settings: settings(ageDays: 90),
       now: now
@@ -108,7 +108,7 @@ struct VoiceHistoryRetentionPlannerTest {
     let tiedSecond = candidate(id: 2, daysAgo: 2)
     let tiedFirst = candidate(id: 1, daysAgo: 2)
 
-    let plan = try VoiceHistoryRetentionPlanner.plan(
+    let plan = try RustVoiceHistoryRetentionPlanner().plan(
       candidates: [later, tiedSecond, tiedFirst],
       settings: settings(artifactCount: 1),
       now: now
@@ -129,7 +129,7 @@ struct VoiceHistoryRetentionPlannerTest {
       candidate(id: $0, daysAgo: 12 - $0, bytes: 10)
     }
 
-    let plan = try VoiceHistoryRetentionPlanner.plan(
+    let plan = try RustVoiceHistoryRetentionPlanner().plan(
       candidates: candidates,
       settings: settings(bytes: 100),
       now: now
@@ -146,7 +146,7 @@ struct VoiceHistoryRetentionPlannerTest {
     let eligible = candidate(id: 1, daysAgo: 1, bytes: 10)
     let pinned = candidate(id: 2, daysAgo: 2, bytes: 20, isPinned: true)
 
-    let plan = try VoiceHistoryRetentionPlanner.plan(
+    let plan = try RustVoiceHistoryRetentionPlanner().plan(
       candidates: [eligible, pinned],
       settings: settings(ageDays: 0, bytes: 0, artifactCount: 0),
       now: now
@@ -162,7 +162,7 @@ struct VoiceHistoryRetentionPlannerTest {
   func zeroAgeExpiresAudioEndingAtTheEnforcementInstant() throws {
     let justCompleted = candidate(id: 1, daysAgo: 0)
 
-    let plan = try VoiceHistoryRetentionPlanner.plan(
+    let plan = try RustVoiceHistoryRetentionPlanner().plan(
       candidates: [justCompleted],
       settings: settings(ageDays: 0),
       now: now
@@ -179,7 +179,7 @@ struct VoiceHistoryRetentionPlannerTest {
     let pinned = candidate(id: 2, daysAgo: 2, bytes: 40, isPinned: true)
     let newest = candidate(id: 3, daysAgo: 1, bytes: 30)
 
-    let plan = try VoiceHistoryRetentionPlanner.plan(
+    let plan = try RustVoiceHistoryRetentionPlanner().plan(
       candidates: [newest, pinned, oldest],
       settings: settings(),
       now: now,
@@ -202,7 +202,7 @@ struct VoiceHistoryRetentionPlannerTest {
     let middle = candidate(id: 2, daysAgo: 2, bytes: 10)
     let newest = candidate(id: 3, daysAgo: 1, bytes: 10)
 
-    let plan = try VoiceHistoryRetentionPlanner.plan(
+    let plan = try RustVoiceHistoryRetentionPlanner().plan(
       candidates: [newest, middle, oldest],
       settings: settings(artifactCount: 2),
       now: now,
@@ -215,7 +215,7 @@ struct VoiceHistoryRetentionPlannerTest {
 
   @Test
   func unlimitedSettingsDoNotExpireAudio() throws {
-    let plan = try VoiceHistoryRetentionPlanner.plan(
+    let plan = try RustVoiceHistoryRetentionPlanner().plan(
       candidates: [candidate(id: 1, daysAgo: 1_000)],
       settings: settings(),
       now: now
@@ -244,7 +244,7 @@ struct VoiceHistoryRetentionPlannerTest {
       recoveryExpiresAt: now.addingTimeInterval(1)
     )
 
-    let plan = try VoiceHistoryRetentionPlanner.plan(
+    let plan = try RustVoiceHistoryRetentionPlanner().plan(
       candidates: [retained, pinned, expired],
       settings: .unlimited,
       now: now
@@ -267,7 +267,7 @@ struct VoiceHistoryRetentionPlannerTest {
       try settings(artifactCount: -1).validated()
     }
     #expect(throws: VoiceHistoryRetentionValidationError.invalidReclaimRequest) {
-      try VoiceHistoryRetentionPlanner.plan(
+      try RustVoiceHistoryRetentionPlanner().plan(
         candidates: [],
         settings: settings(),
         now: now,
@@ -275,14 +275,14 @@ struct VoiceHistoryRetentionPlannerTest {
       )
     }
     #expect(throws: VoiceHistoryRetentionValidationError.invalidArtifactSize) {
-      try VoiceHistoryRetentionPlanner.plan(
+      try RustVoiceHistoryRetentionPlanner().plan(
         candidates: [candidate(id: 1, daysAgo: 1, bytes: -1)],
         settings: settings(),
         now: now
       )
     }
     #expect(throws: VoiceHistoryRetentionValidationError.invalidArtifactSize) {
-      try VoiceHistoryRetentionPlanner.plan(
+      try RustVoiceHistoryRetentionPlanner().plan(
         candidates: [
           candidate(id: 1, daysAgo: 2, bytes: Int64.max),
           candidate(id: 2, daysAgo: 1, bytes: 1),

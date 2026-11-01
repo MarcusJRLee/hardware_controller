@@ -1,5 +1,5 @@
 import Foundation
-import HardwareControllerVoiceCore
+import HardwareControllerCore
 
 enum VoiceInputHistoryError: Error, LocalizedError, Sendable {
   case invalidLimit

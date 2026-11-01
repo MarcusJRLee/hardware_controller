@@ -272,7 +272,10 @@ decisions from one versioned CUJ fixture. A synchronous versioned C ABI exposes
 that policy with caller-owned buffers, stable typed errors, and no retained
 pointer or callback.
 
-**Current evidence:** Swift and Rust conformance tests share
+Decision [0057](decisions/0057_single_rust_retention_policy.md) retires the
+Swift planner; both apps now call the Rust policy.
+
+**Current evidence:** Swift boundary and Rust conformance tests share
 `Tests/cuj/voice_retention_v1.json`; Rust layout and domain tests pass; and a
 real C17 consumer compiles, links, and executes against the optimized static
 library. Decision
