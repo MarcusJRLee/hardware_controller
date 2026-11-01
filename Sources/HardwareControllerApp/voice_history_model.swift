@@ -19,6 +19,13 @@ enum VoiceHistoryWork: Equatable {
   var isBusy: Bool { self != .idle }
 }
 
+/// Adds a confirmed Dictionary suggestion to the persisted Local AI settings.
+@MainActor
+protocol VoiceDictionaryEditing: AnyObject {
+  var personalDictionary: PersonalDictionary { get }
+  func addDictionaryEntry(_ suggestion: VoiceDictionarySuggestion) -> Bool
+}
+
 @MainActor
 @Observable
 private final class VoiceHistoryPlaybackState {
@@ -38,6 +45,8 @@ final class VoiceHistoryModel {
   private(set) var work = VoiceHistoryWork.idle
   private(set) var errorMessage: String?
   private(set) var notice: String?
+  /// Offered after a correction; nothing is added without explicit confirmation.
+  private(set) var dictionarySuggestions: [VoiceDictionarySuggestion] = []
   var isPlaying: Bool { playbackState.isPlaying }
 
   @ObservationIgnored private let history: any VoiceSessionHistoryAccessing
@@ -49,6 +58,7 @@ final class VoiceHistoryModel {
   @ObservationIgnored private let exporter: any VoiceHistoryExporting
   @ObservationIgnored private let player: any VoiceHistoryAudioPlaying
   @ObservationIgnored private let playbackState: VoiceHistoryPlaybackState
+  @ObservationIgnored private let dictionaryEditor: (any VoiceDictionaryEditing)?
   @ObservationIgnored private var loadGeneration: UInt64 = 0
 
   init(
@@ -59,9 +69,11 @@ final class VoiceHistoryModel {
     retentionManager: (any VoiceSessionHistoryRetentionManaging)? = nil,
     recoveryManager: (any VoiceSessionHistoryRecoveryManaging)? = nil,
     exporter: any VoiceHistoryExporting = VoiceHistoryExporter(),
-    player: (any VoiceHistoryAudioPlaying)? = nil
+    player: (any VoiceHistoryAudioPlaying)? = nil,
+    dictionaryEditor: (any VoiceDictionaryEditing)? = nil
   ) {
     self.history = history
+    self.dictionaryEditor = dictionaryEditor
     self.retentionManager = retentionManager
     self.recoveryManager = recoveryManager
     self.service = service
@@ -136,6 +148,7 @@ final class VoiceHistoryModel {
       return
     }
     selectedSessionID = sessionID
+    dictionarySuggestions = []
     selectedResultID =
       selectedSession?.results
       .preferredReusableResult?.id
@@ -150,6 +163,7 @@ final class VoiceHistoryModel {
 
   func select(resultID: UUID) {
     selectedResultID = resultID
+    dictionarySuggestions = []
     if let selectedResult {
       correctionDraft = selectedResult.text
     }
@@ -162,14 +176,39 @@ final class VoiceHistoryModel {
     else {
       return
     }
+    let sourceText = selectedResult?.text ?? ""
+    let correctedText = correctionDraft
     await perform(.correcting) {
       _ = try await service.correct(
         sessionID: selectedSessionID,
         sourceResultID: selectedResultID,
-        text: correctionDraft
+        text: correctedText
       )
       notice = "Correction saved as a new result."
+      if let dictionaryEditor {
+        dictionarySuggestions = VoiceDictionarySuggester.suggestions(
+          original: sourceText,
+          corrected: correctedText,
+          dictionary: dictionaryEditor.personalDictionary
+        )
+      }
     }
+  }
+
+  func acceptDictionarySuggestion(_ suggestion: VoiceDictionarySuggestion) {
+    guard let dictionaryEditor, dictionarySuggestions.contains(suggestion) else {
+      return
+    }
+    guard dictionaryEditor.addDictionaryEntry(suggestion) else {
+      errorMessage = "The Dictionary could not be updated. Edit it in Local AI settings."
+      return
+    }
+    dictionarySuggestions.removeAll { $0 == suggestion }
+    notice = "Added to the Dictionary."
+  }
+
+  func dismissDictionarySuggestions() {
+    dictionarySuggestions = []
   }
 
   func importAudio(from sourceURL: URL) async {
@@ -391,6 +430,7 @@ final class VoiceHistoryModel {
       }
       return
     }
+    dictionarySuggestions = []
     selectedSessionID = sessions.first?.id
     selectedResultID =
       sessions.first?.results
@@ -516,7 +556,8 @@ struct VoiceHistoryPresentation {
   init(
     arguments: [String],
     localAISettings: LocalAISettings,
-    history: any VoiceSessionHistoryManaging
+    history: any VoiceSessionHistoryManaging,
+    dictionaryEditor: (any VoiceDictionaryEditing)? = nil
   ) {
     let reformatter = LocalAIVoiceHistoryReformatter(
       settings: localAISettings
@@ -537,7 +578,8 @@ struct VoiceHistoryPresentation {
       ),
       archiveImporter: VoiceHistoryArchiveImporter(history: history),
       retentionManager: history,
-      recoveryManager: history
+      recoveryManager: history,
+      dictionaryEditor: dictionaryEditor
     )
   }
 

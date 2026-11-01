@@ -845,3 +845,19 @@ private struct LocalApplicationPreferencesFileAccess:
     )
   }
 }
+
+extension ApplicationPreferencesModel: VoiceDictionaryEditing {
+  var personalDictionary: PersonalDictionary {
+    localAISettings.dictionary
+  }
+
+  /// Validates and persists through the same path as the Local AI settings.
+  func addDictionaryEntry(_ suggestion: VoiceDictionarySuggestion) -> Bool {
+    var settings = localAISettings
+    settings.dictionary = VoiceDictionarySuggester.applying(
+      suggestion,
+      to: settings.dictionary
+    )
+    return setLocalAISettings(settings)
+  }
+}

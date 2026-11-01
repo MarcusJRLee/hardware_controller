@@ -35,6 +35,38 @@ struct VoiceHistoryModelTest {
   }
 
   @Test
+  func correctionOffersDictionaryEntriesOnlyUntilConfirmed() async throws {
+    let fixture = try HistoryModelFixture()
+    defer { fixture.remove() }
+    try await fixture.storeSession()
+    let editor = RecordingDictionaryEditor()
+    let model = fixture.model(dictionaryEditor: editor)
+    await model.load()
+    model.correctionDraft = "Searchable OpenCode text."
+
+    await model.saveCorrection()
+
+    #expect(editor.dictionary == .empty)
+    let suggestion = try #require(model.dictionarySuggestions.first)
+    #expect(suggestion == .vocabulary("OpenCode"))
+    model.acceptDictionarySuggestion(suggestion)
+    #expect(editor.dictionary.vocabulary == ["OpenCode"])
+    #expect(!model.dictionarySuggestions.contains(suggestion))
+    #expect(model.notice == "Added to the Dictionary.")
+
+    editor.acceptsEntries = false
+    model.correctionDraft = "Searchable Context7 text."
+    await model.saveCorrection()
+    let rejected = try #require(model.dictionarySuggestions.first)
+    model.acceptDictionarySuggestion(rejected)
+    #expect(model.dictionarySuggestions.contains(rejected))
+    #expect(model.errorMessage != nil)
+
+    model.dismissDictionarySuggestions()
+    #expect(model.dictionarySuggestions.isEmpty)
+  }
+
+  @Test
   func timedSpanUsesTheRetainedArtifactThroughThePlayer() async throws {
     let fixture = try HistoryModelFixture()
     defer { fixture.remove() }
@@ -302,6 +334,22 @@ private struct HistoryModelServiceStub: VoiceHistoryServicing {
   }
 }
 
+@MainActor
+private final class RecordingDictionaryEditor: VoiceDictionaryEditing {
+  var dictionary = PersonalDictionary.empty
+  var acceptsEntries = true
+
+  var personalDictionary: PersonalDictionary { dictionary }
+
+  func addDictionaryEntry(_ suggestion: VoiceDictionarySuggestion) -> Bool {
+    guard acceptsEntries else {
+      return false
+    }
+    dictionary = VoiceDictionarySuggester.applying(suggestion, to: dictionary)
+    return true
+  }
+}
+
 private final class HistoryModelFixture: @unchecked Sendable {
   let root: URL
   let history: SQLiteVoiceSessionHistory
@@ -359,7 +407,8 @@ private final class HistoryModelFixture: @unchecked Sendable {
 
   @MainActor
   func model(
-    player: (any VoiceHistoryAudioPlaying)? = nil
+    player: (any VoiceHistoryAudioPlaying)? = nil,
+    dictionaryEditor: (any VoiceDictionaryEditing)? = nil
   ) -> VoiceHistoryModel {
     VoiceHistoryModel(
       history: history,
@@ -377,7 +426,8 @@ private final class HistoryModelFixture: @unchecked Sendable {
       archiveImporter: VoiceHistoryArchiveImporter(history: history),
       retentionManager: history,
       exporter: HistoryModelExporter(),
-      player: player
+      player: player,
+      dictionaryEditor: dictionaryEditor
     )
   }
 
