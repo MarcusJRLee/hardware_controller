@@ -94,6 +94,8 @@
 
 - `scripts/check.sh` (and `scripts/check_ios.sh` for iOS or shared Voice code)
   must pass before handing work back.
+- Before claiming a change works, follow `.claude/skills/verify/SKILL.md`:
+  drive the affected journeys on a fresh build and report evidence and gaps.
 - Driver tests use recorded, sanitized HID fixtures and cover press, release,
   repeats, simultaneous Controls, reconnect, and disconnect-while-active.
 - Latency claims report p50, p95, p99, max, and sample count from a monotonic
