@@ -63,16 +63,10 @@ final class VoiceInputSampleConverter: @unchecked Sendable {
     else {
       return []
     }
-    var delivered = false
+    let input = OneShotConverterInput(buffer)
     var error: NSError?
     let status = converter.convert(to: output, error: &error) { _, inputStatus in
-      guard !delivered else {
-        inputStatus.pointee = .noDataNow
-        return nil
-      }
-      delivered = true
-      inputStatus.pointee = .haveData
-      return buffer
+      input.next(inputStatus)
     }
     guard
       status != .error,
@@ -84,6 +78,29 @@ final class VoiceInputSampleConverter: @unchecked Sendable {
     // Zeroing keeps sample timing exact; dropping would shift every timestamp.
     return UnsafeBufferPointer(start: channel, count: Int(output.frameLength))
       .map { $0.isFinite ? $0 : 0 }
+  }
+}
+
+/// Hands one buffer to AVAudioConverter, then reports no data.
+///
+/// Some SDKs declare the converter input block `@Sendable`, but the converter
+/// calls it synchronously inside `convert(to:error:withInputFrom:)`, so this
+/// state is never touched concurrently.
+private final class OneShotConverterInput: @unchecked Sendable {
+  private var buffer: AVAudioPCMBuffer?
+
+  init(_ buffer: AVAudioPCMBuffer) {
+    self.buffer = buffer
+  }
+
+  func next(_ status: UnsafeMutablePointer<AVAudioConverterInputStatus>) -> AVAudioBuffer? {
+    guard let buffer else {
+      status.pointee = .noDataNow
+      return nil
+    }
+    self.buffer = nil
+    status.pointee = .haveData
+    return buffer
   }
 }
 
