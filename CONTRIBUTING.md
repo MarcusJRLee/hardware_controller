@@ -13,6 +13,11 @@ scripts/check_ios.sh  # When touching apps/ios or shared Voice code.
 
 - One reason to change per PR, on a branch from `main`, squash-merged.
 - Colocated `FILENAME_test.EXT` for every file with behavioral logic.
+  `scripts/check_conventions.sh` enforces it; a file without logic needs a
+  reasoned line in `Tests/untested_sources.txt`. The same check rejects
+  dashed paths, non-Foundation imports in the domain, and network APIs outside
+  the Ollama adapter. `.swift-format` rejects force unwraps, `try!`, and
+  implicitly unwrapped optionals.
 - Update docs and journey proofs ([voice_cujs.md](docs/voice_cujs.md)) in the
   same PR; `scripts/check_docs.sh` fails on broken links or missing tests.
 - Add or supersede a [decision](docs/decisions/) when a durable choice changes.
