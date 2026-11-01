@@ -116,11 +116,8 @@ public actor AppleFoundationModelRefiner: TranscriptRefining {
         let response = try await session.respond(
           to: prompt.prompt,
           generating: AppleRefinementOutput.self,
-          options: GenerationOptions(
-            samplingMode: .greedy,
-            maximumResponseTokens: Self.maximumTokens(
-              for: request.transcript
-            )
+          options: Self.greedyOptions(
+            maximumResponseTokens: Self.maximumTokens(for: request.transcript)
           )
         )
         guard response.content.blocks.count == 1,
@@ -226,6 +223,17 @@ public actor AppleFoundationModelRefiner: TranscriptRefining {
       }
     }
   #endif
+
+  /// The Xcode 27 SDK renames `sampling` to `samplingMode` and back-deploys it to
+  /// macOS 26; CI still builds with the Xcode 26 SDK, which has only `sampling`.
+  @available(macOS 26.0, *)
+  private static func greedyOptions(maximumResponseTokens: Int) -> GenerationOptions {
+    #if compiler(>=6.4)
+      GenerationOptions(samplingMode: .greedy, maximumResponseTokens: maximumResponseTokens)
+    #else
+      GenerationOptions(sampling: .greedy, maximumResponseTokens: maximumResponseTokens)
+    #endif
+  }
 
   static func maximumTokens(for transcript: String) -> Int {
     min(2_048, max(128, transcript.count / 2 + 128))
