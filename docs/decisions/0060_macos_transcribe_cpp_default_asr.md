@@ -1,7 +1,7 @@
 # Decision 0060: transcribe.cpp as the macOS default speech engine
 
-**Status:** Proposed; awaiting approval before implementation. Amends the
-in-process rule in [0029](0029_local_voice_platform_expansion.md) and the
+**Status:** Accepted 2026-11-01. The owner added that a missing setup step must
+never silently degrade to Apple. Amends the in-process rule in [0029](0029_local_voice_platform_expansion.md) and the
 isolation consequence in [0055](0055_transcribe_cpp_asr_runtime.md).
 
 ## Context
@@ -53,7 +53,7 @@ How the default model reaches the Mac (app today: 10 MB):
 | Criterion | Apple default (today) | Parakeet, one-click download at onboarding | Bundled Whisper tiny, Parakeet as upgrade | Bundled Parakeet Q4_K_M |
 | --- | --- | --- | --- | --- |
 | Accuracy | 2.7% synthetic WER; weak in use | 0.0% synthetic | Smallest Whisper; likely weak on real speech (hypothesis) | 0.8% synthetic |
-| First launch | Works | Apple until the download completes | Works | Works |
+| First launch | Works | Dictation asks for the download first | Works | Works |
 | App size | 10 MB | 23 MB; model stored separately | About 70 MB | About 500 MB on every update |
 | Dictionary recognition hints | Supported | Not supported by Parakeet yet | Supported | Not supported |
 | Model update | System-managed | Replace the package | Tied to app versions | Tied to app versions |
@@ -65,8 +65,15 @@ streaming API and nothing is measured; it is a later comparison.
 ## Decision
 
 - transcribe.cpp is the macOS default speech engine and Parakeet TDT 0.6B v3 is
-  its default Model package. Apple's recognizer is the fallback only: before a
-  package is installed, after a service failure, and when the user chooses it.
+  its default Model package. Apple's recognizer runs only when the user
+  explicitly selects it, or after a service failure.
+- A missing setup step never silently degrades quality. While Parakeet is the
+  selected engine and no valid package is installed, every Dictation start is
+  refused with a setup prompt offering the download or an explicit switch to
+  Apple. Switching to Apple asks for confirmation that names it the less
+  accurate engine, and settings keep a visible note while it is selected.
+- A per-session fallback after a service failure is announced in that
+  session's indicator and recorded in History.
 - Run the kernel in `HardwareControllerASRService.xpc`, embedded in
   `Contents/XPCServices`, launched on demand by launchd. Same Team signature,
   hardened runtime, and no network entitlement. Only the service links the
@@ -85,8 +92,8 @@ streaming API and nothing is measured; it is a later comparison.
     retranscribes the retained recording with Apple's recognizer. The
     recording is the durable capture, so no audio is lost.
   - A crash during a Metal decode reloads the service CPU-only. A second crash
-    in the same app run falls back to Apple until relaunch and says so in
-    settings.
+    in the same app run uses Apple until relaunch, and settings and the
+    indicator say so.
   - A decode exceeding max(2 s, 0.25 × audio duration) invalidates the
     connection, which kills the service, and falls back.
   - Five idle minutes unloads the service so its memory returns to the system.
@@ -96,8 +103,8 @@ streaming API and nothing is measured; it is a later comparison.
   validates identity, digest, license, size, and compatibility. Import of a
   prepared package stays available. The service revalidates digests
   immediately before load.
-- Local AI settings show the active engine (transcribe.cpp or Apple), the
-  installed package, and why Apple is active when it is.
+- Settings show the selected engine, the installed package and its state, and
+  whether this run has fallen back to Apple after repeated service crashes.
 - Dictionary replacements apply to every engine. Parakeet ignores recognition
   hints until transcribe.cpp supports them for its family; the Dictionary view
   says so while Parakeet is active.
@@ -129,8 +136,8 @@ Each slice ships with its tests and docs:
 
 ## Consequences
 
-- Dictation quality on macOS depends on a 485–740 MB download; until it
-  completes, users get today's Apple behavior.
+- Dictation on macOS needs a 485–740 MB download or an explicit choice of
+  Apple before first use.
 - The app bundle gains a 13 MB runtime inside the service. Packaging, signing,
   smoke, and release verification cover two executables.
 - Names that relied on Apple recognition hints may regress under Parakeet until
