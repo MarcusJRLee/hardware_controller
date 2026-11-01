@@ -9,6 +9,9 @@ scripts/check.sh      # Required before every PR; same as the Verify CI job.
 scripts/check_ios.sh  # When touching apps/ios or shared Voice code.
 ```
 
+The scripts build the Rust archive first. Before a bare `swift build` or
+opening the package in Xcode, run `scripts/build_rust_ffi.sh` once.
+
 ## Pull requests
 
 - One reason to change per PR, on a branch from `main`, squash-merged.
@@ -27,6 +30,9 @@ scripts/check_ios.sh  # When touching apps/ios or shared Voice code.
 Required checks: `Verify` (`scripts/check.sh`, then an ad-hoc packaged build
 smoke-launched by `scripts/smoke_app.sh`) and `CodeQL`. The `iOS` job runs
 `scripts/check_ios.sh`.
+
+To prove a change in the running app, follow the
+[verify skill](.claude/skills/verify/SKILL.md).
 
 ## CI lanes
 
