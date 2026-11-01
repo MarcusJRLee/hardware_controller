@@ -3,11 +3,9 @@ name: CodeQL
 on:
   pull_request:
     branches:
-      - dev
       - main
   push:
     branches:
-      - dev
       - main
   schedule:
     - cron: "23 7 * * 1"
@@ -20,63 +18,118 @@ concurrency:
   group: codeql-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# The required CodeQL check aggregates every uploaded category. A pull request
+# that skips a Swift category reports it as not found (neutral), which passes;
+# its sources match main's analysis, so no finding can be missed. Pushes to
+# main and the weekly schedule always analyze every category.
 jobs:
-  analyze:
-    # Each platform is traced and analyzed in parallel under its own category;
-    # the required CodeQL check aggregates every uploaded category.
-    name: CodeQL (${{ matrix.platform }})
-    runs-on: macos-26
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [macos, ios]
+  changes:
+    name: Classify changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      codeql_macos: ${{ steps.classify.outputs.codeql_macos }}
+      codeql_ios: ${{ steps.classify.outputs.codeql_ios }}
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Install zsh
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh >/dev/null
+      - name: Classify
+        id: classify
+        run: scripts/classify_changes.sh "${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
 
-      # CodeQL traces every process started after initialization. Rust, the
-      # pinned runtime fetch, and SwiftPM manifest evaluation produce no Swift
-      # evidence, so preparing them first keeps the traced build to Swift.
+  # Always runs, so every pull request produces the required CodeQL check.
+  actions:
+    name: CodeQL (actions)
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          build-mode: none
+          languages: actions
+          queries: security-extended
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          category: /language:actions
+
+  macos:
+    name: CodeQL (macos)
+    needs: changes
+    if: needs.changes.outputs.codeql_macos == 'true'
+    runs-on: macos-26
+    timeout-minutes: 35
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # CodeQL traces every process started after initialization. Rust and
+      # SwiftPM manifest evaluation produce no Swift evidence, so preparing them
+      # first keeps the traced build to Swift.
       - name: Prepare untraced build inputs
         run: |
-          if [[ "${{ matrix.platform }}" == "macos" ]]; then
-            scripts/build_rust_ffi.sh
-            swift package describe --type json >/dev/null
-          else
-            rustup target add aarch64-apple-ios aarch64-apple-ios-sim
-            scripts/build_ios_rust_ffi.sh
-            scripts/fetch_asr_runtime.sh
-          fi
-
+          scripts/build_rust_ffi.sh
+          swift package describe --type json >/dev/null
       - name: Initialize CodeQL
         uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           build-mode: manual
           languages: swift
           queries: security-extended
-
       - name: Build Swift products
-        run: |
-          if [[ "${{ matrix.platform }}" == "macos" ]]; then
-            swift build --arch arm64
-          else
-            xcodebuild build -quiet \
-              -project apps/ios/voice_input/VoiceInput.xcodeproj \
-              -scheme VoiceInput \
-              -configuration Debug \
-              -destination "generic/platform=iOS Simulator" \
-              -derivedDataPath "$RUNNER_TEMP/codeql_ios" \
-              ARCHS=arm64 \
-              CODE_SIGNING_ALLOWED=NO \
-              CODE_SIGNING_REQUIRED=NO \
-              ONLY_ACTIVE_ARCH=YES
-          fi
-
+        run: swift build --arch arm64
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
-          category: /language:swift/platform:${{ matrix.platform }}
+          category: /language:swift/platform:macos
+
+  ios:
+    name: CodeQL (ios)
+    needs: changes
+    if: needs.changes.outputs.codeql_ios == 'true'
+    runs-on: macos-26
+    timeout-minutes: 35
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare untraced build inputs
+        run: |
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+          scripts/build_ios_rust_ffi.sh
+          scripts/fetch_asr_runtime.sh
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          build-mode: manual
+          languages: swift
+          queries: security-extended
+      - name: Build Swift products
+        run: |
+          xcodebuild build -quiet \
+            -project apps/ios/voice_input/VoiceInput.xcodeproj \
+            -scheme VoiceInput \
+            -configuration Debug \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath "$RUNNER_TEMP/codeql_ios" \
+            ARCHS=arm64 \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            ONLY_ACTIVE_ARCH=YES
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          category: /language:swift/platform:ios

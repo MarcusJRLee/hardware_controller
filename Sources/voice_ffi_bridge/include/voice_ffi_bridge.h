@@ -9,6 +9,17 @@ enum VoiceFFIBridgeStatusV1 {
   VoiceFFIBridgeStatusInvalidArgument = VOICE_STATUS_INVALID_ARGUMENT,
   VoiceFFIBridgeStatusBufferTooSmall = VOICE_STATUS_BUFFER_TOO_SMALL,
   VoiceFFIBridgeStatusInternalFailure = VOICE_STATUS_INTERNAL_FAILURE,
+  VoiceFFIBridgeStatusInvalidAgeLimit = VOICE_STATUS_INVALID_AGE_LIMIT,
+  VoiceFFIBridgeStatusInvalidArtifactLimit =
+      VOICE_STATUS_INVALID_ARTIFACT_LIMIT,
+  VoiceFFIBridgeStatusInvalidByteLimit = VOICE_STATUS_INVALID_BYTE_LIMIT,
+  VoiceFFIBridgeStatusInvalidReclaimRequest =
+      VOICE_STATUS_INVALID_RECLAIM_REQUEST,
+  VoiceFFIBridgeStatusInvalidArtifactSize = VOICE_STATUS_INVALID_ARTIFACT_SIZE,
+  VoiceFFIBridgeStatusInvalidSessionId = VOICE_STATUS_INVALID_SESSION_ID,
+  VoiceFFIBridgeStatusDuplicateSessionId = VOICE_STATUS_DUPLICATE_SESSION_ID,
+  VoiceFFIBridgeStatusInvalidTimestamp = VOICE_STATUS_INVALID_TIMESTAMP,
+  VoiceFFIBridgeStatusTooManyCandidates = VOICE_STATUS_TOO_MANY_CANDIDATES,
   VoiceFFIBridgeStatusInvalidUtf8Path = VOICE_STATUS_INVALID_UTF8_PATH,
   VoiceFFIBridgeStatusInvalidModelPackageRoot =
       VOICE_STATUS_INVALID_MODEL_PACKAGE_ROOT,
@@ -41,6 +52,14 @@ enum VoiceFFIBridgeStatusV1 {
   VoiceFFIBridgeStatusASRCapabilityUnsupported =
       VOICE_STATUS_ASR_CAPABILITY_UNSUPPORTED,
   VoiceFFIBridgeStatusASRModelAmbiguous = VOICE_STATUS_ASR_MODEL_AMBIGUOUS,
+};
+
+enum VoiceFFIBridgeExpirationReasonV1 {
+  VoiceFFIBridgeExpirationAgeLimit = VOICE_EXPIRATION_AGE_LIMIT,
+  VoiceFFIBridgeExpirationArtifactLimit = VOICE_EXPIRATION_ARTIFACT_LIMIT,
+  VoiceFFIBridgeExpirationByteLimit = VOICE_EXPIRATION_BYTE_LIMIT,
+  VoiceFFIBridgeExpirationLowDisk = VOICE_EXPIRATION_LOW_DISK,
+  VoiceFFIBridgeExpirationRecoveryLimit = VOICE_EXPIRATION_RECOVERY_LIMIT,
 };
 
 enum VoiceFFIBridgeModelRuntimeV1 {

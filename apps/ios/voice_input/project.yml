@@ -23,7 +23,7 @@ targets:
         buildPhase: resources
     dependencies:
       - target: VoiceInputShared
-      - target: HardwareControllerVoiceCore
+      - target: HardwareControllerCore
       - target: HardwareControllerVoiceFFI
         embed: false
       - target: VoiceASRBridge
@@ -67,7 +67,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.shared
 
-  HardwareControllerVoiceCore:
+  HardwareControllerCore:
     type: framework.static
     platform: iOS
     sources:
@@ -110,6 +110,7 @@ targets:
         excludes:
           - voice_ffi_build_stamp.generated.swift
     dependencies:
+      - target: HardwareControllerCore
       - framework: ../../../.build/ios_voice_ffi/VoiceFFI.xcframework
     settings:
       base:
@@ -204,7 +205,7 @@ targets:
     dependencies:
       - target: VoiceInputShared
       - target: VoiceInput
-      - target: HardwareControllerVoiceCore
+      - target: HardwareControllerCore
       - target: HardwareControllerVoiceFFI
         embed: false
     entitlements:

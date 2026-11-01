@@ -24,6 +24,8 @@ fi
 }
 
 destination="${HC_IOS_SIMULATOR_DESTINATION:-platform=iOS Simulator,id=$simulator_udid}"
+# Booting takes minutes on CI; start it now so it overlaps checks and the build.
+xcrun simctl boot "$simulator_udid" >/dev/null 2>&1 &
 derived_data="$(mktemp -d /tmp/hardware_controller_ios_check.XXXXXX)"
 trap 'rm -rf "$derived_data"' EXIT
 
@@ -39,17 +41,20 @@ if [[ "${HC_IOS_SKIP_SHARED_CHECKS:-0}" != "1" ]]; then
   scripts/prepare_ios_asr_model_package_test.sh
 fi
 
+xcode_test_flags=(
+  -project apps/ios/voice_input/VoiceInput.xcodeproj
+  -scheme VoiceInput
+  -destination "$destination"
+  -derivedDataPath "$derived_data"
+  -parallel-testing-enabled NO
+)
+# Building needs no booted simulator, so it runs while the boot finishes.
+xcodebuild build-for-testing -quiet "${xcode_test_flags[@]}" \
+  SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
 xcrun simctl bootstatus "$simulator_udid" -b
 xcrun simctl privacy "$simulator_udid" grant microphone \
   com.longdevity.hardwarecontroller.voiceinput
-
-xcodebuild test -quiet \
-  -project apps/ios/voice_input/VoiceInput.xcodeproj \
-  -scheme VoiceInput \
-  -destination "$destination" \
-  -derivedDataPath "$derived_data" \
-  -parallel-testing-enabled NO \
-  SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
+xcodebuild test-without-building -quiet "${xcode_test_flags[@]}"
 
 scripts/check_ios_system_capture_metadata.sh \
   "$derived_data/Build/Products/Debug-iphonesimulator/VoiceInput.app"

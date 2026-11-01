@@ -1,5 +1,6 @@
 import Foundation
 import HardwareControllerCore
+import HardwareControllerVoiceFFI
 import SQLite3
 
 private final class SQLiteVoiceHistoryRetentionDatabaseHandle:
@@ -162,7 +163,7 @@ actor SQLiteVoiceHistoryRetentionStore {
       lowDiskReclaimBytes,
       measuredLowDiskReclaimBytes
     )
-    let plan = try VoiceHistoryRetentionPlanner.plan(
+    let plan = try RustVoiceHistoryRetentionPlanner().plan(
       candidates: candidates,
       settings: settings,
       now: now,

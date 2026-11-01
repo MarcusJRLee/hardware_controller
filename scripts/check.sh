@@ -10,7 +10,7 @@ swift format lint --recursive --strict \
 # Every tracked C and Objective-C source is formatted; no hand-kept list.
 c_sources=("${(@f)$(git ls-files '*.c' '*.h' '*.m')}")
 xcrun clang-format --dry-run --Werror "${c_sources[@]}"
-zsh -n scripts/*.sh
+scripts/check_fast.sh
 scripts/install_ios_test.sh
 scripts/check_rust.sh
 scripts/check_voice_asr_bridge.sh

@@ -98,9 +98,10 @@ logging frameworks.
 `voice_core` is the first cross-platform engine tracer. It owns a dependency-
 free retention policy using UUID bytes, Unix epoch milliseconds, immutable
 candidates, typed validation failures, and ordered decisions. It imports no
-Apple type and denies unsafe Rust. `Tests/cuj/voice_retention_v1.json` is read by
-both Rust and Swift, proving policy parity while the shipped macOS app still
-uses the Swift baseline.
+Apple type and denies unsafe Rust. macOS and iOS History both plan audio expiry
+through `RustVoiceHistoryRetentionPlanner`, which calls the linked policy; no
+Swift copy of the algorithm remains. `Tests/cuj/voice_retention_v1.json` is read
+by the Rust tests and by the Swift boundary test of the linked policy.
 
 `voice_ffi` exposes synchronous `V1` retention, Model-package, and History-
 archive functions. The
@@ -687,6 +688,10 @@ provider readiness/test state, bounded context, dictionary, and instructions.
 
 `VoiceHistoryModel` owns presentation state only. `VoiceHistoryService`
 serializes correction, retranscription, reformatting, and re-delivery workflows;
+after a correction, `VoiceDictionarySuggester` diffs the source and corrected
+text and offers at most three Dictionary entries that persist only through
+confirmed Local AI settings writes (see
+[decision 0058](decisions/0058_dictionary_suggestions_from_corrections.md));
 system adapters isolate AVFAudio, Apple speech, local refinement, target capture,
 text writing, and package export. SQLite remains actor-owned. Every derived
 operation appends a linked immutable `VoiceHistoryResult` carrying its stage,

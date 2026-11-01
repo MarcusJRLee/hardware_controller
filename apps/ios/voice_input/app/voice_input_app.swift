@@ -1,6 +1,6 @@
 import AVFAudio
 import AppIntents
-import HardwareControllerVoiceCore
+import HardwareControllerCore
 import SwiftUI
 import UIKit
 import VoiceInputShared
