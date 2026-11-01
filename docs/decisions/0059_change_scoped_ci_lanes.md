@@ -36,7 +36,8 @@ branches, so each merge re-ran everything for the next PR. Queue waits reached
 - `scripts/check_workflows.sh` fails a job without a timeout, a macOS job over
   35 minutes or not gated by `changes`, an Ubuntu job over 15 minutes, or a
   workflow that does not cancel superseded runs. `scripts/ci_durations.sh`
-  reports p50, max, and queue time per job.
+  reports p50, max, and queue time against each job's own timeout, and the
+  weekly CI health workflow fails when a p50 passes 70% of that budget.
 
 ## Consequences
 

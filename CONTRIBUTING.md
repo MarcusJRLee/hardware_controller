@@ -65,7 +65,8 @@ macOS runners are scarce, so a cheap Ubuntu job classifies each change
 
 `scripts/check_workflows.sh` (in the fast lane) fails if a job lacks a
 timeout, exceeds its budget, or adds macOS work without `needs: changes`.
-Run `scripts/ci_durations.sh` to see p50, max, and queue time per job.
+`scripts/ci_durations.sh` shows p50, max, queue time, and budget per job; the
+weekly **CI health** workflow fails when a job's p50 passes 70% of its budget.
 
 ## Privacy and hardware evidence
 
