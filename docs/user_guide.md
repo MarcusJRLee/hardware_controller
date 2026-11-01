@@ -10,8 +10,8 @@
 
 ## Install
 
-Build and install the signed app (see the README commands), then open exactly
-`/Applications/Hardware Controller.app`. macOS ties permissions to that path
+Run `scripts/install_app.sh` to build, verify, install, and launch the signed
+app, then always open exactly `/Applications/Hardware Controller.app`. macOS ties permissions to that path
 and signature, so install before granting them; the app blocks Actions when run
 from a disk image. A personal build is not notarized: if macOS warns, Control-
 click the app and choose **Open**.

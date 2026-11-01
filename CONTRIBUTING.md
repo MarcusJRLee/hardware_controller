@@ -19,7 +19,8 @@ scripts/check_ios.sh  # When touching apps/ios or shared Voice code.
 - Never change version metadata or create release artifacts without explicit
   approval for that exact version.
 
-Required checks: `Verify` (`scripts/check.sh`) and `CodeQL`. The `iOS` job runs
+Required checks: `Verify` (`scripts/check.sh`, then an ad-hoc packaged build
+smoke-launched by `scripts/smoke_app.sh`) and `CodeQL`. The `iOS` job runs
 `scripts/check_ios.sh`.
 
 ## CI lanes

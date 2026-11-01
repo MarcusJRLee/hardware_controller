@@ -64,6 +64,11 @@ jobs:
       - name: Run repository checks
         if: needs.changes.outputs.macos == 'true'
         run: scripts/check.sh
+      - name: Smoke-launch the packaged app
+        if: needs.changes.outputs.macos == 'true'
+        run: |
+          scripts/build_app.sh --ad-hoc
+          scripts/smoke_app.sh "dist/Hardware Controller.app" --demo
 
   ios:
     name: iOS

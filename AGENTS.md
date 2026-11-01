@@ -106,9 +106,9 @@
 - Signing identities and Team identifiers live only in ignored `.env.local`.
   Every `/Applications` build uses an explicit Apple Development identity
   verified against `HC_EXPECTED_TEAM_ID`; never install an ad-hoc build.
-- After every repository change, replace the single canonical
-  `/Applications/Hardware Controller.app` (quit it first), verify the installed
-  signature, and launch that exact bundle.
+- After every repository change, run `scripts/install_app.sh`. It replaces the
+  single canonical `/Applications/Hardware Controller.app`, verifies it, and
+  launches that exact bundle; do not install any other way.
 - Never change `CFBundleShortVersionString` or `CFBundleVersion`, run
   `scripts/build_release.sh`, or create a tag, DMG, GitHub Release, or release
   record without explicit approval of that exact version.

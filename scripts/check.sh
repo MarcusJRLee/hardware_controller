@@ -11,6 +11,8 @@ swift format lint --recursive --strict \
 c_sources=("${(@f)$(git ls-files '*.c' '*.h' '*.m')}")
 xcrun clang-format --dry-run --Werror "${c_sources[@]}"
 scripts/check_fast.sh
+scripts/smoke_app_test.sh
+scripts/install_app_test.sh
 scripts/install_ios_test.sh
 scripts/check_rust.sh
 scripts/check_voice_asr_bridge.sh
