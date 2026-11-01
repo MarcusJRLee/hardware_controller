@@ -8,7 +8,16 @@ cd "$repo_root"
 app_bundle="dist/Hardware Controller.app"
 contents="$app_bundle/Contents"
 iconset=".build/AppIcon.iconset"
-sign_identity="${HC_CODE_SIGN_IDENTITY:--}"
+# An ad-hoc signature is only for throwaway CI and smoke builds; it must be
+# requested explicitly so it can never be installed by accident.
+if [[ "${1:-}" == "--ad-hoc" ]]; then
+  sign_identity="-"
+elif [[ -n "${HC_CODE_SIGN_IDENTITY:-}" && "$HC_CODE_SIGN_IDENTITY" != "-" ]]; then
+  sign_identity="$HC_CODE_SIGN_IDENTITY"
+else
+  print -u2 "Set HC_CODE_SIGN_IDENTITY (see .env.example) or pass --ad-hoc."
+  exit 1
+fi
 
 scripts/build_rust_ffi.sh
 swift build -c release --product HardwareController

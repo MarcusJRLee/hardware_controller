@@ -12,7 +12,7 @@ same PR. Gaps that need a signed device or physical hardware are tracked in the
 | Contract | Pure state machines, formatting, retention, edits, Profile edits. | `Tests/HardwareControllerCoreTests`, `crates/*` |
 | Adapter | Real SQLite, files, Keychain, FFI, audio conversion, transcribe.cpp. | `Tests/HardwareControllerMacTests`, `Tests/voice_asr_bridge_tests`, `apps/ios/voice_input/tests` |
 | Process | The runtime against a fake process seam (no UI callbacks mocked). | `Tests/HardwareControllerAppTests` |
-| System | Launched app, real UI, simulator. | `apps/ios/voice_input/ui_tests`, `scripts/check_ios.sh` |
+| System | Launched app, real UI, simulator. | `scripts/smoke_app.sh`, `apps/ios/voice_input/ui_tests`, `scripts/check_ios.sh` |
 | Cross-language | One fixture read by Rust, Swift, and C. | `Tests/cuj/` |
 
 Rules: mock only system boundaries (microphone, clock, filesystem faults,
@@ -29,6 +29,7 @@ events.
 | H2 | Hold or toggle an Action | Momentary/Toggle semantics; duplicate suppression; every exit ends active Actions once; p99 ≤ 15 ms. | `binding_engine_tests`, `controller_runtime_test`, `action_executor_tests` |
 | H3 | Edit and switch Profiles | Pure typed edits; atomic save before adoption; active Actions end first. | `profile_edit_test`, `profile_tests`, `profile_store_tests`, `application_runtime_test` |
 | H4 | Use a keyboard fallback | Exact chord, active Profile only, shared ownership with the pedal. | `keyboard_fallback_input_source_test`, `application_runtime_test` |
+| H5 | Install and launch | Only an unexpired Apple Development build passes policy; one canonical copy; the installed bundle launches and stays up; CI smoke-launches every packaged build. | `scripts/install_app_test.sh`, `scripts/smoke_app_test.sh`, `scripts/smoke_app.sh` |
 | M1 | Hold to dictate | One session; one validated insertion; audio and every text stage stored; copyable on failure. | `local_ai_dictation_controller_test`, `voice_session_history_test`, `sqlite_voice_session_store_test` |
 | M2 | Latch a long prompt | First key-down begins; hold finishes on release; double press latches and finishes once. | `voice_trigger_test`, `voice_keyboard_trigger_controller_test` |
 | M3 | Format for purpose | Five Styles from one Raw; validated list blocks; safe flattening; protected tokens kept. | `voice_formatted_document_builder_test`, `voice_formatted_text_renderer_test`, `voice_formatting_draft_normalizer_test`, `voice_casing_policy_test`, `voice_list_intent_test` |

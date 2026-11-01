@@ -24,13 +24,18 @@ scripts/check.sh      # Everything the Verify CI job runs.
 | Verify macOS, Rust, and the C bridge | `scripts/check.sh` | — |
 | Verify only Rust and the C ABI | `scripts/check_rust.sh` | — |
 | Verify the iOS app | `scripts/check_ios.sh` | XcodeGen, simulator, `rustup target add aarch64-apple-ios aarch64-apple-ios-sim` |
-| Build a signed Mac app | `scripts/build_app.sh` | `.env.local` signing values |
+| Install the signed Mac app | `scripts/install_app.sh` | `.env.local` signing values |
+| Smoke-launch a built app | `scripts/smoke_app.sh <bundle> [--demo \| --installed]` | — |
 | Install the iOS app on a phone | `scripts/install_ios.sh` | Unlocked iPhone in Developer Mode, `.env.local` |
 | Prepare the iOS starter model | `scripts/prepare_ios_asr_model_package.sh <dir>` | Network during preparation only |
 | Benchmark ASR models | `scripts/benchmark_asr.sh [--model m.gguf] [--manifest m.tsv]` | — |
 
-Signing values live in the ignored `.env.local` (copy `.env.example`). Never
-commit it, and never install an ad-hoc-signed build in `/Applications`.
+Signing values live in the ignored `.env.local` (copy `.env.example`).
+`install_app.sh` is the only install path: it refuses ad-hoc or expired
+identities, verifies Team, entitlements, hardened runtime, Apple-only
+libraries, and unchanged version metadata, replaces the one
+`/Applications/Hardware Controller.app`, re-verifies it, and proves the
+installed bundle launches and stays up.
 
 `benchmark_asr.sh` prints p50/p95/p99/max latency, median real-time factor, and
 word error rate. Without `--manifest` it synthesizes speech with `say`, which
