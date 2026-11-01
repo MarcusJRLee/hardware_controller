@@ -1,4 +1,4 @@
-import HardwareControllerVoiceCore
+import HardwareControllerCore
 import VoiceInputShared
 import XCTest
 

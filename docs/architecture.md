@@ -98,9 +98,10 @@ logging frameworks.
 `voice_core` is the first cross-platform engine tracer. It owns a dependency-
 free retention policy using UUID bytes, Unix epoch milliseconds, immutable
 candidates, typed validation failures, and ordered decisions. It imports no
-Apple type and denies unsafe Rust. `Tests/cuj/voice_retention_v1.json` is read by
-both Rust and Swift, proving policy parity while the shipped macOS app still
-uses the Swift baseline.
+Apple type and denies unsafe Rust. macOS and iOS History both plan audio expiry
+through `RustVoiceHistoryRetentionPlanner`, which calls the linked policy; no
+Swift copy of the algorithm remains. `Tests/cuj/voice_retention_v1.json` is read
+by the Rust tests and by the Swift boundary test of the linked policy.
 
 `voice_ffi` exposes synchronous `V1` retention, Model-package, and History-
 archive functions. The

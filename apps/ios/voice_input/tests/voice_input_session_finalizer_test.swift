@@ -1,5 +1,5 @@
 import Foundation
-import HardwareControllerVoiceCore
+import HardwareControllerCore
 import Synchronization
 import XCTest
 
