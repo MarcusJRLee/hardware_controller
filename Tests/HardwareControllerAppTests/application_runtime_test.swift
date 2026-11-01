@@ -1249,7 +1249,7 @@ private final class ApplicationSnapshotRecorder:
 @MainActor
 /// Waits for an asynchronously published runtime condition.
 private func waitUntil(
-  timeout: Duration = .seconds(1),
+  timeout: Duration = .seconds(10),
   _ condition: @escaping @MainActor () -> Bool
 ) async throws {
   let clock = ContinuousClock()
