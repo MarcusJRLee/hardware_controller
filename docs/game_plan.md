@@ -41,8 +41,8 @@ Reference-Mac results do not establish lower-tier support.
 
 ## Next work
 
-- macOS native ASR (Parakeet through transcribe.cpp) in an XPC service, so a
-  kernel fault cannot take down the Device hot path.
+- macOS default speech engine: transcribe.cpp with Parakeet in an XPC service
+  ([0060](decisions/0060_macos_transcribe_cpp_default_asr.md), proposed).
 - Portability: keep Apple types out of the Rust boundary; document Android,
   Windows, and Linux seams without building them. Remote providers need a new
   privacy decision first.
