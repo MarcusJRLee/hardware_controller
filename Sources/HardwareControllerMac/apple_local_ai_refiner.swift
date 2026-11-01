@@ -117,7 +117,7 @@ public actor AppleFoundationModelRefiner: TranscriptRefining {
           to: prompt.prompt,
           generating: AppleRefinementOutput.self,
           options: GenerationOptions(
-            sampling: .greedy,
+            samplingMode: .greedy,
             maximumResponseTokens: Self.maximumTokens(
               for: request.transcript
             )
