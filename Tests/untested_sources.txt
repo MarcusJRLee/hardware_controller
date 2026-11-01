@@ -1,0 +1,55 @@
+# Swift sources without a same-named `<name>_test.swift`, each with the reason.
+# Format: `<path> | <reason>`. Backticked names in a reason must be tracked test
+# files. scripts/check_conventions.sh fails on a source missing from this list,
+# a listed path that no longer exists, or a listed path that now has a test.
+
+# SwiftUI and UIKit rendering; behavior lives in tested models.
+Sources/HardwareControllerApp/application_shell_view.swift | View; state in `app_model_test`, `application_navigation_test`.
+Sources/HardwareControllerApp/control_stage_view.swift | View; Control state in `app_model_test`.
+Sources/HardwareControllerApp/controller_view.swift | View; Control state in `app_model_test`.
+Sources/HardwareControllerApp/design_system.swift | Style constants.
+Sources/HardwareControllerApp/device_binding_editor.swift | View; edits in `control_editor_view_test`, `profile_edit_test`.
+Sources/HardwareControllerApp/general_settings_view.swift | View; settings in `application_preferences_test`.
+Sources/HardwareControllerApp/local_ai_settings_view.swift | View; settings in `application_preferences_test`, `local_ai_pipeline_presentation_test`.
+Sources/HardwareControllerApp/profiles_view.swift | View; edits in `profile_edit_test`, `application_runtime_test`.
+Sources/HardwareControllerApp/shortcut_recorder.swift | AppKit key-capture view; shortcut values in `profile_tests`.
+Sources/HardwareControllerApp/voice_history_view.swift | View; state in `voice_history_model_test`.
+apps/ios/voice_input/app/voice_input_history_view.swift | View; state in `voice_input_history_model_test`.
+apps/ios/voice_input/app/voice_input_model_library_view.swift | View; state in `voice_input_model_library_model_test`.
+apps/ios/voice_input/app/voice_input_onboarding_view.swift | View; policy in `voice_input_onboarding_policy_test`.
+apps/ios/voice_input/keyboard/keyboard_view_controller.swift | UIKit host; policy in `voice_input_keyboard_policy_test`.
+apps/ios/voice_input/widgets/voice_input_widgets.swift | WidgetKit declarations.
+
+# Composition roots and system boundaries, exercised through their seams.
+Sources/HardwareControllerApp/application_process.swift | Process seam; relay in `application_runtime_test`.
+Sources/HardwareControllerApp/application_profile_persistence.swift | Persistence protocol and preview stores; real store in `profile_store_tests`.
+Sources/HardwareControllerApp/application_runtime_factory.swift | Composition root; launch proven by `scripts/smoke_app_test.sh` and CI smoke.
+Sources/HardwareControllerApp/application_snapshot.swift | Value declarations.
+Sources/HardwareControllerApp/application_system_controller.swift | Permission and login-item system boundary; faked in `application_runtime_test`.
+Sources/HardwareControllerApp/live_application_process.swift | Live composition root; launch proven by CI smoke.
+Sources/HardwareControllerMac/accessibility_permission.swift | System trust query; faked in `transcript_writer_tests`.
+Sources/HardwareControllerMac/monotonic_clock.swift | Thin clock wrapper used by `controller_runtime_test`.
+apps/ios/voice_input/app/voice_input_app.swift | App entry point.
+apps/ios/voice_input/app/voice_input_app_shortcuts.swift | App Shortcuts declarations; checked by `scripts/check_ios_system_capture_metadata.sh`.
+apps/ios/voice_input/app/voice_input_capture_boundaries.swift | AVFoundation boundary protocols; faked in `voice_input_capture_service_test`.
+apps/ios/voice_input/app/voice_input_system_control_reloader.swift | WidgetKit reload call.
+apps/ios/voice_input/system_capture/voice_input_system_capture_intents.swift | App Intents declarations; logic in `voice_input_system_capture_test`.
+
+# Declarations whose behavior is tested under the policy that uses them.
+Sources/HardwareControllerCore/domain.swift | Value declarations; behavior in `binding_engine_tests`, `profile_tests`.
+Sources/HardwareControllerCore/local_ai_provider_kind.swift | Enum declaration.
+Sources/HardwareControllerCore/personal_dictionary.swift | Values; replacement behavior in `local_ai_dictation_tests`.
+Sources/HardwareControllerCore/voice_casing.swift | Casing transformer in `voice_casing_policy_test`.
+Sources/HardwareControllerCore/voice_formatting.swift | Style values; formatting in `voice_formatted_document_builder_test`.
+Sources/HardwareControllerCore/voice_history_retention.swift | Settings and errors; policy in `voice_history_retention_planner_test`.
+Sources/HardwareControllerCore/voice_spoken_edit.swift | Edit values; engine in `voice_spoken_edit_engine_test`.
+apps/ios/voice_input/app/voice_input_lifecycle.swift | Lifecycle values; policy in `voice_input_lifecycle_policy_test`.
+apps/ios/voice_input/shared/voice_input_activity.swift | Live Activity attributes.
+apps/ios/voice_input/shared/voice_input_delivery_target.swift | Policy in `voice_input_delivery_target_policy_test`.
+apps/ios/voice_input/shared/voice_input_environment.swift | Build environment constants.
+apps/ios/voice_input/shared/voice_input_host_field.swift | Policy in `voice_input_host_field_policy_test`.
+apps/ios/voice_input/shared/voice_input_insertion_recovery.swift | Policy in `voice_input_insertion_recovery_policy_test`.
+apps/ios/voice_input/shared/voice_input_local_copy.swift | Policy in `voice_input_insertion_recovery_policy_test`.
+apps/ios/voice_input/shared/voice_input_onboarding.swift | Policy in `voice_input_onboarding_policy_test`.
+apps/ios/voice_input/shared/voice_input_shared.swift | Handoff values; behavior in `voice_input_keychain_store_test`, `voice_input_keyboard_policy_test`.
+apps/ios/voice_input/shared/voice_input_store.swift | Command policy; behavior in `voice_input_keychain_store_test`.

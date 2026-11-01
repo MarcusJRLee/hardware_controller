@@ -118,9 +118,10 @@ struct MicrophoneCaptureTest {
     let capture = AVAudioEngineMicrophoneCapture(engine: engine)
     let stream = try await capture.start()
     var iterator = stream.makeAsyncIterator()
+    let format = try #require(engine.inputFormat)
     let source = try #require(
       AVAudioPCMBuffer(
-        pcmFormat: engine.inputFormat,
+        pcmFormat: format,
         frameCapacity: 2
       )
     )
@@ -209,9 +210,10 @@ struct MicrophoneCaptureTest {
     let engine = FakeAudioEngine()
     let capture = AVAudioEngineMicrophoneCapture(engine: engine)
     let stream = try await capture.start()
+    let format = try #require(engine.inputFormat)
     let source = try #require(
       AVAudioPCMBuffer(
-        pcmFormat: engine.inputFormat,
+        pcmFormat: format,
         frameCapacity: 1
       )
     )
@@ -407,7 +409,7 @@ private final class FakeAudioEngine:
   let inputFormat = AVAudioFormat(
     standardFormatWithSampleRate: 48_000,
     channels: 1
-  )!
+  )
 
   private let lock = NSLock()
   private let startError: (any Error)?
