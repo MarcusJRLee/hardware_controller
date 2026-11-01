@@ -30,9 +30,9 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
-            .build/ios_asr_runtime
-            .build/ios_asr_test_assets
-          key: asr-assets-${{ hashFiles('scripts/fetch_ios_asr_runtime.sh', 'scripts/fetch_ios_asr_test_assets.sh') }}
+            .build/asr_runtime
+            .build/asr_test_assets
+          key: asr-assets-${{ hashFiles('scripts/fetch_asr_runtime.sh', 'scripts/fetch_asr_test_assets.sh') }}
       - name: Run repository checks
         run: scripts/check.sh
 
@@ -49,12 +49,15 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
-            .build/ios_asr_runtime
-            .build/ios_asr_test_assets
-          key: asr-assets-${{ hashFiles('scripts/fetch_ios_asr_runtime.sh', 'scripts/fetch_ios_asr_test_assets.sh') }}
+            .build/asr_runtime
+            .build/asr_test_assets
+          key: asr-assets-${{ hashFiles('scripts/fetch_asr_runtime.sh', 'scripts/fetch_asr_test_assets.sh') }}
       - name: Install iOS build tools
         run: |
           brew install ripgrep xcodegen
           rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+      # Verify already runs the shared bridge and Model-package checks.
       - name: Run iOS checks
+        env:
+          HC_IOS_SKIP_SHARED_CHECKS: "1"
         run: scripts/check_ios.sh

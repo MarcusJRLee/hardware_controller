@@ -42,6 +42,8 @@ pub enum ModelRuntime {
     MistralRs,
     /// Portable llama.cpp runtime.
     LlamaCpp,
+    /// Portable transcribe.cpp runtime for ggml speech models.
+    TranscribeCpp,
 }
 
 /// One inference stage implemented by a package.
@@ -282,6 +284,8 @@ pub enum ModelFileRole {
     Configuration,
     /// Runtime vocabulary data.
     Vocabulary,
+    /// Optional speech-detection weights used to skip silence before ASR.
+    SpeechDetection,
     /// Human-readable license notice.
     Notice,
 }

@@ -1,0 +1,4 @@
+framework module VoiceASRBridge {
+  header "voice_asr_bridge.h"
+  export *
+}

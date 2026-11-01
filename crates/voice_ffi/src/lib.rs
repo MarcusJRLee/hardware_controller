@@ -9,7 +9,7 @@ use voice_core::{
 };
 use voice_models::{
     ASRModelError, ModelCapability, ModelPackageError, ModelPackageLimits, ModelRuntime,
-    ModelStage, ValidatedModelPackage, resolve_whisper_file_asr_model, validate_model_package,
+    ModelStage, ValidatedModelPackage, resolve_file_asr_model, validate_model_package,
 };
 
 /// The request completed successfully.
@@ -256,7 +256,7 @@ pub struct VoiceModelPackageInfoV1 {
     pub notice_file: VoiceUtf8BufferV1,
     /// Publisher or upstream source URL.
     pub source_url: VoiceUtf8BufferV1,
-    /// Runtime code: sherpa-onnx 1, whisper.cpp 2, mistral.rs 3, llama.cpp 4.
+    /// Runtime code: sherpa-onnx 1, whisper.cpp 2, mistral.rs 3, llama.cpp 4, transcribe.cpp 5.
     pub runtime: u32,
     /// Stage code: ASR 1, formatting 2, VAD 3.
     pub stage: u32,
@@ -289,25 +289,29 @@ pub struct VoiceModelPackageInfoV2 {
 /// Revalidated runtime input returned in caller-owned storage.
 #[repr(C)]
 #[derive(Debug)]
-pub struct VoiceASRModelInfoV1 {
+pub struct VoiceASRModelInfoV2 {
     /// Verified absolute model payload path.
     pub model_path: VoiceUtf8BufferV1,
+    /// Verified absolute speech-detection payload path; empty when absent.
+    pub speech_detection_path: VoiceUtf8BufferV1,
     /// SHA-256 of the exact revalidated manifest bytes.
     pub manifest_sha256: [u8; 32],
+    /// 1 when the package declares a speech-detection payload.
+    pub has_speech_detection: u8,
     /// Written as zeroes.
-    pub reserved: [u8; 8],
+    pub reserved: [u8; 7],
 }
 
-/// Revalidates and resolves a whisper.cpp file-ASR package immediately before load.
+/// Revalidates and resolves a transcribe.cpp file-ASR package immediately before load.
 ///
 /// # Safety
 ///
-/// The Model-package request contract applies. `output` and its path buffer
+/// The Model-package request contract applies. `output` and its path buffers
 /// must be valid, aligned, writable, and nonoverlapping with the request.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn voice_asr_model_resolve_v1(
+pub unsafe extern "C" fn voice_asr_model_resolve_v2(
     request: *const VoiceModelPackageRequestV1,
-    output: *mut VoiceASRModelInfoV1,
+    output: *mut VoiceASRModelInfoV2,
 ) -> u32 {
     std::panic::catch_unwind(AssertUnwindSafe(|| {
         // Safety: Pointer validity and alignment are the documented C precondition.
@@ -318,7 +322,7 @@ pub unsafe extern "C" fn voice_asr_model_resolve_v1(
 
 unsafe fn resolve_asr_model(
     request: *const VoiceModelPackageRequestV1,
-    output: *mut VoiceASRModelInfoV1,
+    output: *mut VoiceASRModelInfoV2,
 ) -> u32 {
     if request.is_null() || output.is_null() {
         return VOICE_STATUS_NULL_POINTER;
@@ -328,10 +332,14 @@ unsafe fn resolve_asr_model(
     // Safety: Null pointers were rejected and exclusive output is the caller contract.
     let output = unsafe { &mut *output };
     output.model_path.length = 0;
+    output.speech_detection_path.length = 0;
     output.manifest_sha256 = [0; 32];
-    output.reserved = [0; 8];
+    output.has_speech_detection = 0;
+    output.reserved = [0; 7];
     if request.root_path_utf8.is_null()
         || (output.model_path.capacity > 0 && output.model_path.bytes.is_null())
+        || (output.speech_detection_path.capacity > 0
+            && output.speech_detection_path.bytes.is_null())
     {
         return VOICE_STATUS_NULL_POINTER;
     }
@@ -352,7 +360,7 @@ unsafe fn resolve_asr_model(
     if path.is_empty() {
         return VOICE_STATUS_INVALID_ARGUMENT;
     }
-    let resolved = match resolve_whisper_file_asr_model(
+    let resolved = match resolve_file_asr_model(
         Path::new(path),
         ModelPackageLimits {
             maximum_manifest_bytes: request.maximum_manifest_bytes,
@@ -365,19 +373,33 @@ unsafe fn resolve_asr_model(
         Err(error) => return asr_model_status(&error),
     };
     let model_path = resolved.model_path.to_string_lossy();
+    let speech_detection_path = resolved
+        .speech_detection_path
+        .as_ref()
+        .map(|path| path.to_string_lossy())
+        .unwrap_or_default();
     output.model_path.length = model_path.len();
+    output.speech_detection_path.length = speech_detection_path.len();
     output.manifest_sha256 = resolved.manifest_sha256;
-    if output.model_path.capacity < output.model_path.length {
+    output.has_speech_detection = u8::from(resolved.speech_detection_path.is_some());
+    if output.model_path.capacity < output.model_path.length
+        || output.speech_detection_path.capacity < output.speech_detection_path.length
+    {
         return VOICE_STATUS_BUFFER_TOO_SMALL;
     }
-    if !model_path.is_empty() {
-        // Safety: Capacity was checked and the caller promises writable storage.
-        unsafe {
-            std::ptr::copy_nonoverlapping(
-                model_path.as_ptr(),
-                output.model_path.bytes,
-                model_path.len(),
-            );
+    for (text, buffer) in [
+        (model_path.as_ref(), &output.model_path),
+        (
+            speech_detection_path.as_ref(),
+            &output.speech_detection_path,
+        ),
+    ] {
+        let text: &str = text;
+        if !text.is_empty() {
+            // Safety: Capacity was checked and the caller promises writable storage.
+            unsafe {
+                std::ptr::copy_nonoverlapping(text.as_ptr(), buffer.bytes, text.len());
+            }
         }
     }
     VOICE_STATUS_OK
@@ -390,7 +412,9 @@ fn asr_model_status(error: &ASRModelError) -> u32 {
         ASRModelError::UnsupportedStage | ASRModelError::MissingFileCapability => {
             VOICE_STATUS_ASR_CAPABILITY_UNSUPPORTED
         }
-        ASRModelError::AmbiguousModelPayload => VOICE_STATUS_ASR_MODEL_AMBIGUOUS,
+        ASRModelError::AmbiguousModelPayload | ASRModelError::AmbiguousSpeechDetectionPayload => {
+            VOICE_STATUS_ASR_MODEL_AMBIGUOUS
+        }
     }
 }
 
@@ -577,6 +601,7 @@ fn set_model_metadata(output: &mut VoiceModelPackageInfoV1, package: &ValidatedM
         ModelRuntime::WhisperCpp => 2,
         ModelRuntime::MistralRs => 3,
         ModelRuntime::LlamaCpp => 4,
+        ModelRuntime::TranscribeCpp => 5,
     };
     output.stage = match package.stage {
         ModelStage::Asr => 1,

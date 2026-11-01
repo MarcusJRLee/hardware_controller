@@ -386,7 +386,7 @@ stop and reflects bounded status; final text is inserted once through
 by the extension.
 
 **Current C4 evidence:** the containing app can persist one compatible active
-ASR package, prewarm a pinned whisper.cpp context, revalidate all selected bytes
+ASR package, prewarm a pinned transcribe.cpp context, revalidate all selected bytes
 through Rust immediately before use, and convert its CAF to timed Raw text. One
 shared deterministic engine applies typed spoken edits and validated semantic
 paragraph/list blocks while preserving Raw. The containing app commits Raw,

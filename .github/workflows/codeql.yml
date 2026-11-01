@@ -49,7 +49,7 @@ jobs:
           else
             rustup target add aarch64-apple-ios aarch64-apple-ios-sim
             scripts/build_ios_rust_ffi.sh
-            scripts/fetch_ios_asr_runtime.sh
+            scripts/fetch_asr_runtime.sh
           fi
 
       - name: Initialize CodeQL

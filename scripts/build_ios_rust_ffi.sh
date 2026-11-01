@@ -57,8 +57,8 @@ for library in "$xcframework"/*/libvoice_ffi.a; do
     print -u2 "$library does not export voice_model_package_validate_v2."
     exit 1
   }
-  [[ "$symbols" == *"_voice_asr_model_resolve_v1"* ]] || {
-    print -u2 "$library does not export voice_asr_model_resolve_v1."
+  [[ "$symbols" == *"_voice_asr_model_resolve_v2"* ]] || {
+    print -u2 "$library does not export voice_asr_model_resolve_v2."
     exit 1
   }
 done

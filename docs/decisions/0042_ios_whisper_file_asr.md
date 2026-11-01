@@ -1,6 +1,7 @@
 # Decision 0042: iOS whisper.cpp file ASR
 
-**Status:** Accepted
+**Status:** Accepted; runtime selection superseded by
+[0055](0055_transcribe_cpp_asr_runtime.md)
 
 ## Context
 

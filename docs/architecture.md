@@ -192,11 +192,14 @@ both limits injected as policy. It never age-evicts Model packages. Explicit
 removal revalidates and quarantines only the app-owned copy before deleting its
 provenance and bytes.
 
-The first C4 runtime is pinned whisper.cpp file ASR. Rust revalidates the active
+The C4 runtime is pinned transcribe.cpp file ASR. Rust revalidates the active
 package and authenticated manifest immediately before resolving one model-role
-payload. A Swift actor owns one prewarmed opaque C context, converts the
-app-owned 16 kHz mono CAF to finite float PCM, and receives bounded UTF-8 plus
-timed segments. The containing app alone links and embeds whisper.cpp; neither
+payload and an optional speech-detection payload. A Swift actor owns one
+prewarmed opaque C context, converts the app-owned 16 kHz mono CAF to finite
+float PCM, and receives bounded UTF-8 plus timed segments. With speech detection,
+the bridge decodes only speech, cut at pauses into chunks of at most 28 seconds,
+and reports silence as a typed no-speech failure. The containing app alone links
+and embeds transcribe.cpp; neither
 extension sees runtime symbols or model paths. Stop produces real timed Raw text
 or an explicit failure, never the K0 placeholder. The same platform-neutral
 spoken-edit, semantic-document, renderer, Style, and retention sources used by
@@ -236,6 +239,7 @@ of UTF-8 and never reads the pasteboard. See
 [decision 0040](decisions/0040_ios_keyboard_activation_and_handoff.md),
 [decision 0041](decisions/0041_ios_model_package_admission.md),
 [decision 0042](decisions/0042_ios_whisper_file_asr.md),
+[decision 0055](decisions/0055_transcribe_cpp_asr_runtime.md),
 [decision 0043](decisions/0043_ios_local_formatting_and_history.md), and
 [decision 0044](decisions/0044_ios_style_qualified_keyboard_delivery.md). Only
 recognized general-text UIKit traits permit Voice. An ephemeral session UUID,

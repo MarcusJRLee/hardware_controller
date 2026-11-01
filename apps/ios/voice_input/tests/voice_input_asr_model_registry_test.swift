@@ -5,7 +5,7 @@ import XCTest
 
 final class VoiceInputASRModelRegistryTest: XCTestCase {
   func testCompatiblePackagePersistsAcrossRegistryInstances() async throws {
-    let fixture = try whisperFixture()
+    let fixture = try transcribeFixture()
     defer { try? FileManager.default.removeItem(at: fixture.root) }
     let installed = try await fixture.installer.install(
       from: fixture.source,
@@ -40,14 +40,14 @@ final class VoiceInputASRModelRegistryTest: XCTestCase {
 
     do {
       try await registry.selectASRModel(installed)
-      XCTFail("A sherpa-onnx package must not select the whisper.cpp adapter.")
+      XCTFail("A sherpa-onnx package must not select the transcribe.cpp adapter.")
     } catch {
       XCTAssertEqual(error as? VoiceInputASRModelRegistryError, .incompatiblePackage)
     }
   }
 
   func testRemovingActivePackageClearsSelection() async throws {
-    let fixture = try whisperFixture()
+    let fixture = try transcribeFixture()
     defer { try? FileManager.default.removeItem(at: fixture.root) }
     let installed = try await fixture.installer.install(
       from: fixture.source,
@@ -90,13 +90,13 @@ final class VoiceInputASRModelRegistryTest: XCTestCase {
     }
   }
 
-  private func whisperFixture() throws -> Fixture {
+  private func transcribeFixture() throws -> Fixture {
     let fixture = try fixture()
     let manifestURL = fixture.source.appendingPathComponent("manifest.json")
     let manifest = try String(contentsOf: manifestURL, encoding: .utf8)
     try manifest.replacingOccurrences(
       of: "\"runtime\": \"sherpa_onnx\"",
-      with: "\"runtime\": \"whisper_cpp\""
+      with: "\"runtime\": \"transcribe_cpp\""
     ).write(to: manifestURL, atomically: true, encoding: .utf8)
     return fixture
   }

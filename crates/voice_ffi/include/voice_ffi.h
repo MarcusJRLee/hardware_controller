@@ -50,6 +50,7 @@ extern "C" {
 #define VOICE_MODEL_RUNTIME_WHISPER_CPP UINT32_C(2)
 #define VOICE_MODEL_RUNTIME_MISTRAL_RS UINT32_C(3)
 #define VOICE_MODEL_RUNTIME_LLAMA_CPP UINT32_C(4)
+#define VOICE_MODEL_RUNTIME_TRANSCRIBE_CPP UINT32_C(5)
 
 #define VOICE_MODEL_STAGE_ASR UINT32_C(1)
 #define VOICE_MODEL_STAGE_FORMATTING UINT32_C(2)
@@ -102,11 +103,14 @@ typedef struct VoiceModelPackageInfoV2 {
   VoiceUtf8BufferV1 languages_csv;
 } VoiceModelPackageInfoV2;
 
-typedef struct VoiceASRModelInfoV1 {
+typedef struct VoiceASRModelInfoV2 {
   VoiceUtf8BufferV1 model_path;
+  /* Empty when has_speech_detection is 0. */
+  VoiceUtf8BufferV1 speech_detection_path;
   uint8_t manifest_sha256[32];
-  uint8_t reserved[8];
-} VoiceASRModelInfoV1;
+  uint8_t has_speech_detection;
+  uint8_t reserved[7];
+} VoiceASRModelInfoV2;
 
 typedef struct VoiceHistoryArchiveRequestV1 {
   const uint8_t *root_path_utf8;
@@ -212,12 +216,14 @@ voice_model_package_validate_v2(const VoiceModelPackageRequestV1 *request,
                                 VoiceModelPackageInfoV2 *output);
 
 /*
- * Revalidates a digest-pinned package and resolves one whisper.cpp model path
- * immediately before runtime load. Output path text is not null terminated.
+ * Revalidates a digest-pinned package and resolves one transcribe.cpp model
+ * path, plus its optional speech-detection path, immediately before runtime
+ * load. Output path text is not null terminated. V1 resolved retired
+ * whisper.cpp packages and is no longer exported.
  */
 VoiceStatusV1
-voice_asr_model_resolve_v1(const VoiceModelPackageRequestV1 *request,
-                           VoiceASRModelInfoV1 *output);
+voice_asr_model_resolve_v2(const VoiceModelPackageRequestV1 *request,
+                           VoiceASRModelInfoV2 *output);
 
 /*
  * The archive-root path is UTF-8 and pointers are never retained. Keep the

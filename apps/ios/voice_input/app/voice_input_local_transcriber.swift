@@ -1,7 +1,7 @@
 import AVFAudio
 import Foundation
 import HardwareControllerVoiceFFI
-import VoiceWhisperBridge
+import VoiceASRBridge
 
 struct VoiceInputTranscriptSegment: Codable, Equatable, Sendable {
   let startMilliseconds: Int64
@@ -18,6 +18,8 @@ struct VoiceInputRawTranscript: Codable, Equatable, Sendable {
 
 enum VoiceInputTranscriptionError: Error, LocalizedError, Equatable, Sendable {
   case unsupportedAudio
+  case noSpeechDetected
+  case incompleteTranscript
   case modelLoadFailed
   case inferenceFailed
   case resultLimitExceeded
@@ -27,6 +29,10 @@ enum VoiceInputTranscriptionError: Error, LocalizedError, Equatable, Sendable {
     switch self {
     case .unsupportedAudio:
       "The local recording is not readable 16 kHz mono audio."
+    case .noSpeechDetected:
+      "No speech was detected. The recording remains on this iPhone."
+    case .incompleteTranscript:
+      "Local speech-to-text stopped before the end of the recording. The recording remains on this iPhone."
     case .modelLoadFailed:
       "The selected local speech-to-text model could not be loaded."
     case .inferenceFailed:
@@ -47,10 +53,20 @@ protocol VoiceInputTranscribing: Sendable {
   ) async throws -> VoiceInputRawTranscript
 }
 
-actor VoiceInputWhisperTranscriber: VoiceInputTranscribing {
+/// Runs the pinned transcribe.cpp runtime on the containing app's completed recording.
+actor VoiceInputLocalTranscriber: VoiceInputTranscribing {
   private static let maximumAudioFrameCount = 16_000 * 60 * 30
   private static let maximumTranscriptBytes = 1_048_576
   private static let maximumSegmentCount = 4_096
+
+  /// Runtime diagnostics are process-wide and must be configured before load.
+  private static let runtimeConfiguration: UInt32 = {
+    #if DEBUG
+      voice_asr_runtime_configure_v1(1)
+    #else
+      voice_asr_runtime_configure_v1(0)
+    #endif
+  }()
 
   private let resolver: any PortableASRModelResolving
   private var loadedContext: LoadedContext?
@@ -67,11 +83,11 @@ actor VoiceInputWhisperTranscriber: VoiceInputTranscribing {
     audioURL: URL,
     model: VoiceInputInstalledModelPackage
   ) throws -> VoiceInputRawTranscript {
-    let context = try context(for: model)
+    let loaded = try context(for: model)
     let samples = try Self.readSamples(from: audioURL)
     var transcript = Data(count: Self.maximumTranscriptBytes)
-    var runtimeSegments = [VoiceWhisperSegmentV1](
-      repeating: VoiceWhisperSegmentV1(),
+    var runtimeSegments = [VoiceASRSegmentV1](
+      repeating: VoiceASRSegmentV1(),
       count: Self.maximumSegmentCount
     )
     let language = Self.runtimeLanguage(for: model.package.languages)
@@ -79,20 +95,21 @@ actor VoiceInputWhisperTranscriber: VoiceInputTranscribing {
       transcript.withUnsafeMutableBytes { transcriptBytes in
         runtimeSegments.withUnsafeMutableBufferPointer { segmentBuffer in
           samples.withUnsafeBufferPointer { sampleBuffer in
-            var output = VoiceWhisperResultV1(
-              transcript_utf8: transcriptBytes.baseAddress?.assumingMemoryBound(to: UInt8.self),
-              transcript_capacity: transcriptBytes.count,
-              transcript_length: 0,
-              segments: segmentBuffer.baseAddress,
-              segment_capacity: segmentBuffer.count,
-              segment_count: 0
+            var request = VoiceASRRequestV1()
+            request.language_utf8 = languageBytes
+            request.detect_speech = loaded.detectsSpeech ? 1 : 0
+            var output = VoiceASRResultV1()
+            output.transcript_utf8 = transcriptBytes.baseAddress?.assumingMemoryBound(
+              to: UInt8.self
             )
-            let status = voice_whisper_transcribe_v1(
-              context,
+            output.transcript_capacity = transcriptBytes.count
+            output.segments = segmentBuffer.baseAddress
+            output.segment_capacity = segmentBuffer.count
+            let status = voice_asr_transcribe_v1(
+              loaded.handle.pointer,
               sampleBuffer.baseAddress,
               sampleBuffer.count,
-              languageBytes,
-              UInt32(min(max(ProcessInfo.processInfo.activeProcessorCount, 1), 8)),
+              &request,
               &output
             )
             return (status, output.transcript_length, output.segment_count)
@@ -101,11 +118,15 @@ actor VoiceInputWhisperTranscriber: VoiceInputTranscribing {
       }
     }
     switch counts.0 {
-    case VoiceWhisperStatusOK.rawValue:
+    case VoiceASRStatusOK.rawValue:
       break
-    case VoiceWhisperStatusBufferTooSmall.rawValue:
+    case VoiceASRStatusNoSpeech.rawValue:
+      throw VoiceInputTranscriptionError.noSpeechDetected
+    case VoiceASRStatusIncompleteTranscript.rawValue:
+      throw VoiceInputTranscriptionError.incompleteTranscript
+    case VoiceASRStatusBufferTooSmall.rawValue:
       throw VoiceInputTranscriptionError.resultLimitExceeded
-    case VoiceWhisperStatusInferenceFailed.rawValue:
+    case VoiceASRStatusInferenceFailed.rawValue:
       throw VoiceInputTranscriptionError.inferenceFailed
     default:
       throw VoiceInputTranscriptionError.invalidRuntimeResult
@@ -125,36 +146,45 @@ actor VoiceInputWhisperTranscriber: VoiceInputTranscribing {
 
   private func context(
     for model: VoiceInputInstalledModelPackage
-  ) throws -> OpaquePointer {
-    let modelURL: URL
-    do {
-      modelURL = try resolver.resolveWhisperASRModel(
-        at: model.rootURL,
-        limits: .standardModelPackage,
-        expectedManifestSHA256: model.package.manifestSHA256
-      )
-    } catch {
-      throw error
-    }
+  ) throws -> LoadedContext {
+    let resolved = try resolver.resolveFileASRModel(
+      at: model.rootURL,
+      limits: .standardModelPackage,
+      expectedManifestSHA256: model.package.manifestSHA256
+    )
     let key = LoadedContext.Key(
-      modelPath: modelURL.path(percentEncoded: false),
+      modelPath: resolved.modelURL.path(percentEncoded: false),
+      speechDetectionPath: resolved.speechDetectionURL?.path(percentEncoded: false),
       manifestSHA256: model.package.manifestSHA256
     )
     if let loadedContext, loadedContext.key == key {
-      return loadedContext.handle.pointer
+      return loadedContext
     }
-    var newContext: OpaquePointer?
-    let status = modelURL.withUnsafeFileSystemRepresentation { path in
-      voice_whisper_context_create_v1(path, 1, &newContext)
-    }
-    guard status == VoiceWhisperStatusOK.rawValue, let newContext else {
+    // Release the previous model before mapping the next one.
+    loadedContext = nil
+    guard Self.runtimeConfiguration == VoiceASRStatusOK.rawValue else {
       throw VoiceInputTranscriptionError.modelLoadFailed
     }
-    loadedContext = LoadedContext(
+    let threadCount = UInt32(min(max(ProcessInfo.processInfo.activeProcessorCount, 1), 8))
+    var newContext: OpaquePointer?
+    let status = resolved.modelURL.withUnsafeFileSystemRepresentation { modelPath in
+      if let speechDetectionURL = resolved.speechDetectionURL {
+        return speechDetectionURL.withUnsafeFileSystemRepresentation { speechPath in
+          voice_asr_context_create_v1(modelPath, speechPath, 1, threadCount, &newContext)
+        }
+      }
+      return voice_asr_context_create_v1(modelPath, nil, 1, threadCount, &newContext)
+    }
+    guard status == VoiceASRStatusOK.rawValue, let newContext else {
+      throw VoiceInputTranscriptionError.modelLoadFailed
+    }
+    let loaded = LoadedContext(
       key: key,
-      handle: WhisperContextHandle(pointer: newContext)
+      handle: ASRContextHandle(pointer: newContext),
+      detectsSpeech: resolved.speechDetectionURL != nil
     )
-    return newContext
+    loadedContext = loaded
+    return loaded
   }
 
   private static func readSamples(from audioURL: URL) throws -> [Float] {
@@ -197,7 +227,7 @@ actor VoiceInputWhisperTranscriber: VoiceInputTranscribing {
 
   static func decode(
     transcript: Data.SubSequence,
-    runtimeSegments: ArraySlice<VoiceWhisperSegmentV1>,
+    runtimeSegments: ArraySlice<VoiceASRSegmentV1>,
     model: VoiceInputInstalledModelPackage
   ) throws -> VoiceInputRawTranscript {
     let transcriptData = Data(transcript)
@@ -270,14 +300,16 @@ actor VoiceInputWhisperTranscriber: VoiceInputTranscribing {
   private struct LoadedContext {
     struct Key: Equatable {
       let modelPath: String
+      let speechDetectionPath: String?
       let manifestSHA256: Data
     }
 
     let key: Key
-    let handle: WhisperContextHandle
+    let handle: ASRContextHandle
+    let detectsSpeech: Bool
   }
 
-  private final class WhisperContextHandle {
+  private final class ASRContextHandle {
     let pointer: OpaquePointer
 
     init(pointer: OpaquePointer) {
@@ -285,7 +317,7 @@ actor VoiceInputWhisperTranscriber: VoiceInputTranscribing {
     }
 
     deinit {
-      voice_whisper_context_destroy_v1(pointer)
+      voice_asr_context_destroy_v1(pointer)
     }
   }
 }

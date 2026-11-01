@@ -1,20 +1,20 @@
 import Foundation
-import VoiceWhisperBridge
+import VoiceASRBridge
 import XCTest
 
 @testable import VoiceInput
 
-final class VoiceInputWhisperTranscriberTest: XCTestCase {
+final class VoiceInputLocalTranscriberTest: XCTestCase {
   func testRuntimeSegmentsDecodeToTimedRawTranscript() throws {
     let text = Data(" first  second ".utf8)
     let segments = [
-      VoiceWhisperSegmentV1(
+      VoiceASRSegmentV1(
         start_milliseconds: 0,
         end_milliseconds: 500,
         text_offset: 0,
         text_length: 7
       ),
-      VoiceWhisperSegmentV1(
+      VoiceASRSegmentV1(
         start_milliseconds: 500,
         end_milliseconds: 1_200,
         text_offset: 7,
@@ -23,7 +23,7 @@ final class VoiceInputWhisperTranscriberTest: XCTestCase {
     ]
     let model = makeInstalledASRPackage()
 
-    let result = try VoiceInputWhisperTranscriber.decode(
+    let result = try VoiceInputLocalTranscriber.decode(
       transcript: text[...],
       runtimeSegments: segments[...],
       model: model
@@ -49,7 +49,7 @@ final class VoiceInputWhisperTranscriberTest: XCTestCase {
 
   func testOutOfBoundsOrBackwardSegmentFailsClosed() {
     let model = makeInstalledASRPackage()
-    let invalid = VoiceWhisperSegmentV1(
+    let invalid = VoiceASRSegmentV1(
       start_milliseconds: 100,
       end_milliseconds: 0,
       text_offset: 0,
@@ -57,7 +57,7 @@ final class VoiceInputWhisperTranscriberTest: XCTestCase {
     )
 
     XCTAssertThrowsError(
-      try VoiceInputWhisperTranscriber.decode(
+      try VoiceInputLocalTranscriber.decode(
         transcript: Data("short".utf8)[...],
         runtimeSegments: [invalid][...],
         model: model
@@ -69,14 +69,14 @@ final class VoiceInputWhisperTranscriberTest: XCTestCase {
 
   func testInvalidUTF8OrNoncontiguousSegmentsFailClosed() {
     let model = makeInstalledASRPackage()
-    let segment = VoiceWhisperSegmentV1(
+    let segment = VoiceASRSegmentV1(
       start_milliseconds: 0,
       end_milliseconds: 100,
       text_offset: 0,
       text_length: 1
     )
     XCTAssertThrowsError(
-      try VoiceInputWhisperTranscriber.decode(
+      try VoiceInputLocalTranscriber.decode(
         transcript: Data([0xFF])[...],
         runtimeSegments: [segment][...],
         model: model
@@ -85,14 +85,14 @@ final class VoiceInputWhisperTranscriberTest: XCTestCase {
       XCTAssertEqual(error as? VoiceInputTranscriptionError, .invalidRuntimeResult)
     }
 
-    let skippedByte = VoiceWhisperSegmentV1(
+    let skippedByte = VoiceASRSegmentV1(
       start_milliseconds: 0,
       end_milliseconds: 100,
       text_offset: 1,
       text_length: 1
     )
     XCTAssertThrowsError(
-      try VoiceInputWhisperTranscriber.decode(
+      try VoiceInputLocalTranscriber.decode(
         transcript: Data("ab".utf8)[...],
         runtimeSegments: [skippedByte][...],
         model: model
@@ -104,15 +104,15 @@ final class VoiceInputWhisperTranscriberTest: XCTestCase {
 
   func testRuntimeLanguageUsesOnePackageLanguageOrAutomaticDetection() {
     XCTAssertEqual(
-      VoiceInputWhisperTranscriber.runtimeLanguage(for: ["en-US"]),
+      VoiceInputLocalTranscriber.runtimeLanguage(for: ["en-US"]),
       "en"
     )
     XCTAssertEqual(
-      VoiceInputWhisperTranscriber.runtimeLanguage(for: ["en-US", "fr-FR"]),
+      VoiceInputLocalTranscriber.runtimeLanguage(for: ["en-US", "fr-FR"]),
       "auto"
     )
     XCTAssertEqual(
-      VoiceInputWhisperTranscriber.runtimeLanguage(for: ["invalid_primary-US"]),
+      VoiceInputLocalTranscriber.runtimeLanguage(for: ["invalid_primary-US"]),
       "auto"
     )
   }

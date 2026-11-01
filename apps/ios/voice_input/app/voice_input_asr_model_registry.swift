@@ -11,7 +11,7 @@ enum VoiceInputASRModelRegistryError: Error, LocalizedError, Sendable {
   var errorDescription: String? {
     switch self {
     case .incompatiblePackage:
-      "Choose a whisper.cpp speech-to-text package that supports completed audio files."
+      "Choose a transcribe.cpp speech-to-text package that supports completed audio files."
     case .packageNotInstalled:
       "The selected speech-to-text package is no longer installed."
     case .noSelection:
@@ -91,8 +91,9 @@ actor VoiceInputASRModelRegistry: VoiceInputModelManaging {
     return installed
   }
 
-  private static func isCompatible(_ package: PortableModelPackage) -> Bool {
-    package.runtime == .whisperCPP
+  /// The one runtime gate shared by selection and the Model library.
+  static func isCompatible(_ package: PortableModelPackage) -> Bool {
+    package.runtime == .transcribeCPP
       && package.stage == .asr
       && package.capabilities.contains(.fileASR)
   }

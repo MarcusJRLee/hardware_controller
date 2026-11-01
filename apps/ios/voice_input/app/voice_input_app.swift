@@ -54,7 +54,7 @@ struct VoiceInputApp: App {
     )
     let asrWorkflow = VoiceInputASRWorkflow(
       modelProvider: registry,
-      transcriber: VoiceInputWhisperTranscriber()
+      transcriber: VoiceInputLocalTranscriber()
     )
     let historyRoot =
       applicationSupport

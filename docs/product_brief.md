@@ -268,7 +268,7 @@ Given a configured Voice chord and ready Local AI Dictation:
   providers.
 - Private Cloud Compute fallback.
 - A second iOS ASR runtime or direct-audio language model before the pinned
-  whisper.cpp file-ASR path meets its device quality gates.
+  transcribe.cpp file-ASR path meets its device quality gates.
 - Shipped Android, Windows, Linux, web, or mobile-web apps. Android and other
   native desktops remain line of sight; web and mobile web are deferred.
 - Downloaded Driver code or user-authored plug-ins.
@@ -300,7 +300,7 @@ executable behind typed Swift values; production V1 import now verifies its
 private snapshot in Rust before complete Swift restore validation. iOS Gate K0
 proves the app-owned capture and keyboard handoff boundary. I1 implements local
 onboarding and bounded Model admission. I2 selects and revalidates one compatible
-package, produces real timed Raw text through a pinned whisper.cpp runtime,
+package, produces real timed Raw text through a pinned transcribe.cpp runtime,
 applies shared deterministic edits and semantic formatting, and commits
 searchable/playable bounded local History before publishing text without
 exposing runtime, model, audio, or History bytes to either extension. App and

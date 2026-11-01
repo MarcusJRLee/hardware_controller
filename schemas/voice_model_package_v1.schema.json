@@ -39,7 +39,7 @@
       "maxLength": 128
     },
     "runtime": {
-      "enum": ["sherpa_onnx", "whisper_cpp", "mistral_rs", "llama_cpp"]
+      "enum": ["sherpa_onnx", "whisper_cpp", "mistral_rs", "llama_cpp", "transcribe_cpp"]
     },
     "stage": {
       "enum": ["asr", "formatting", "vad"]
@@ -111,7 +111,7 @@
             "$ref": "#/$defs/relative_path"
           },
           "role": {
-            "enum": ["model", "tokenizer", "configuration", "vocabulary", "notice"]
+            "enum": ["model", "tokenizer", "configuration", "vocabulary", "speech_detection", "notice"]
           },
           "bytes": {
             "type": "integer",
