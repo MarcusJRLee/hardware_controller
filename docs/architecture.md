@@ -198,7 +198,10 @@ payload and an optional speech-detection payload. A Swift actor owns one
 prewarmed opaque C context, converts the app-owned 16 kHz mono CAF to finite
 float PCM, and receives bounded UTF-8 plus timed segments. With speech detection,
 the bridge decodes only speech, cut at pauses into chunks of at most 28 seconds,
-and reports silence as a typed no-speech failure. The containing app alone links
+and reports silence as a typed no-speech failure. While recording, a separate
+engine tap feeds live pause-cut decoding so Stop decodes only the last chunk; the
+recorded file stays authoritative and replaces any live result that failed or
+does not cover it. The containing app alone links
 and embeds transcribe.cpp; neither
 extension sees runtime symbols or model paths. Stop produces real timed Raw text
 or an explicit failure, never the K0 placeholder. The same platform-neutral
@@ -240,6 +243,7 @@ of UTF-8 and never reads the pasteboard. See
 [decision 0041](decisions/0041_ios_model_package_admission.md),
 [decision 0042](decisions/0042_ios_whisper_file_asr.md),
 [decision 0055](decisions/0055_transcribe_cpp_asr_runtime.md),
+[decision 0056](decisions/0056_ios_live_pause_cut_decoding.md),
 [decision 0043](decisions/0043_ios_local_formatting_and_history.md), and
 [decision 0044](decisions/0044_ios_style_qualified_keyboard_delivery.md). Only
 recognized general-text UIKit traits permit Voice. An ephemeral session UUID,

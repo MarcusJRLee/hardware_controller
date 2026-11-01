@@ -53,8 +53,25 @@ protocol VoiceInputTranscribing: Sendable {
   ) async throws -> VoiceInputRawTranscript
 }
 
-/// Runs the pinned transcribe.cpp runtime on the containing app's completed recording.
-actor VoiceInputLocalTranscriber: VoiceInputTranscribing {
+/// A live transcript plus the number of 16 kHz samples it covers.
+struct VoiceInputLiveTranscript: Equatable, Sendable {
+  let transcript: VoiceInputRawTranscript
+  let receivedSampleCount: Int
+}
+
+/// Best-effort decoding while audio arrives; the completed file stays authoritative.
+protocol VoiceInputLiveTranscribing: Sendable {
+  /// Returns false when the selected model cannot decode live.
+  func beginLive(model: VoiceInputInstalledModelPackage) async -> Bool
+  /// Returns false once live decoding has ended for any reason.
+  func feedLive(_ samples: [Float]) async -> Bool
+  /// Returns nil whenever the caller must transcribe the completed file instead.
+  func finishLive(model: VoiceInputInstalledModelPackage) async -> VoiceInputLiveTranscript?
+  func cancelLive() async
+}
+
+/// Runs the pinned transcribe.cpp runtime on the containing app's recordings.
+actor VoiceInputLocalTranscriber: VoiceInputTranscribing, VoiceInputLiveTranscribing {
   private static let maximumAudioFrameCount = 16_000 * 60 * 30
   private static let maximumTranscriptBytes = 1_048_576
   private static let maximumSegmentCount = 4_096
@@ -70,6 +87,7 @@ actor VoiceInputLocalTranscriber: VoiceInputTranscribing {
 
   private let resolver: any PortableASRModelResolving
   private var loadedContext: LoadedContext?
+  private var isLive = false
 
   init(resolver: any PortableASRModelResolving = RustPortableVoiceValidator()) {
     self.resolver = resolver
@@ -84,37 +102,112 @@ actor VoiceInputLocalTranscriber: VoiceInputTranscribing {
     model: VoiceInputInstalledModelPackage
   ) throws -> VoiceInputRawTranscript {
     let loaded = try context(for: model)
+    // A batch run on the same context ends any live decode in the bridge.
+    isLive = false
     let samples = try Self.readSamples(from: audioURL)
-    var transcript = Data(count: Self.maximumTranscriptBytes)
+    let language = Self.runtimeLanguage(for: model.package.languages)
+    let detectsSpeech: UInt8 = loaded.detectsSpeech ? 1 : 0
+    return try Self.readResult(model: model) { output in
+      language.withCString { languageBytes in
+        samples.withUnsafeBufferPointer { sampleBuffer in
+          var request = VoiceASRRequestV1()
+          request.language_utf8 = languageBytes
+          request.detect_speech = detectsSpeech
+          return voice_asr_transcribe_v1(
+            loaded.handle.pointer,
+            sampleBuffer.baseAddress,
+            sampleBuffer.count,
+            &request,
+            &output
+          )
+        }
+      }
+    }
+  }
+
+  func beginLive(model: VoiceInputInstalledModelPackage) -> Bool {
+    guard let loaded = try? context(for: model), loaded.detectsSpeech else {
+      return false
+    }
+    let language = Self.runtimeLanguage(for: model.package.languages)
+    let status = language.withCString { languageBytes in
+      var request = VoiceASRRequestV1()
+      request.language_utf8 = languageBytes
+      request.detect_speech = 1
+      return voice_asr_live_begin_v1(loaded.handle.pointer, &request)
+    }
+    isLive = status == VoiceASRStatusOK.rawValue
+    return isLive
+  }
+
+  func feedLive(_ samples: [Float]) -> Bool {
+    guard isLive, let loadedContext else {
+      return false
+    }
+    let status = samples.withUnsafeBufferPointer { buffer in
+      voice_asr_live_feed_v1(
+        loadedContext.handle.pointer,
+        buffer.baseAddress,
+        buffer.count,
+        nil
+      )
+    }
+    isLive = status == VoiceASRStatusOK.rawValue
+    return isLive
+  }
+
+  func finishLive(model: VoiceInputInstalledModelPackage) -> VoiceInputLiveTranscript? {
+    guard isLive, let loadedContext else {
+      return nil
+    }
+    isLive = false
+    var progress = VoiceASRLiveProgressV1()
+    guard
+      voice_asr_live_feed_v1(loadedContext.handle.pointer, nil, 0, &progress)
+        == VoiceASRStatusOK.rawValue,
+      let transcript = try? Self.readResult(
+        model: model,
+        run: { output in
+          voice_asr_live_finish_v1(loadedContext.handle.pointer, &output)
+        })
+    else {
+      voice_asr_live_cancel_v1(loadedContext.handle.pointer)
+      return nil
+    }
+    return VoiceInputLiveTranscript(
+      transcript: transcript,
+      receivedSampleCount: Int(clamping: progress.received_samples)
+    )
+  }
+
+  func cancelLive() {
+    isLive = false
+    if let loadedContext {
+      voice_asr_live_cancel_v1(loadedContext.handle.pointer)
+    }
+  }
+
+  /// Runs one bridge call into bounded buffers and validates its result.
+  private static func readResult(
+    model: VoiceInputInstalledModelPackage,
+    run: (inout VoiceASRResultV1) -> UInt32
+  ) throws -> VoiceInputRawTranscript {
+    var transcript = Data(count: maximumTranscriptBytes)
     var runtimeSegments = [VoiceASRSegmentV1](
       repeating: VoiceASRSegmentV1(),
-      count: Self.maximumSegmentCount
+      count: maximumSegmentCount
     )
-    let language = Self.runtimeLanguage(for: model.package.languages)
-    let counts = language.withCString { languageBytes in
-      transcript.withUnsafeMutableBytes { transcriptBytes in
-        runtimeSegments.withUnsafeMutableBufferPointer { segmentBuffer in
-          samples.withUnsafeBufferPointer { sampleBuffer in
-            var request = VoiceASRRequestV1()
-            request.language_utf8 = languageBytes
-            request.detect_speech = loaded.detectsSpeech ? 1 : 0
-            var output = VoiceASRResultV1()
-            output.transcript_utf8 = transcriptBytes.baseAddress?.assumingMemoryBound(
-              to: UInt8.self
-            )
-            output.transcript_capacity = transcriptBytes.count
-            output.segments = segmentBuffer.baseAddress
-            output.segment_capacity = segmentBuffer.count
-            let status = voice_asr_transcribe_v1(
-              loaded.handle.pointer,
-              sampleBuffer.baseAddress,
-              sampleBuffer.count,
-              &request,
-              &output
-            )
-            return (status, output.transcript_length, output.segment_count)
-          }
-        }
+    let counts = transcript.withUnsafeMutableBytes { transcriptBytes in
+      runtimeSegments.withUnsafeMutableBufferPointer { segmentBuffer in
+        var output = VoiceASRResultV1()
+        output.transcript_utf8 = transcriptBytes.baseAddress?.assumingMemoryBound(
+          to: UInt8.self
+        )
+        output.transcript_capacity = transcriptBytes.count
+        output.segments = segmentBuffer.baseAddress
+        output.segment_capacity = segmentBuffer.count
+        let status = run(&output)
+        return (status, output.transcript_length, output.segment_count)
       }
     }
     switch counts.0 {
@@ -137,7 +230,7 @@ actor VoiceInputLocalTranscriber: VoiceInputTranscribing {
     else {
       throw VoiceInputTranscriptionError.invalidRuntimeResult
     }
-    return try Self.decode(
+    return try decode(
       transcript: transcript.prefix(counts.1),
       runtimeSegments: runtimeSegments.prefix(counts.2),
       model: model
@@ -161,6 +254,7 @@ actor VoiceInputLocalTranscriber: VoiceInputTranscribing {
       return loadedContext
     }
     // Release the previous model before mapping the next one.
+    isLive = false
     loadedContext = nil
     guard Self.runtimeConfiguration == VoiceASRStatusOK.rawValue else {
       throw VoiceInputTranscriptionError.modelLoadFailed

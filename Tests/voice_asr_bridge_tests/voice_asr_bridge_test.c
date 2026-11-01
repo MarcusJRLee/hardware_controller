@@ -166,16 +166,35 @@ static int check_transcript(Fixture *fixture, uint8_t detect_speech,
  * Three copies separated by two seconds of silence exceed one encoder window,
  * so the clip must be cut at a pause and later chunks must keep absolute time.
  */
-static int check_long_form(Fixture *fixture) {
+static float *long_form_samples(const Fixture *fixture, size_t *count) {
   const size_t gap = 16000 * 2;
-  const size_t count = fixture->sample_count * 3 + gap * 2;
-  float *samples = calloc(count, sizeof(*samples));
+  *count = fixture->sample_count * 3 + gap * 2;
+  float *samples = calloc(*count, sizeof(*samples));
   if (samples == NULL) {
-    return 40;
+    return NULL;
   }
   for (size_t copy = 0; copy < 3; copy += 1) {
     memcpy(samples + copy * (fixture->sample_count + gap), fixture->samples,
            fixture->sample_count * sizeof(*samples));
+  }
+  return samples;
+}
+
+static size_t occurrences(const uint8_t *transcript, const char *phrase) {
+  size_t count = 0;
+  for (const char *cursor = (const char *)transcript;
+       (cursor = strstr(cursor, phrase)) != NULL; cursor += 1) {
+    count += 1;
+  }
+  return count;
+}
+
+static int check_long_form(Fixture *fixture) {
+  const size_t gap = 16000 * 2;
+  size_t count = 0;
+  float *samples = long_form_samples(fixture, &count);
+  if (samples == NULL) {
+    return 40;
   }
   uint8_t transcript[8192] = {0};
   VoiceASRSegmentV1 segments[128] = {0};
@@ -189,15 +208,10 @@ static int check_long_form(Fixture *fixture) {
     return 41;
   }
   transcript[result.transcript_length] = '\0';
-  size_t occurrences = 0;
-  for (const char *cursor = (const char *)transcript;
-       (cursor = strstr(cursor, "ask not what your country")) != NULL;
-       cursor += 1) {
-    occurrences += 1;
-  }
   const int64_t audio_ms = (int64_t)(count / 16);
   /* Segment joins must keep a word boundary: no "youask" or "countryand". */
-  if (occurrences != 3 || strstr((const char *)transcript, "youask") != NULL ||
+  if (occurrences(transcript, "ask not what your country") != 3 ||
+      strstr((const char *)transcript, "youask") != NULL ||
       check_segments(segments, result.segment_count, result.transcript_length,
                      audio_ms) != 0 ||
       segments[result.segment_count - 1].start_milliseconds <
@@ -205,6 +219,110 @@ static int check_long_form(Fixture *fixture) {
     fprintf(stderr, "Unexpected long-form transcript: %s\n", transcript);
     return 42;
   }
+  return 0;
+}
+
+/*
+ * Feeds the long-form clip in 100 ms pieces, as a microphone tap would. Earlier
+ * utterances must decode during feed, leaving only the tail for finish.
+ */
+static int check_live(Fixture *fixture) {
+  VoiceASRLiveProgressV1 progress = {0};
+  const VoiceASRRequestV1 whole = request(0);
+  const VoiceASRRequestV1 detected = request(1);
+  float piece[1600] = {0};
+  if (voice_asr_live_feed_v1(fixture->context, piece, 1600, &progress) !=
+          VOICE_ASR_STATUS_LIVE_STATE_INVALID ||
+      voice_asr_live_begin_v1(fixture->context, &whole) !=
+          VOICE_ASR_STATUS_INVALID_ARGUMENT) {
+    return 50;
+  }
+  size_t count = 0;
+  float *samples = long_form_samples(fixture, &count);
+  if (samples == NULL || voice_asr_live_begin_v1(fixture->context, &detected) !=
+                             VOICE_ASR_STATUS_OK) {
+    free(samples);
+    return 51;
+  }
+  for (size_t offset = 0; offset < count; offset += 1600) {
+    const size_t length = count - offset < 1600 ? count - offset : 1600;
+    if (voice_asr_live_feed_v1(fixture->context, samples + offset, length,
+                               &progress) != VOICE_ASR_STATUS_OK) {
+      free(samples);
+      return 52;
+    }
+  }
+  free(samples);
+  if (progress.received_samples != count || progress.decoded_chunk_count < 2 ||
+      progress.decoded_samples == 0) {
+    fprintf(stderr, "Live decode committed %u chunks before finish.\n",
+            progress.decoded_chunk_count);
+    return 53;
+  }
+  /* The first finish decodes the tail; a retry only copies the result. */
+  uint8_t small = 0;
+  VoiceASRResultV1 result = {.transcript_utf8 = &small,
+                             .transcript_capacity = 1};
+  struct timespec start = {0};
+  struct timespec end = {0};
+  clock_gettime(CLOCK_MONOTONIC, &start);
+  const uint32_t first_status =
+      voice_asr_live_finish_v1(fixture->context, &result);
+  clock_gettime(CLOCK_MONOTONIC, &end);
+  if (first_status != VOICE_ASR_STATUS_BUFFER_TOO_SMALL) {
+    return 54;
+  }
+  uint8_t transcript[8192] = {0};
+  VoiceASRSegmentV1 segments[128] = {0};
+  result = (VoiceASRResultV1){
+      .transcript_utf8 = transcript,
+      .transcript_capacity = sizeof(transcript) - 1,
+      .segments = segments,
+      .segment_capacity = sizeof(segments) / sizeof(segments[0]),
+  };
+  const uint32_t status = voice_asr_live_finish_v1(fixture->context, &result);
+  transcript[result.transcript_length] = '\0';
+  if (status != VOICE_ASR_STATUS_OK ||
+      occurrences(transcript, "ask not what your country") != 3 ||
+      strstr((const char *)transcript, "youask") != NULL ||
+      check_segments(segments, result.segment_count, result.transcript_length,
+                     (int64_t)(count / 16)) != 0) {
+    fprintf(stderr, "Unexpected live transcript: %s\n", transcript);
+    return 55;
+  }
+  fprintf(stdout, "live_chunks=%u finish_seconds=%.6f\n",
+          result.decoded_chunk_count, elapsed_seconds(start, end));
+  if (voice_asr_live_finish_v1(fixture->context, &result) !=
+      VOICE_ASR_STATUS_LIVE_STATE_INVALID) {
+    return 56;
+  }
+
+  float *silence = calloc(16000 * 3, sizeof(*silence));
+  if (silence == NULL ||
+      voice_asr_live_begin_v1(fixture->context, &detected) !=
+          VOICE_ASR_STATUS_OK ||
+      voice_asr_live_feed_v1(fixture->context, silence, 16000 * 3, NULL) !=
+          VOICE_ASR_STATUS_OK ||
+      voice_asr_live_finish_v1(fixture->context, &result) !=
+          VOICE_ASR_STATUS_NO_SPEECH ||
+      result.transcript_length != 0) {
+    free(silence);
+    return 57;
+  }
+  /* A batch transcription abandons any live decode on the same context. */
+  VoiceASRResultV1 ignored = {0};
+  if (voice_asr_live_begin_v1(fixture->context, &detected) !=
+          VOICE_ASR_STATUS_OK ||
+      transcribe(fixture, silence, 16000 * 3, &detected, NULL, 0, NULL, 0,
+                 &ignored) != VOICE_ASR_STATUS_NO_SPEECH ||
+      voice_asr_live_feed_v1(fixture->context, silence, 1600, NULL) !=
+          VOICE_ASR_STATUS_LIVE_STATE_INVALID) {
+    free(silence);
+    return 58;
+  }
+  free(silence);
+  voice_asr_live_cancel_v1(fixture->context);
+  voice_asr_live_cancel_v1(NULL);
   return 0;
 }
 
@@ -264,6 +382,9 @@ int main(int argument_count, char **arguments) {
   }
   if (status == 0) {
     status = check_long_form(&fixture);
+  }
+  if (status == 0) {
+    status = check_live(&fixture);
   }
   voice_asr_context_destroy_v1(fixture.context);
   free(fixture.samples);

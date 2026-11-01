@@ -51,7 +51,9 @@ An active compatible package now drives pinned local transcribe.cpp file ASR
 in the containing app. The runtime revalidates selected model bytes before load,
 prewarms one actor-owned context, skips silence with the package's Silero speech
 detector, and returns bounded Raw text with timed segments. A recording with no
-detected speech fails explicitly instead of producing invented text. Neither extension links the runtime or can read model bytes.
+detected speech fails explicitly instead of producing invented text. Long
+recordings decode at pauses while you speak, so Stop waits only for the last
+chunk; the recorded file replaces any live result that is incomplete. Neither extension links the runtime or can read model bytes.
 
 The app applies the shared deterministic spoken-edit, casing, list-intent,
 typed list-normalization, and semantic-formatting core, then commits Raw,

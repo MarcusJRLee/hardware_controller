@@ -16,6 +16,8 @@ extern "C" {
 #define VOICE_ASR_STATUS_NO_SPEECH UINT32_C(5)
 #define VOICE_ASR_STATUS_INCOMPLETE_TRANSCRIPT UINT32_C(6)
 #define VOICE_ASR_STATUS_SPEECH_DETECTION_UNAVAILABLE UINT32_C(7)
+#define VOICE_ASR_STATUS_LIVE_STATE_INVALID UINT32_C(8)
+#define VOICE_ASR_STATUS_LIVE_LIMIT_EXCEEDED UINT32_C(9)
 
 enum VoiceASRStatusV1 {
   VoiceASRStatusOK = VOICE_ASR_STATUS_OK,
@@ -27,6 +29,8 @@ enum VoiceASRStatusV1 {
   VoiceASRStatusIncompleteTranscript = VOICE_ASR_STATUS_INCOMPLETE_TRANSCRIPT,
   VoiceASRStatusSpeechDetectionUnavailable =
       VOICE_ASR_STATUS_SPEECH_DETECTION_UNAVAILABLE,
+  VoiceASRStatusLiveStateInvalid = VOICE_ASR_STATUS_LIVE_STATE_INVALID,
+  VoiceASRStatusLiveLimitExceeded = VOICE_ASR_STATUS_LIVE_LIMIT_EXCEEDED,
 };
 
 /* The most vocabulary terms one request may carry. */
@@ -109,6 +113,47 @@ uint32_t voice_asr_transcribe_v1(VoiceASRContext *context, const float *samples,
                                  size_t sample_count,
                                  const VoiceASRRequestV1 *request,
                                  VoiceASRResultV1 *output);
+
+/*
+ * Live decoding transcribes while audio is still arriving. Speech detection is
+ * required: completed speech is cut at a pause and decoded during feed, so
+ * finish only decodes the final chunk. One live decode may be active per
+ * context, and it shares the context's exclusive-access rule. Calling
+ * voice_asr_transcribe_v1 or voice_asr_live_begin_v1 abandons it.
+ */
+typedef struct VoiceASRLiveProgressV1 {
+  /* Samples accepted since begin. */
+  uint64_t received_samples;
+  /* Samples already decoded into committed chunks. */
+  uint64_t decoded_samples;
+  uint32_t decoded_chunk_count;
+  uint32_t reserved;
+} VoiceASRLiveProgressV1;
+
+/* The request's strings are copied; detect_speech must be 1. */
+uint32_t voice_asr_live_begin_v1(VoiceASRContext *context,
+                                 const VoiceASRRequestV1 *request);
+
+/*
+ * Accepts finite 16 kHz mono samples, at most 30 minutes in total. A failed
+ * feed ends the live decode; the caller should transcribe its own recording
+ * with voice_asr_transcribe_v1 instead. progress may be NULL.
+ */
+uint32_t voice_asr_live_feed_v1(VoiceASRContext *context, const float *samples,
+                                size_t sample_count,
+                                VoiceASRLiveProgressV1 *progress);
+
+/*
+ * Decodes the remaining chunk and returns the whole transcript with the same
+ * result contract as voice_asr_transcribe_v1. On BUFFER_TOO_SMALL the result is
+ * retained, so finish may be called again with larger buffers. Any other
+ * status ends the live decode.
+ */
+uint32_t voice_asr_live_finish_v1(VoiceASRContext *context,
+                                  VoiceASRResultV1 *output);
+
+/* Discards any live decode. NULL or an idle context does nothing. */
+void voice_asr_live_cancel_v1(VoiceASRContext *context);
 
 #ifdef __cplusplus
 }
