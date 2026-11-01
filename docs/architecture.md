@@ -372,8 +372,10 @@ events, and keeps retry, sleep, wake, and shutdown ordering out of UI code.
 The AppKit application delegate forwards system events without becoming a
 second owner of runtime state.
 
-Create, duplicate, rename, delete, Device-setup edits, and activation are
-complete envelope transactions. Active Profile changes wait for the Controller
+Every Profile change is one `ProfileEdit` value. The pure
+`ProfileEnvelope.applying(_:in:)` in Core returns the candidate envelope and
+the Profile the runtime must adopt, or a typed `ProfileEditFailure`; the
+runtime only commits and publishes. Active Profile changes wait for the Controller
 runtime to cancel active Actions and install its new immutable resolver before
 presentation publishes the candidate. Inactive Profile edits never replace the
 runtime resolver.

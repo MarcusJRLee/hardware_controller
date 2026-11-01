@@ -378,7 +378,7 @@ private struct MenuBarContent: View {
         "Active Profile",
         selection: Binding(
           get: { model.envelope.activeProfileID },
-          set: { model.activateProfile(id: $0) }
+          set: { model.edit(.activateProfile(id: $0)) }
         )
       ) {
         ForEach(model.profiles) { profile in
