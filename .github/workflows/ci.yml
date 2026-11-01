@@ -1,11 +1,9 @@
 name: CI
 
+# Pull requests only: main requires branches to be up to date and squash-merges
+# them, so a push to main has exactly the tree its PR already verified.
 on:
   pull_request:
-  push:
-    branches:
-      - dev
-      - main
 
 permissions:
   contents: read
@@ -14,32 +12,67 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# macOS runners are the scarce resource. A cheap Ubuntu job decides which lanes
+# a change needs; see CONTRIBUTING.md for the lanes and their time budgets.
 jobs:
+  changes:
+    name: Classify changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      macos: ${{ steps.classify.outputs.macos }}
+      ios: ${{ steps.classify.outputs.ios }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install zsh
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh >/dev/null
+      - name: Classify
+        id: classify
+        run: scripts/classify_changes.sh "${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+
+  # Verify is the required check, so it always reports: prose-only changes get
+  # the platform-independent fast lane on Ubuntu, everything else the full one.
   verify:
     name: Verify
-    runs-on: macos-26
-    timeout-minutes: 45
+    needs: changes
+    runs-on: ${{ needs.changes.outputs.macos == 'true' && 'macos-26' || 'ubuntu-latest' }}
+    timeout-minutes: 15
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Run fast checks
+        if: needs.changes.outputs.macos != 'true'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq zsh >/dev/null
+          scripts/check_fast.sh
       # Digest-pinned downloads are verified on every use, so a cache can only
       # skip network transfer; it cannot substitute different bytes.
       - name: Restore pinned ASR assets
+        if: needs.changes.outputs.macos == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .build/ios_asr_runtime
             .build/ios_asr_test_assets
-          key: asr-assets-${{ hashFiles('scripts/fetch_ios_asr_runtime.sh', 'scripts/fetch_ios_asr_test_assets.sh') }}
+            .build/asr_runtime
+            .build/asr_test_assets
+          key: asr-assets-${{ hashFiles('scripts/fetch_*asr*.sh') }}
       - name: Run repository checks
+        if: needs.changes.outputs.macos == 'true'
         run: scripts/check.sh
 
   ios:
     name: iOS
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 25
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -51,10 +84,14 @@ jobs:
           path: |
             .build/ios_asr_runtime
             .build/ios_asr_test_assets
-          key: asr-assets-${{ hashFiles('scripts/fetch_ios_asr_runtime.sh', 'scripts/fetch_ios_asr_test_assets.sh') }}
+            .build/asr_runtime
+            .build/asr_test_assets
+          key: asr-assets-${{ hashFiles('scripts/fetch_*asr*.sh') }}
       - name: Install iOS build tools
         run: |
           brew install ripgrep xcodegen
           rustup target add aarch64-apple-ios aarch64-apple-ios-sim
       - name: Run iOS checks
+        env:
+          HC_IOS_SKIP_SHARED_CHECKS: "1"
         run: scripts/check_ios.sh

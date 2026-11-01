@@ -49,6 +49,25 @@ Swift scan on every pull request. The parallel `iOS` job runs
 request at `main`. See
 [`0052_main_feature_branch_workflow.md`](docs/decisions/0052_main_feature_branch_workflow.md).
 
+## CI lanes
+
+macOS runners are scarce, so a cheap Ubuntu job classifies each change
+(`scripts/classify_changes.sh`) and only the needed lanes run:
+
+| Lane | Runs when | Runner | Budget |
+| --- | --- | --- | --- |
+| Verify, fast | Only prose changed (`*.md`, `docs/`, `.claude/`) | Ubuntu | `scripts/check_fast.sh` |
+| Verify, full | Anything else changed | macOS | 15 min |
+| iOS | `apps/ios`, shared Core, FFI, Rust, ASR or iOS scripts | macOS | 25 min |
+| CodeQL (macos / ios) | That platform's Swift or shared sources | macOS | 35 min |
+| CodeQL (actions) | Always; keeps the required check reporting | Ubuntu | 10 min |
+| Workflow edits | Every lane | — | — |
+
+`scripts/check_workflows.sh` (in the fast lane) fails if a job lacks a
+timeout, exceeds its budget, or adds macOS work without `needs: changes`.
+`scripts/ci_durations.sh` shows p50, max, queue time, and budget per job; the
+weekly **CI health** workflow fails when a job's p50 passes 70% of its budget.
+
 ## Privacy and hardware evidence
 
 Never submit credentials, personal configuration, transcripts, raw logs,
