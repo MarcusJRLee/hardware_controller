@@ -419,6 +419,146 @@ private struct CaptureHarness {
   }
 }
 
+final class VoiceInputCaptureServiceLiveTest: XCTestCase {
+  func testStopDrainsEveryTappedSampleBeforeUsingTheLiveTranscript() async throws {
+    let tap = ScriptedLiveAudioTap()
+    let live = CountingLiveTranscriber()
+    let fixture = try CaptureFixture(
+      liveActivityID: "activity",
+      liveTranscriber: live,
+      liveAudioTap: tap
+    )
+    addTeardownBlock { try fixture.remove() }
+
+    try await fixture.service.start(sessionID: UUID())
+    tap.deliver(count: 1_600)
+    tap.deliver(count: 1_600)
+    do {
+      try await fixture.service.stop(styleKind: .natural)
+      XCTFail("The fixture History store must reject the finalized transcript.")
+    } catch {
+      XCTAssertEqual(error as? CaptureServiceTestError, .unused)
+    }
+
+    XCTAssertEqual(tap.events, [.start, .stop])
+    let fed = await live.fedSampleCount
+    let finished = await live.finishCount
+    XCTAssertEqual(fed, 3_200)
+    XCTAssertEqual(finished, 1)
+  }
+
+  func testInterruptionCancelsLiveDecodingAndStopsTheTap() async throws {
+    let tap = ScriptedLiveAudioTap()
+    let live = CountingLiveTranscriber()
+    let fixture = try CaptureFixture(
+      liveActivityID: "activity",
+      liveTranscriber: live,
+      liveAudioTap: tap
+    )
+    addTeardownBlock { try fixture.remove() }
+
+    try await fixture.service.start(sessionID: UUID())
+    tap.deliver(count: 1_600)
+    await fixture.service.interrupt(reason: .audioInterruption)
+
+    XCTAssertEqual(tap.events, [.start, .stop])
+    let finished = await live.finishCount
+    let cancelled = await live.cancelCount
+    XCTAssertEqual(finished, 0)
+    XCTAssertGreaterThanOrEqual(cancelled, 1)
+  }
+
+  func testTapFailureLeavesTheDurableRecordingRunning() async throws {
+    let tap = ScriptedLiveAudioTap(startError: VoiceInputLiveAudioTapError.unsupportedInputFormat)
+    let live = CountingLiveTranscriber()
+    let fixture = try CaptureFixture(
+      liveActivityID: "activity",
+      liveTranscriber: live,
+      liveAudioTap: tap
+    )
+    addTeardownBlock { try fixture.remove() }
+
+    try await fixture.service.start(sessionID: UUID())
+
+    XCTAssertEqual(try fixture.store.readSnapshot().phase, .recording)
+    let cancelled = await live.cancelCount
+    XCTAssertEqual(cancelled, 1)
+  }
+}
+
+private final class ScriptedLiveAudioTap: VoiceInputLiveAudioTapping, Sendable {
+  enum Event: Equatable, Sendable {
+    case start
+    case stop
+  }
+
+  private struct State: Sendable {
+    var events: [Event] = []
+    var onSamples: (@Sendable ([Float]) -> Void)?
+  }
+
+  private let state = Mutex(State())
+  private let startError: VoiceInputLiveAudioTapError?
+
+  init(startError: VoiceInputLiveAudioTapError? = nil) {
+    self.startError = startError
+  }
+
+  var events: [Event] { state.withLock { $0.events } }
+
+  func start(onSamples: @escaping @Sendable ([Float]) -> Void) throws {
+    if let startError {
+      throw startError
+    }
+    state.withLock {
+      $0.events.append(.start)
+      $0.onSamples = onSamples
+    }
+  }
+
+  func stop() {
+    state.withLock {
+      $0.events.append(.stop)
+      $0.onSamples = nil
+    }
+  }
+
+  func deliver(count: Int) {
+    let onSamples = state.withLock { $0.onSamples }
+    onSamples?([Float](repeating: 0.1, count: count))
+  }
+}
+
+private actor CountingLiveTranscriber: VoiceInputLiveTranscribing {
+  private(set) var fedSampleCount = 0
+  private(set) var finishCount = 0
+  private(set) var cancelCount = 0
+
+  func beginLive(model _: VoiceInputInstalledModelPackage) -> Bool { true }
+
+  func feedLive(_ samples: [Float]) -> Bool {
+    fedSampleCount += samples.count
+    return true
+  }
+
+  func finishLive(model: VoiceInputInstalledModelPackage) -> VoiceInputLiveTranscript? {
+    finishCount += 1
+    return VoiceInputLiveTranscript(
+      transcript: VoiceInputRawTranscript(
+        text: "Live transcript.",
+        segments: [],
+        modelPackageID: model.package.packageID,
+        modelVersion: model.package.version
+      ),
+      receivedSampleCount: fedSampleCount
+    )
+  }
+
+  func cancelLive() {
+    cancelCount += 1
+  }
+}
+
 private struct CaptureFixture {
   let root: URL
   let store: LockedProbeStore
@@ -431,6 +571,8 @@ private struct CaptureFixture {
   init(
     liveActivityID: String?,
     transcriber: any VoiceInputTranscribing = PrewarmingTranscriber(),
+    liveTranscriber: (any VoiceInputLiveTranscribing)? = nil,
+    liveAudioTap: (any VoiceInputLiveAudioTapping)? = nil,
     backgroundTaskManager: any VoiceInputBackgroundTaskManaging =
       RecordingBackgroundTaskManager(),
     controlReloader: @escaping @Sendable () -> Void = {},
@@ -448,7 +590,9 @@ private struct CaptureFixture {
     activityManager = RecordingLiveActivityManager(startedID: liveActivityID)
     let workflow = VoiceInputASRWorkflow(
       modelProvider: ImmediateASRModelProvider(),
-      transcriber: transcriber
+      transcriber: transcriber,
+      liveTranscriber: liveTranscriber,
+      recordedSampleCount: { _ in 3_200 }
     )
     service = VoiceInputCaptureService(
       store: store,
@@ -459,6 +603,7 @@ private struct CaptureFixture {
       permissionRequester: { true },
       audioSession: audioSession,
       recorderFactory: recorderFactory,
+      liveAudioTap: liveAudioTap,
       activityManager: activityManager,
       backgroundTaskManager: backgroundTaskManager,
       controlReloader: controlReloader,

@@ -52,9 +52,11 @@ struct VoiceInputApp: App {
       installer: VoiceInputModelPackageInstaller(rootURL: modelRoot),
       selectionURL: modelRoot.appendingPathComponent("active_asr.json")
     )
+    let transcriber = VoiceInputLocalTranscriber()
     let asrWorkflow = VoiceInputASRWorkflow(
       modelProvider: registry,
-      transcriber: VoiceInputLocalTranscriber()
+      transcriber: transcriber,
+      liveTranscriber: transcriber
     )
     let historyRoot =
       applicationSupport
@@ -98,6 +100,7 @@ struct VoiceInputApp: App {
         VoiceInputSessionFinalizer(history: $0)
       },
       recoveryStore: historyRepository,
+      liveAudioTap: VoiceInputSystemLiveAudioTap(),
       controlReloader: VoiceInputSystemControlReloader.reload
     )
     _model = StateObject(

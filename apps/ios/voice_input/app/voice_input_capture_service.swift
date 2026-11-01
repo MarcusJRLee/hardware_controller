@@ -50,6 +50,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
   private let permissionRequester: @Sendable () async -> Bool
   private let audioSession: any VoiceInputAudioSessionControlling
   private let recorderFactory: any VoiceInputAudioRecorderCreating
+  private let liveAudioTap: (any VoiceInputLiveAudioTapping)?
   private let activityManager: any VoiceInputLiveActivityManaging
   private let backgroundTaskManager: any VoiceInputBackgroundTaskManaging
   private let controlReloader: @Sendable () -> Void
@@ -57,6 +58,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
   private let heartbeatInterval: Duration
   private let now: @Sendable () -> Date
   private var recorder: (any VoiceInputAudioRecording)?
+  private var liveFeed: LiveFeed?
   private var activityID: String?
   private var heartbeatTask: Task<Void, Never>?
   private var heartbeatPhase: VoiceInputSnapshot.Phase?
@@ -79,6 +81,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
     audioSession: any VoiceInputAudioSessionControlling = VoiceInputSystemAudioSession(),
     recorderFactory: any VoiceInputAudioRecorderCreating =
       VoiceInputSystemAudioRecorderFactory(),
+    liveAudioTap: (any VoiceInputLiveAudioTapping)? = nil,
     activityManager: any VoiceInputLiveActivityManaging =
       VoiceInputSystemLiveActivityManager(),
     backgroundTaskManager: any VoiceInputBackgroundTaskManaging =
@@ -95,6 +98,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
     self.permissionRequester = permissionRequester
     self.audioSession = audioSession
     self.recorderFactory = recorderFactory
+    self.liveAudioTap = liveAudioTap
     self.activityManager = activityManager
     self.backgroundTaskManager = backgroundTaskManager
     self.controlReloader = controlReloader
@@ -172,6 +176,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
       recorder = newRecorder
       sessionStartedAt = now()
       try Self.protectCaptureFile(captureURL)
+      await startLiveFeed(asrWorkflow: asrWorkflow)
       let requestedActivityID = await activityManager.start(
         sessionID: requestedSessionID,
         at: now()
@@ -225,6 +230,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
     recorder.stop()
     self.recorder = nil
     let sessionEndedAt = now()
+    await drainLiveFeed()
     let backgroundTask = await backgroundTaskManager.begin(
       name: "Finish local voice recording"
     ) { [weak self] in
@@ -464,6 +470,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
     sessionStartedAt = nil
     activeCaptureURL = nil
     endingRecorder?.stop()
+    await cancelLiveFeed()
     await activityManager.end(
       id: endingActivityID,
       phase: endingPhase,
@@ -471,6 +478,49 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
     )
     try? audioSession.deactivateAfterRecording()
     isTearingDown = false
+  }
+
+  /// Starts live decoding beside the durable recorder. Any failure here only
+  /// disables the optimization; the recording continues unchanged.
+  private func startLiveFeed(asrWorkflow: VoiceInputASRWorkflow) async {
+    guard let liveAudioTap, await asrWorkflow.beginLiveTranscription() else {
+      return
+    }
+    let (samples, continuation) = AsyncStream<[Float]>.makeStream()
+    let consumer = Task {
+      for await chunk in samples {
+        await asrWorkflow.feedLiveTranscription(chunk)
+      }
+    }
+    do {
+      try liveAudioTap.start { continuation.yield($0) }
+      liveFeed = LiveFeed(continuation: continuation, consumer: consumer)
+    } catch {
+      continuation.finish()
+      consumer.cancel()
+      await asrWorkflow.cancelLiveTranscription()
+    }
+  }
+
+  /// Stops the tap and waits until every delivered sample reached the decoder.
+  private func drainLiveFeed() async {
+    guard let liveFeed else {
+      return
+    }
+    self.liveFeed = nil
+    liveAudioTap?.stop()
+    liveFeed.continuation.finish()
+    await liveFeed.consumer.value
+  }
+
+  private func cancelLiveFeed() async {
+    if let liveFeed {
+      self.liveFeed = nil
+      liveAudioTap?.stop()
+      liveFeed.continuation.finish()
+      liveFeed.consumer.cancel()
+    }
+    await asrWorkflow?.cancelLiveTranscription()
   }
 
   private func preservePartial(
@@ -528,5 +578,10 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
       lastControlRecordingState = isRecording
       controlReloader()
     }
+  }
+
+  private struct LiveFeed {
+    let continuation: AsyncStream<[Float]>.Continuation
+    let consumer: Task<Void, Never>
   }
 }
