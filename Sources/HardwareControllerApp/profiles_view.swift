@@ -54,7 +54,7 @@ struct ProfilesView: View {
         guard let selectedProfileID else {
           return
         }
-        model.renameProfile(id: selectedProfileID, name: renameDraft)
+        model.edit(.renameProfile(id: selectedProfileID, name: renameDraft))
       }
       .disabled(
         renameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -98,7 +98,7 @@ struct ProfilesView: View {
 
       HStack(spacing: 8) {
         Button {
-          model.createProfile()
+          model.edit(.createProfile)
         } label: {
           Image(systemName: "plus")
         }
@@ -185,7 +185,7 @@ struct ProfilesView: View {
 
       if profile.id != model.envelope.activeProfileID {
         Button("Make Active") {
-          model.activateProfile(id: profile.id)
+          model.edit(.activateProfile(id: profile.id))
         }
         .buttonStyle(.borderedProminent)
       }
@@ -215,9 +215,8 @@ struct ProfilesView: View {
           matching: matchRule
         ) {
           Button("Remove Setup", role: .destructive) {
-            model.removeDeviceConfiguration(
-              profileID: profile.id,
-              configurationID: configuration.id
+            model.edit(
+              .removeDeviceConfiguration(profileID: profile.id, configurationID: configuration.id)
             )
           }
           .buttonStyle(.borderless)
@@ -248,10 +247,7 @@ struct ProfilesView: View {
           }
           Spacer()
           Button("Add Device Setup") {
-            model.addDeviceConfiguration(
-              profileID: profile.id,
-              descriptor: descriptor
-            )
+            model.edit(.addDeviceConfiguration(profileID: profile.id, descriptor: descriptor))
           }
         }
         .padding(16)
@@ -295,7 +291,7 @@ struct ProfilesView: View {
     guard let selectedProfileID else {
       return
     }
-    model.duplicateProfile(id: selectedProfileID)
+    model.edit(.duplicateProfile(id: selectedProfileID))
   }
 
   /// Deletes the selected Profile with a deterministic replacement.
@@ -303,9 +299,8 @@ struct ProfilesView: View {
     guard let selectedProfileID else {
       return
     }
-    model.deleteProfile(
-      id: selectedProfileID,
-      replacementProfileID: replacementProfile?.id
+    model.edit(
+      .deleteProfile(id: selectedProfileID, replacementProfileID: replacementProfile?.id)
     )
   }
 

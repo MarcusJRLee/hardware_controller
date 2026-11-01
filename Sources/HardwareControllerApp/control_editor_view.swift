@@ -100,7 +100,7 @@ struct ControlEditorView: View {
           "Action",
           selection: Binding(
             get: { binding.action.kind },
-            set: { setAction($0) }
+            set: { edit(.action($0)) }
           )
         ) {
           ForEach(ActionKind.allCases, id: \.self) { kind in
@@ -121,7 +121,7 @@ struct ControlEditorView: View {
             "Behavior",
             selection: Binding(
               get: { binding.interactionMode },
-              set: { setInteractionMode($0) }
+              set: { edit(.interactionMode($0)) }
             )
           ) {
             Text("Hold").tag(InteractionMode.momentary)
@@ -144,7 +144,7 @@ struct ControlEditorView: View {
 
           ShortcutRecorderButton(
             shortcut: shortcut,
-            onChange: { setShortcut($0) }
+            onChange: { edit(.shortcut($0)) }
           )
         }
       }
@@ -157,17 +157,17 @@ struct ControlEditorView: View {
             HStack(spacing: 8) {
               ShortcutRecorderButton(
                 shortcut: shortcut,
-                onChange: { setActivationShortcut($0) }
+                onChange: { edit(.activationShortcut($0)) }
               )
 
               Button("Clear") {
-                setActivationShortcut(nil)
+                edit(.activationShortcut(nil))
               }
               .buttonStyle(.borderless)
             }
           } else {
             Button("Use suggested ⌃⇧⌘D") {
-              setActivationShortcut(.suggestedControlActivation)
+              edit(.activationShortcut(.suggestedControlActivation))
             }
             .buttonStyle(.link)
           }
@@ -243,64 +243,15 @@ struct ControlEditorView: View {
       .foregroundStyle(.tertiary)
   }
 
-  /// Routes an Action edit to active or identified Profile state.
-  private func setAction(_ kind: ActionKind) {
-    if let profileID, let configurationID {
-      model.setAction(
-        kind,
-        for: controlID,
-        profileID: profileID,
-        configurationID: configurationID
-      )
-    } else {
-      model.setAction(kind, for: controlID)
-    }
-  }
-
-  /// Routes a mode edit to active or identified Profile state.
-  private func setInteractionMode(_ mode: InteractionMode) {
-    if let profileID, let configurationID {
-      model.setInteractionMode(
-        mode,
-        for: controlID,
-        profileID: profileID,
-        configurationID: configurationID
-      )
-    } else {
-      model.setInteractionMode(mode, for: controlID)
-    }
-  }
-
-  /// Routes a shortcut edit to active or identified Profile state.
-  private func setShortcut(
-    _ shortcut: HardwareControllerCore.KeyboardShortcut
-  ) {
-    if let profileID, let configurationID {
-      model.setShortcut(
-        shortcut,
-        for: controlID,
-        profileID: profileID,
-        configurationID: configurationID
-      )
-    } else {
-      model.setShortcut(shortcut, for: controlID)
-    }
-  }
-
-  /// Routes a fallback edit to active or identified Profile state.
-  private func setActivationShortcut(
-    _ shortcut: HardwareControllerCore.KeyboardShortcut?
-  ) {
-    if let profileID, let configurationID {
-      model.setActivationShortcut(
-        shortcut,
-        for: controlID,
-        profileID: profileID,
-        configurationID: configurationID
-      )
-    } else {
-      model.setActivationShortcut(shortcut, for: controlID)
-    }
+  /// Routes one Binding edit to active or identified Profile state.
+  private func edit(_ change: BindingEdit) {
+    let target: ProfileBindingTarget =
+      if let profileID, let configurationID {
+        .identified(controlID, profileID: profileID, configurationID: configurationID)
+      } else {
+        .active(controlID)
+      }
+    model.edit(.binding(change, target))
   }
 
   /// Explains activation scope or the active registration failure.

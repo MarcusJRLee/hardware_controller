@@ -85,10 +85,7 @@ struct ApplicationRuntimeTest {
       snapshotHandler: fixture.snapshots.append
     )
 
-    await fixture.runtime.setAction(
-      .keyboardShortcut,
-      for: .left
-    )
+    await fixture.runtime.edit(.binding(.action(.keyboardShortcut), .active(.left)))
     try await waitUntil {
       fixture.snapshots.values.last?.lastError != nil
     }
@@ -499,7 +496,7 @@ struct ApplicationRuntimeTest {
       snapshotHandler: fixture.snapshots.append
     )
 
-    await fixture.runtime.createProfile()
+    await fixture.runtime.edit(.createProfile)
     var envelope = try #require(
       fixture.snapshots.values.last?.envelope
     )
@@ -507,11 +504,8 @@ struct ApplicationRuntimeTest {
     #expect(created.name == "New Profile")
     #expect(created.deviceConfigurations.isEmpty)
 
-    await fixture.runtime.renameProfile(
-      id: created.id,
-      name: "  Coding  "
-    )
-    await fixture.runtime.duplicateProfile(id: created.id)
+    await fixture.runtime.edit(.renameProfile(id: created.id, name: "  Coding  "))
+    await fixture.runtime.edit(.duplicateProfile(id: created.id))
 
     envelope = try #require(fixture.snapshots.values.last?.envelope)
     #expect(
@@ -549,12 +543,10 @@ struct ApplicationRuntimeTest {
       )
     )
 
-    await fixture.runtime.setAction(
-      .keyboardShortcut,
-      for: .left,
-      profileID: inactive.id,
-      configurationID: configuration.id
-    )
+    await fixture.runtime.edit(
+      .binding(
+        .action(.keyboardShortcut),
+        .identified(.left, profileID: inactive.id, configurationID: configuration.id)))
 
     let updated = try #require(
       fixture.snapshots.values.last?.envelope.profile(id: inactive.id)
@@ -586,10 +578,8 @@ struct ApplicationRuntimeTest {
       )
     )
 
-    await fixture.runtime.setActivationShortcut(
-      .suggestedControlActivation,
-      for: .center
-    )
+    await fixture.runtime.edit(
+      .binding(.activationShortcut(.suggestedControlActivation), .active(.center)))
 
     let updated = try #require(
       fixture.snapshots.values.last?.envelope.activeProfile?
@@ -673,17 +663,14 @@ struct ApplicationRuntimeTest {
       snapshotHandler: fixture.snapshots.append
     )
 
-    await fixture.runtime.activateProfile(id: music.id)
+    await fixture.runtime.edit(.activateProfile(id: music.id))
     #expect(
       fixture.snapshots.values.last?.envelope.activeProfileID
         == music.id
     )
     #expect(fixture.process.profiles == [active, music])
 
-    await fixture.runtime.deleteProfile(
-      id: music.id,
-      replacementProfileID: active.id
-    )
+    await fixture.runtime.edit(.deleteProfile(id: music.id, replacementProfileID: active.id))
     #expect(
       fixture.snapshots.values.last?.envelope.profiles == [active]
     )
@@ -707,19 +694,15 @@ struct ApplicationRuntimeTest {
       )
     )
 
-    await fixture.runtime.removeDeviceConfiguration(
-      profileID: profile.id,
-      configurationID: configuration.id
-    )
+    await fixture.runtime.edit(
+      .removeDeviceConfiguration(profileID: profile.id, configurationID: configuration.id))
     #expect(
       fixture.snapshots.values.last?.envelope.activeProfile?
         .deviceConfigurations.isEmpty == true
     )
 
-    await fixture.runtime.addDeviceConfiguration(
-      profileID: profile.id,
-      descriptor: Infinity3Driver.descriptor
-    )
+    await fixture.runtime.edit(
+      .addDeviceConfiguration(profileID: profile.id, descriptor: Infinity3Driver.descriptor))
     let restored = try #require(
       fixture.snapshots.values.last?.envelope.activeProfile?
         .configuration(
@@ -749,7 +732,7 @@ struct ApplicationRuntimeTest {
       snapshotHandler: fixture.snapshots.append
     )
 
-    await fixture.runtime.activateProfile(id: music.id)
+    await fixture.runtime.edit(.activateProfile(id: music.id))
 
     #expect(
       fixture.snapshots.values.last?.envelope.activeProfileID

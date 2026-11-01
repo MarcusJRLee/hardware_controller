@@ -16,7 +16,7 @@ struct AppModelTests {
     model.start()
     let originalEnvelope = model.envelope
 
-    model.setAction(.keyboardShortcut, for: .left)
+    model.edit(.binding(.action(.keyboardShortcut), .active(.left)))
     await model.waitForPendingIntents()
 
     #expect(model.envelope == originalEnvelope)
@@ -52,9 +52,9 @@ struct AppModelTests {
     )
     model.start()
 
-    model.setAction(.keyboardShortcut, for: .left)
-    model.setInteractionMode(.toggle, for: .left)
-    model.setShortcut(shortcut, for: .left)
+    model.edit(.binding(.action(.keyboardShortcut), .active(.left)))
+    model.edit(.binding(.interactionMode(.toggle), .active(.left)))
+    model.edit(.binding(.shortcut(shortcut), .active(.left)))
     await model.waitForPendingIntents()
 
     #expect(
@@ -76,10 +76,7 @@ struct AppModelTests {
     )
     model.start()
 
-    model.setActivationShortcut(
-      .suggestedControlActivation,
-      for: .center
-    )
+    model.edit(.binding(.activationShortcut(.suggestedControlActivation), .active(.center)))
     await model.waitForPendingIntents()
 
     #expect(
@@ -99,7 +96,7 @@ struct AppModelTests {
     await model.stop()
     let envelope = model.envelope
 
-    model.setAction(.keyboardShortcut, for: .left)
+    model.edit(.binding(.action(.keyboardShortcut), .active(.left)))
     try? await Task.sleep(for: .milliseconds(10))
 
     #expect(model.envelope == envelope)
