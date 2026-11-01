@@ -43,9 +43,9 @@ test placement, hardware fixtures, and signed Device testing.
 
 GitHub requests review from the repository owner. Automated verification must
 pass, review threads must be resolved, and accepted changes are squash-merged.
-The `Analyze (swift)` gate performs an extended CodeQL scan when Swift or its
-build inputs change and completes without compiling Swift for unrelated
-changes. Create each focused branch from current `main` and target its pull
+Required checks are `Verify` (`scripts/check.sh`) and an extended `CodeQL`
+Swift scan on every pull request. The parallel `iOS` job runs
+`scripts/check_ios.sh` on a simulator. Create each focused branch from current `main` and target its pull
 request at `main`. See
 [`0052_main_feature_branch_workflow.md`](docs/decisions/0052_main_feature_branch_workflow.md).
 
