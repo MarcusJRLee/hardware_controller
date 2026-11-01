@@ -41,8 +41,9 @@ Reference-Mac results do not establish lower-tier support.
 
 ## Next work
 
-- macOS native ASR (Parakeet through transcribe.cpp) in an XPC service, so a
-  kernel fault cannot take down the Device hot path.
+- macOS Parakeet ASR in an XPC service, so a kernel fault cannot take down the
+  Device hot path ([0060](decisions/0060_macos_parakeet_asr_xpc_service.md),
+  proposed).
 - Portability: keep Apple types out of the Rust boundary; document Android,
   Windows, and Linux seams without building them. Remote providers need a new
   privacy decision first.
