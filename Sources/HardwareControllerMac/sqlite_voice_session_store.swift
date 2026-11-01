@@ -205,7 +205,7 @@ actor SQLiteVoiceSessionStore {
     recoveredAt: Date? = nil
   ) throws {
     try ensureResultsBackfilled()
-    try validateDeliveryEvidence(document)
+    try VoiceHistoryColumnCodec.validateDeliveryEvidence(document)
     let audioDurationMilliseconds = try audioDurationMilliseconds(
       at: audioURL
     )
@@ -312,7 +312,7 @@ actor SQLiteVoiceSessionStore {
     try bind(document.deliveryFailure, to: 10, in: statement)
     try bind(audioURL?.lastPathComponent, to: 11, in: statement)
     try bind(
-      try encodedFormattedDocument(
+      try VoiceHistoryColumnCodec.encodedFormattedDocument(
         document.formattedDocument,
         expectedRawText: document.rawText,
         expectedFormattedText: document.formattedText
@@ -320,7 +320,8 @@ actor SQLiteVoiceSessionStore {
       to: 12,
       in: statement
     )
-    try bind(try encodedSpokenEdits(document.spokenEdits), to: 13, in: statement)
+    try bind(
+      try VoiceHistoryColumnCodec.encodedSpokenEdits(document.spokenEdits), to: 13, in: statement)
     try bind(document.deliveryFailureReason?.rawValue, to: 14, in: statement)
     if let audioDurationMilliseconds {
       sqlite3_bind_int64(statement, 15, audioDurationMilliseconds)
@@ -343,7 +344,7 @@ actor SQLiteVoiceSessionStore {
     audioURL: URL?
   ) throws {
     let document = session.document
-    try validateDeliveryEvidence(document)
+    try VoiceHistoryColumnCodec.validateDeliveryEvidence(document)
     guard
       document.startedAt.timeIntervalSince1970.isFinite,
       document.endedAt.timeIntervalSince1970.isFinite,
@@ -487,7 +488,7 @@ actor SQLiteVoiceSessionStore {
           SQLiteVoiceHistoryRecoveryDescriptor(
             id: id,
             audioFilename: optionalText(statement, column: 1),
-            audioExpirationReason: try optionalAudioExpirationReason(
+            audioExpirationReason: try VoiceHistoryColumnCodec.optionalAudioExpirationReason(
               optionalText(statement, column: 2)
             )
           )
@@ -750,20 +751,20 @@ actor SQLiteVoiceSessionStore {
       targetApplicationName: optionalText(statement, column: 7),
       deliveryOutcome: outcome,
       deliveryFailure: optionalText(statement, column: 9),
-      deliveryFailureReason: try deliveryFailureReason(
+      deliveryFailureReason: try VoiceHistoryColumnCodec.deliveryFailureReason(
         from: optionalText(statement, column: 13)
       ),
-      formattedDocument: try formattedDocument(
+      formattedDocument: try VoiceHistoryColumnCodec.formattedDocument(
         from: optionalText(statement, column: 11),
         expectedRawText: text(statement, column: 3),
         expectedFormattedText: text(statement, column: 5)
       ),
-      spokenEdits: try spokenEdits(
+      spokenEdits: try VoiceHistoryColumnCodec.spokenEdits(
         from: optionalText(statement, column: 12)
       ),
       inputKind: inputKind
     )
-    try validateDeliveryEvidence(document)
+    try VoiceHistoryColumnCodec.validateDeliveryEvidence(document)
     let audioFilename = optionalText(statement, column: 10)
     let expectedAudioFilename = "\(id.uuidString).caf"
     guard audioFilename == nil || audioFilename == expectedAudioFilename else {
@@ -776,10 +777,10 @@ actor SQLiteVoiceSessionStore {
     let audioExpiredAt = optionalDouble(statement, column: 16).map {
       Date(timeIntervalSince1970: $0)
     }
-    let audioExpirationReason = try optionalAudioExpirationReason(
+    let audioExpirationReason = try VoiceHistoryColumnCodec.optionalAudioExpirationReason(
       optionalText(statement, column: 17)
     )
-    let recoveryKind = try optionalRecoveryKind(
+    let recoveryKind = try VoiceHistoryColumnCodec.optionalRecoveryKind(
       optionalText(statement, column: 18)
     )
     let recoveredAt = optionalDouble(statement, column: 19).map {
@@ -887,11 +888,11 @@ actor SQLiteVoiceSessionStore {
           "Voice History contains an invalid result record."
         )
       }
-      let style = try historyStyle(
+      let style = try VoiceHistoryColumnCodec.historyStyle(
         kind: optionalText(statement, column: 6),
         revision: optionalInt(statement, column: 7)
       )
-      let provider = try historyProvider(
+      let provider = try VoiceHistoryColumnCodec.historyProvider(
         optionalText(statement, column: 8)
       )
       let result = VoiceHistoryResult(
@@ -903,25 +904,25 @@ actor SQLiteVoiceSessionStore {
         stage: stage,
         origin: origin,
         text: text(statement, column: 4),
-        sourceResultID: try optionalUUID(
+        sourceResultID: try VoiceHistoryColumnCodec.optionalUUID(
           optionalText(statement, column: 5)
         ),
         style: style,
         provider: provider,
         modelIdentifier: optionalText(statement, column: 9),
         promptRevision: optionalInt(statement, column: 10),
-        formattedDocument: try historyFormattedDocument(
+        formattedDocument: try VoiceHistoryColumnCodec.historyFormattedDocument(
           from: optionalText(statement, column: 11),
           expectedText: text(statement, column: 4)
         ),
-        timedSpans: try timedSpans(
+        timedSpans: try VoiceHistoryColumnCodec.timedSpans(
           from: optionalText(statement, column: 12)
         ),
-        deliveryOutcome: try historyDeliveryOutcome(
+        deliveryOutcome: try VoiceHistoryColumnCodec.historyDeliveryOutcome(
           optionalText(statement, column: 13)
         ),
         deliveryFailure: optionalText(statement, column: 14),
-        deliveryFailureReason: try deliveryFailureReason(
+        deliveryFailureReason: try VoiceHistoryColumnCodec.deliveryFailureReason(
           from: optionalText(statement, column: 15)
         )
       )
@@ -1045,11 +1046,12 @@ actor SQLiteVoiceSessionStore {
       sqlite3_bind_null(statement, 12)
     }
     try bind(
-      try encodedHistoryFormattedDocument(result),
+      try VoiceHistoryColumnCodec.encodedHistoryFormattedDocument(result),
       to: 13,
       in: statement
     )
-    try bind(try encodedTimedSpans(result.timedSpans), to: 14, in: statement)
+    try bind(
+      try VoiceHistoryColumnCodec.encodedTimedSpans(result.timedSpans), to: 14, in: statement)
     try bind(result.deliveryOutcome?.rawValue, to: 15, in: statement)
     try bind(result.deliveryFailure, to: 16, in: statement)
     try bind(
@@ -1498,321 +1500,11 @@ actor SQLiteVoiceSessionStore {
     return sqlite3_column_double(statement, column)
   }
 
-  private func optionalAudioExpirationReason(
-    _ rawValue: String?
-  ) throws -> VoiceHistoryAudioExpirationReason? {
-    guard let rawValue else {
-      return nil
-    }
-    guard let reason = VoiceHistoryAudioExpirationReason(rawValue: rawValue)
-    else {
-      throw VoiceSessionHistoryError.storageUnavailable(
-        "Voice History contains an invalid audio expiration reason."
-      )
-    }
-    return reason
-  }
-
-  private func optionalRecoveryKind(
-    _ rawValue: String?
-  ) throws -> VoiceHistoryRecoveryKind? {
-    guard let rawValue else {
-      return nil
-    }
-    guard let kind = VoiceHistoryRecoveryKind(rawValue: rawValue) else {
-      throw VoiceSessionHistoryError.storageUnavailable(
-        "Voice History contains an invalid recovery kind."
-      )
-    }
-    return kind
-  }
-
-  private func optionalUUID(_ value: String?) throws -> UUID? {
-    guard let value else {
-      return nil
-    }
-    guard let id = UUID(uuidString: value) else {
-      throw VoiceSessionHistoryError.storageUnavailable(
-        "Voice History contains an invalid result relationship."
-      )
-    }
-    return id
-  }
-
-  private func historyStyle(
-    kind: String?,
-    revision: Int?
-  ) throws -> VoiceStyle? {
-    guard kind != nil || revision != nil else {
-      return nil
-    }
-    guard
-      let kind,
-      let revision,
-      let styleKind = VoiceStyleKind(rawValue: kind),
-      revision > 0
-    else {
-      throw VoiceSessionHistoryError.storageUnavailable(
-        "Voice History contains invalid Style evidence."
-      )
-    }
-    return VoiceStyle(kind: styleKind, revision: revision)
-  }
-
-  private func historyProvider(
-    _ value: String?
-  ) throws -> LocalAIProviderKind? {
-    guard let value else {
-      return nil
-    }
-    guard let provider = LocalAIProviderKind(rawValue: value) else {
-      throw VoiceSessionHistoryError.storageUnavailable(
-        "Voice History contains invalid provider evidence."
-      )
-    }
-    return provider
-  }
-
-  private func historyDeliveryOutcome(
-    _ value: String?
-  ) throws -> VoiceSessionDeliveryOutcome? {
-    guard let value else {
-      return nil
-    }
-    guard let outcome = VoiceSessionDeliveryOutcome(rawValue: value) else {
-      throw VoiceSessionHistoryError.storageUnavailable(
-        "Voice History contains invalid delivery-result evidence."
-      )
-    }
-    return outcome
-  }
-
   private func storageFailure() -> VoiceSessionHistoryError {
     let code = sqlite3_extended_errcode(database)
     return .storageUnavailable(
       "Voice History could not update its local database (SQLite \(code))."
     )
-  }
-
-  private func historyFormattedDocument(
-    from json: String?,
-    expectedText: String
-  ) throws -> VoiceFormattedDocument? {
-    guard let json else {
-      return nil
-    }
-    do {
-      let document = try JSONDecoder().decode(
-        VoiceFormattedDocument.self,
-        from: Data(json.utf8)
-      )
-      guard
-        try VoiceFormattedTextRenderer().render(
-          document,
-          supportsMultiline: true
-        ) == expectedText
-      else {
-        throw VoiceFormattingError.invalidBlock
-      }
-      return document
-    } catch {
-      throw VoiceSessionHistoryError.storageUnavailable(
-        "Voice History contains invalid result formatting."
-      )
-    }
-  }
-
-  private func encodedHistoryFormattedDocument(
-    _ result: VoiceHistoryResult
-  ) throws -> String? {
-    guard let document = result.formattedDocument else {
-      return nil
-    }
-    do {
-      guard
-        try VoiceFormattedTextRenderer().render(
-          document,
-          supportsMultiline: true
-        ) == result.text
-      else {
-        throw VoiceFormattingError.invalidBlock
-      }
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = [.sortedKeys]
-      return String(decoding: try encoder.encode(document), as: UTF8.self)
-    } catch {
-      throw VoiceSessionHistoryError.invalidResult(
-        "A Formatted History result contains invalid structured evidence."
-      )
-    }
-  }
-
-  private func timedSpans(
-    from json: String?
-  ) throws -> [VoiceHistoryTimedSpan] {
-    guard let json else {
-      return []
-    }
-    do {
-      return try JSONDecoder().decode(
-        [VoiceHistoryTimedSpan].self,
-        from: Data(json.utf8)
-      )
-    } catch {
-      throw VoiceSessionHistoryError.storageUnavailable(
-        "Voice History contains invalid timed transcript spans."
-      )
-    }
-  }
-
-  private func encodedTimedSpans(
-    _ spans: [VoiceHistoryTimedSpan]
-  ) throws -> String? {
-    guard !spans.isEmpty else {
-      return nil
-    }
-    do {
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = [.sortedKeys]
-      return String(decoding: try encoder.encode(spans), as: UTF8.self)
-    } catch {
-      throw VoiceSessionHistoryError.invalidResult(
-        "History could not store timed transcript spans."
-      )
-    }
-  }
-
-  private func deliveryFailureReason(
-    from rawValue: String?
-  ) throws -> VoiceSessionDeliveryFailureReason? {
-    guard let rawValue else {
-      return nil
-    }
-    guard
-      let reason = VoiceSessionDeliveryFailureReason(
-        rawValue: rawValue
-      )
-    else {
-      throw VoiceSessionHistoryError.storageUnavailable(
-        "Voice History contains an invalid delivery failure reason."
-      )
-    }
-    return reason
-  }
-
-  private func validateDeliveryEvidence(
-    _ document: VoiceSessionDocument
-  ) throws {
-    guard document.deliveryFailureReason != nil else {
-      return
-    }
-    guard
-      document.deliveryOutcome == .failed,
-      document.deliveryFailure != nil,
-      document.deliveredText.isEmpty
-    else {
-      throw VoiceSessionHistoryError.storageUnavailable(
-        "Voice History contains contradictory delivery evidence."
-      )
-    }
-  }
-
-  private func formattedDocument(
-    from json: String?,
-    expectedRawText: String,
-    expectedFormattedText: String
-  ) throws -> VoiceFormattedDocument? {
-    guard let json else {
-      return nil
-    }
-    do {
-      let document = try JSONDecoder().decode(
-        VoiceFormattedDocument.self,
-        from: Data(json.utf8)
-      )
-      guard document.rawText == expectedRawText else {
-        throw VoiceFormattingError.invalidEvidenceReference
-      }
-      let rendered = try VoiceFormattedTextRenderer().render(
-        document,
-        supportsMultiline: true
-      )
-      guard rendered == expectedFormattedText else {
-        throw VoiceFormattingError.invalidBlock
-      }
-      return document
-    } catch {
-      throw VoiceSessionHistoryError.storageUnavailable(
-        "Voice History contains invalid structured formatting."
-      )
-    }
-  }
-
-  private func encodedFormattedDocument(
-    _ document: VoiceFormattedDocument?,
-    expectedRawText: String,
-    expectedFormattedText: String
-  ) throws -> String? {
-    guard let document else {
-      return nil
-    }
-    do {
-      guard document.rawText == expectedRawText else {
-        throw VoiceFormattingError.invalidEvidenceReference
-      }
-      let rendered = try VoiceFormattedTextRenderer().render(
-        document,
-        supportsMultiline: true
-      )
-      guard rendered == expectedFormattedText else {
-        throw VoiceFormattingError.invalidBlock
-      }
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = [.sortedKeys]
-      return String(decoding: try encoder.encode(document), as: UTF8.self)
-    } catch {
-      throw VoiceSessionHistoryError.storageUnavailable(
-        "Voice History could not store invalid structured formatting."
-      )
-    }
-  }
-
-  private func spokenEdits(
-    from json: String?
-  ) throws -> VoiceSpokenEditResult? {
-    guard let json else {
-      return nil
-    }
-    do {
-      let result = try JSONDecoder().decode(
-        VoiceSpokenEditResult.self,
-        from: Data(json.utf8)
-      )
-      try VoiceSpokenEditReplayer().validate(result)
-      return result
-    } catch {
-      throw VoiceSessionHistoryError.storageUnavailable(
-        "Voice History contains invalid spoken-edit evidence."
-      )
-    }
-  }
-
-  private func encodedSpokenEdits(
-    _ result: VoiceSpokenEditResult?
-  ) throws -> String? {
-    guard let result else {
-      return nil
-    }
-    do {
-      try VoiceSpokenEditReplayer().validate(result)
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = [.sortedKeys]
-      return String(decoding: try encoder.encode(result), as: UTF8.self)
-    } catch {
-      throw VoiceSessionHistoryError.storageUnavailable(
-        "Voice History could not store invalid spoken-edit evidence."
-      )
-    }
   }
 
   private static func addColumnIfNeeded(
