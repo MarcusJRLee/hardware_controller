@@ -4,6 +4,7 @@
 # growth is visible before it blocks merging.
 # Usage: scripts/ci_durations.sh [runs] [--check]
 #   --check fails when a job's p50 exceeds 70% of its timeout-minutes.
+#   HC_CI_DURATIONS_TSV replaces the GitHub query (name, minutes, queue) for tests.
 
 set -euo pipefail
 
@@ -23,14 +24,18 @@ budgets="$(
   done
 )"
 
-durations="$(
+durations="${HC_CI_DURATIONS_TSV-}"
+[[ -n "$durations" ]] || durations="$(
   gh run list --limit "$runs" --json databaseId,conclusion \
     --jq '.[] | select(.conclusion == "success") | .databaseId' \
     | while read -r run; do
       gh api "repos/{owner}/{repo}/actions/runs/$run/jobs" \
         --jq '.jobs[] | select(.conclusion == "success")
-          | [.name, (((.completed_at | fromdate) - (.started_at | fromdate)) / 60),
-             (((.started_at | fromdate) - (.created_at | fromdate)) / 60)] | @tsv'
+          | (.started_at | fromdate) as $started | (.created_at | fromdate) as $created
+          # A job reused from an earlier attempt keeps its old start time but
+          # gets a new creation time, so its queue time is unknown.
+          | [.name, (((.completed_at | fromdate) - $started) / 60),
+             (if $started >= $created then ($started - $created) / 60 else "" end)] | @tsv'
     done
 )"
 
@@ -40,7 +45,7 @@ print -r -- "$durations" | sort | HC_BUDGETS="$budgets" awk -F '\t' -v check="$c
     n = split(ENVIRON["HC_BUDGETS"], lines, "\n")
     for (i = 1; i <= n; i++) { split(lines[i], pair, "\t"); budget[pair[1]] = pair[2] }
   }
-  $1 != "" { name = $1; minutes[name, ++count[name]] = $2; queue[name] += $3 }
+  $1 != "" { name = $1; minutes[name, ++count[name]] = $2; if ($3 != "") { queue[name] += $3; queued[name]++ } }
   END {
     printf "%-20s %5s %7s %7s %9s %7s\n", "job", "runs", "p50", "max", "queue avg", "budget"
     over = 0
@@ -52,7 +57,8 @@ print -r -- "$durations" | sort | HC_BUDGETS="$budgets" awk -F '\t' -v check="$c
       limit = (name in budget) ? budget[name] : 0
       flag = (limit > 0 && p50 > 0.7 * limit) ? "  OVER 70%" : ""
       if (flag != "") over = 1
-      printf "%-20s %5d %7.1f %7.1f %9.1f %7s%s\n", name, n, p50, v[n], queue[name] / n, limit, flag
+      wait = (queued[name] > 0) ? sprintf("%.1f", queue[name] / queued[name]) : "-"
+      printf "%-20s %5d %7.1f %7.1f %9s %7s%s\n", name, n, p50, v[n], wait, limit, flag
     }
     if (check == "--check" && over) exit 1
   }'
