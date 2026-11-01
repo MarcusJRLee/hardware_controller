@@ -1,12 +1,16 @@
 import XCTest
 
 final class VoiceInputUITest: XCTestCase {
+  /// Shared CI simulators stall for seconds under load; a passing wait returns
+  /// as soon as its condition holds, so only failures pay this deadline.
+  private static let timeout: TimeInterval = 30
+
   @MainActor
   func testColdLaunchExplainsLocalOnboardingAndKeyboardBoundary() {
     let app = XCUIApplication()
     app.launch()
 
-    XCTAssertTrue(app.navigationBars["Voice Input"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.navigationBars["Voice Input"].waitForExistence(timeout: Self.timeout))
     XCTAssertTrue(app.buttons["start_capture"].exists)
     XCTAssertTrue(app.staticTexts["Voice anywhere. Private by default."].exists)
     XCTAssertTrue(app.staticTexts["Local processing"].exists)
@@ -24,8 +28,8 @@ final class VoiceInputUITest: XCTestCase {
     for _ in 0..<6 where !search.exists {
       app.swipeUp()
     }
-    XCTAssertTrue(history.waitForExistence(timeout: 2))
-    XCTAssertTrue(search.waitForExistence(timeout: 2))
+    XCTAssertTrue(history.waitForExistence(timeout: Self.timeout))
+    XCTAssertTrue(search.waitForExistence(timeout: Self.timeout))
   }
 
   @MainActor
@@ -34,13 +38,13 @@ final class VoiceInputUITest: XCTestCase {
     app.launch()
 
     let start = app.buttons["start_capture"]
-    XCTAssertTrue(start.waitForExistence(timeout: 5))
+    XCTAssertTrue(start.waitForExistence(timeout: Self.timeout))
     start.tap()
 
     let captureStatus = app.descendants(matching: .any)["capture_status"]
     let failed = NSPredicate(format: "value == 'Failed'")
     expectation(for: failed, evaluatedWith: captureStatus)
-    waitForExpectations(timeout: 5)
+    waitForExpectations(timeout: Self.timeout)
     XCTAssertTrue(app.staticTexts["capture_error"].exists)
     XCTAssertFalse(app.buttons["stop_capture"].exists)
   }
@@ -77,7 +81,7 @@ final class VoiceInputUITest: XCTestCase {
     XCTAssertTrue(style.isHittable)
     style.tap()
     for label in ["Natural", "Casual", "Formal", "Technical", "Verbatim"] {
-      XCTAssertTrue(app.buttons[label].waitForExistence(timeout: 2))
+      XCTAssertTrue(app.buttons[label].waitForExistence(timeout: Self.timeout))
     }
 
     let attachment = XCTAttachment(screenshot: app.screenshot())
@@ -105,7 +109,7 @@ final class VoiceInputUITest: XCTestCase {
     ] {
       XCTAssertTrue(
         app.descendants(matching: .any)[identifier]
-          .waitForExistence(timeout: 2)
+          .waitForExistence(timeout: Self.timeout)
       )
     }
   }
