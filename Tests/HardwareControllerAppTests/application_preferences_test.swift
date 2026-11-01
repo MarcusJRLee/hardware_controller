@@ -489,6 +489,24 @@ struct ApplicationPreferencesModelTests {
     #expect(applied == ["usb-microphone"])
   }
 
+  @Test
+  func confirmedDictionarySuggestionPersistsThroughLocalAISettings() {
+    let model = ApplicationPreferencesModel(
+      arguments: [],
+      isDemoMode: false,
+      appearanceApplier: AppearanceApplier(),
+      store: PreferenceStore()
+    )
+    var applied: [LocalAISettings] = []
+    model.setLocalAISettingsHandler { applied.append($0) }
+
+    #expect(model.addDictionaryEntry(.vocabulary("OpenCode")))
+    #expect(model.addDictionaryEntry(.vocabulary("opencode")))
+
+    #expect(model.personalDictionary.vocabulary == ["OpenCode"])
+    #expect(applied.map(\.dictionary.vocabulary) == [["OpenCode"]])
+  }
+
   /// Persists Local AI settings before applying them to process services.
   @Test
   func localAISettingsChangeIsTransactional() {

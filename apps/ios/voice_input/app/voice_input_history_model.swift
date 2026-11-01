@@ -1,6 +1,6 @@
 import Combine
 import Foundation
-import HardwareControllerVoiceCore
+import HardwareControllerCore
 
 protocol VoiceInputHistoryAccessing: Sendable {
   func recent(limit: Int) async throws -> [VoiceInputHistorySession]

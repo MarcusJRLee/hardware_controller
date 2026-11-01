@@ -1,5 +1,6 @@
 import Foundation
-import HardwareControllerVoiceCore
+import HardwareControllerCore
+import HardwareControllerVoiceFFI
 import Synchronization
 import XCTest
 
@@ -152,7 +153,7 @@ private final class RecordingHistoryAccess: VoiceInputHistoryAccessing, Sendable
   }
 
   func enforceRetention(now: Date) async throws -> VoiceHistoryRetentionPlan {
-    try VoiceHistoryRetentionPlanner.plan(
+    try RustVoiceHistoryRetentionPlanner().plan(
       candidates: [],
       settings: .unlimited,
       now: now
@@ -164,7 +165,7 @@ private final class RecordingHistoryAccess: VoiceInputHistoryAccessing, Sendable
     now: Date
   ) async throws -> VoiceHistoryRetentionPlan {
     state.withLock { $0.retentionSettings.append(settings) }
-    return try VoiceHistoryRetentionPlanner.plan(
+    return try RustVoiceHistoryRetentionPlanner().plan(
       candidates: [],
       settings: settings,
       now: now

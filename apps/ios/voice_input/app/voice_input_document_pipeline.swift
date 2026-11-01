@@ -1,5 +1,5 @@
 import Foundation
-import HardwareControllerVoiceCore
+import HardwareControllerCore
 
 struct VoiceInputProcessedTranscript: Codable, Equatable, Sendable {
   let rawTranscript: VoiceInputRawTranscript

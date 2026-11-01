@@ -1,0 +1,33 @@
+name: CI health
+
+# Fails, and so notifies the owner, when any job's median duration drifts past
+# 70% of its timeout budget. Fix the slowdown or rebudget it deliberately.
+on:
+  schedule:
+    - cron: "41 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: ci-health
+  cancel-in-progress: true
+
+jobs:
+  durations:
+    name: CI durations
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install zsh
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh >/dev/null
+      - name: Compare durations with budgets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/ci_durations.sh 50 --check

@@ -459,9 +459,41 @@ struct VoiceHistoryView: View {
         )
         .accessibilityLabel("Corrected text")
         .accessibilityIdentifier("voice_history_correction")
+
+      if !model.dictionarySuggestions.isEmpty {
+        dictionarySuggestions
+      }
     }
     .padding(18)
     .studioCard()
+  }
+
+  private var dictionarySuggestions: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack {
+        Text("Add to Dictionary?")
+          .font(.subheadline.weight(.semibold))
+        Spacer()
+        Button("Not Now") {
+          model.dismissDictionarySuggestions()
+        }
+        .buttonStyle(.borderless)
+        .accessibilityIdentifier("voice_history_dismiss_dictionary_suggestions")
+      }
+      ForEach(model.dictionarySuggestions, id: \.self) { suggestion in
+        HStack {
+          Text(suggestion.summary)
+            .font(.callout)
+          Spacer()
+          Button("Add") {
+            model.acceptDictionarySuggestion(suggestion)
+          }
+          .accessibilityLabel("Add \(suggestion.summary)")
+        }
+      }
+    }
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier("voice_history_dictionary_suggestions")
   }
 
   private func actionsCard(
@@ -786,6 +818,17 @@ extension VoiceHistoryWork {
     case .exporting: "Exporting session…"
     case .deleting: "Deleting session…"
     case .pinning: "Updating pin…"
+    }
+  }
+}
+
+extension VoiceDictionarySuggestion {
+  fileprivate var summary: String {
+    switch self {
+    case .vocabulary(let term):
+      "Recognize \u{201C}\(term)\u{201D}"
+    case .replacement(let spokenForm, let replacement):
+      "Replace \u{201C}\(spokenForm)\u{201D} with \u{201C}\(replacement)\u{201D}"
     }
   }
 }

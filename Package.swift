@@ -52,7 +52,7 @@ let package = Package(
     ),
     .target(
       name: "HardwareControllerVoiceFFI",
-      dependencies: ["VoiceFFIBridge"],
+      dependencies: ["HardwareControllerCore", "VoiceFFIBridge"],
       path: "Sources/hardware_controller_voice_ffi"
     ),
     .target(
@@ -92,7 +92,7 @@ let package = Package(
     ),
     .testTarget(
       name: "HardwareControllerVoiceFFITests",
-      dependencies: ["HardwareControllerVoiceFFI"],
+      dependencies: ["HardwareControllerCore", "HardwareControllerVoiceFFI"],
       path: "Tests/hardware_controller_voice_ffi_tests"
     ),
     .testTarget(

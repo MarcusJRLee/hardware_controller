@@ -162,7 +162,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let historyPresentation = VoiceHistoryPresentation(
       arguments: arguments,
       localAISettings: preferencesModel.localAISettings,
-      history: voiceSessionHistory
+      history: voiceSessionHistory,
+      dictionaryEditor: preferencesModel
     )
     self.model = model
     navigation = ApplicationNavigationModel(arguments: arguments)
