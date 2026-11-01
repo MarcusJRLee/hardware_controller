@@ -684,6 +684,10 @@ provider readiness/test state, bounded context, dictionary, and instructions.
 
 `VoiceHistoryModel` owns presentation state only. `VoiceHistoryService`
 serializes correction, retranscription, reformatting, and re-delivery workflows;
+after a correction, `VoiceDictionarySuggester` diffs the source and corrected
+text and offers at most three Dictionary entries that persist only through
+confirmed Local AI settings writes (see
+[decision 0058](decisions/0058_dictionary_suggestions_from_corrections.md));
 system adapters isolate AVFAudio, Apple speech, local refinement, target capture,
 text writing, and package export. SQLite remains actor-owned. Every derived
 operation appends a linked immutable `VoiceHistoryResult` carrying its stage,

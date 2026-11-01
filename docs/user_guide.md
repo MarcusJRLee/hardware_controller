@@ -289,7 +289,10 @@ creates a new result, including when the attempt fails.
    After an interruption, History marks app-owned audio **Recovered** and
    offers whole-recording playback even when no timed transcript exists.
 5. Edit **Correction**, then choose **Save Correction**. This appends a new
-   corrected result; it never changes prior evidence.
+   corrected result; it never changes prior evidence. When the edit fixes a
+   misheard name or term, **Add to Dictionary?** offers it as recognition
+   vocabulary, plus a replacement when several words were misheard as one
+   term. Nothing is added until you choose **Add**.
 6. Choose **Retranscribe** to rerun local Apple speech against retained audio,
    or choose a Style and **Reformat** to run the current local refinement path.
    A Recovery session begins with empty text by design; retranscription appends
