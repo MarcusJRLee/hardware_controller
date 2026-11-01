@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
-import HardwareControllerVoiceCore
+import HardwareControllerCore
+import HardwareControllerVoiceFFI
 import SQLite3
 
 private final class VoiceInputSQLiteHandle: @unchecked Sendable {
@@ -437,7 +438,7 @@ actor VoiceInputHistoryRepository {
       )
     }
     let lowDiskReclaimBytes = try automaticLowDiskReclaimBytes()
-    let plan = try VoiceHistoryRetentionPlanner.plan(
+    let plan = try RustVoiceHistoryRetentionPlanner().plan(
       candidates: retained,
       settings: retentionSettings,
       now: now,
