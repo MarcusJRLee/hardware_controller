@@ -22,15 +22,35 @@ concurrency:
 
 jobs:
   analyze:
-    name: CodeQL
+    # Each platform is traced and analyzed in parallel under its own category;
+    # the required CodeQL check aggregates every uploaded category.
+    name: CodeQL (${{ matrix.platform }})
     runs-on: macos-26
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos, ios]
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      # CodeQL traces every process started after initialization. Rust, the
+      # pinned runtime fetch, and SwiftPM manifest evaluation produce no Swift
+      # evidence, so preparing them first keeps the traced build to Swift.
+      - name: Prepare untraced build inputs
+        run: |
+          if [[ "${{ matrix.platform }}" == "macos" ]]; then
+            scripts/build_rust_ffi.sh
+            swift package describe --type json >/dev/null
+          else
+            rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+            scripts/build_ios_rust_ffi.sh
+            scripts/fetch_ios_asr_runtime.sh
+          fi
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
@@ -41,21 +61,22 @@ jobs:
 
       - name: Build Swift products
         run: |
-          scripts/build_rust_ffi.sh
-          swift build --arch arm64
-          rustup target add aarch64-apple-ios aarch64-apple-ios-sim
-          scripts/build_ios_rust_ffi.sh
-          scripts/fetch_ios_asr_runtime.sh
-          xcodebuild build -quiet \
-            -project apps/ios/voice_input/VoiceInput.xcodeproj \
-            -scheme VoiceInput \
-            -configuration Debug \
-            -destination "generic/platform=iOS Simulator" \
-            -derivedDataPath "$RUNNER_TEMP/codeql_ios" \
-            ARCHS=arm64 \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            ONLY_ACTIVE_ARCH=YES
+          if [[ "${{ matrix.platform }}" == "macos" ]]; then
+            swift build --arch arm64
+          else
+            xcodebuild build -quiet \
+              -project apps/ios/voice_input/VoiceInput.xcodeproj \
+              -scheme VoiceInput \
+              -configuration Debug \
+              -destination "generic/platform=iOS Simulator" \
+              -derivedDataPath "$RUNNER_TEMP/codeql_ios" \
+              ARCHS=arm64 \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              ONLY_ACTIVE_ARCH=YES
+          fi
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          category: /language:swift/platform:${{ matrix.platform }}

@@ -24,5 +24,37 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Digest-pinned downloads are verified on every use, so a cache can only
+      # skip network transfer; it cannot substitute different bytes.
+      - name: Restore pinned ASR assets
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .build/ios_asr_runtime
+            .build/ios_asr_test_assets
+          key: asr-assets-${{ hashFiles('scripts/fetch_ios_asr_runtime.sh', 'scripts/fetch_ios_asr_test_assets.sh') }}
       - name: Run repository checks
         run: scripts/check.sh
+
+  ios:
+    name: iOS
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Restore pinned ASR assets
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .build/ios_asr_runtime
+            .build/ios_asr_test_assets
+          key: asr-assets-${{ hashFiles('scripts/fetch_ios_asr_runtime.sh', 'scripts/fetch_ios_asr_test_assets.sh') }}
+      - name: Install iOS build tools
+        run: |
+          brew install ripgrep xcodegen
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+      - name: Run iOS checks
+        run: scripts/check_ios.sh
