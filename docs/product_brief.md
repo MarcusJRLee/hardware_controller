@@ -1,330 +1,88 @@
 # Product brief
 
-## Product promise
+## Promise
 
-Hardware Controller makes a physical Control feel like a native extension of
-the Mac: connect it, choose what it does, and receive an immediate,
-predictable response in the active app.
+A physical Control feels like a native extension of the Mac: connect it, choose
+what it does, and get an immediate, predictable response in the active app.
+The primary workflow is hands-free Dictation: put the cursor in a field, hold
+the center pedal, speak, release. On iPhone, the Voice Input app and keyboard
+bring the same local Voice pipeline to any text field.
 
-The primary workflow is hands-free Dictation:
+## Principles
 
-1. Put the text cursor in an app.
-2. Hold the center Control.
-3. Speak.
-4. Release to finish.
-
-Toggle mode starts on one press and finishes on the next. Users choose Local
-Dictation for live recognized text or Local AI Dictation for one corrected and
-automatically formatted result.
-
-## Product principles
-
-1. **Immediate:** input handling and speech/model latency are measured against
-   explicit percentile budgets.
-2. **Quiet:** the app stays out of the way until status or configuration is
-   needed.
+1. **Immediate:** input and speech latency have explicit percentile budgets.
+2. **Quiet:** the app stays out of the way until state or setup needs you.
 3. **Legible:** Device, permission, Profile, provider, and Action state are
    obvious.
-4. **Safe:** disconnects, permission loss, invalid model output, and termination
-   cannot leave an Action held or mutate the wrong target.
-5. **Local:** configuration, speech, context, prompts, and generation remain on
-   the Mac; no cloud inference is allowed.
-6. **Extensible:** hardware facts stop at the Driver boundary and Local AI
-   providers stop at one typed refinement boundary.
+4. **Safe:** disconnects, permission loss, bad model output, and termination
+   never leave an Action held or change the wrong field.
+5. **Local:** configuration, speech, context, and generation stay on-device.
+6. **Extensible:** hardware facts stop at the Driver; models stop at typed
+   provider boundaries.
 
 ## Canonical language
 
 | Term | Meaning |
 | --- | --- |
 | Device | One connected physical controller. |
-| Control | One independently actuated input on a Device. |
+| Control | One independently actuated input on a Device. Say `pedal` only in Infinity-specific copy. |
 | Control event | A timestamped press, release, or value change. |
-| Driver | A Device-specific adapter that turns raw input into Control events. |
+| Driver | Device-specific adapter that turns raw input into Control events. |
 | Action | Behavior the app can execute. |
 | Binding | A Control plus interaction mode mapped to an Action. |
-| Profile | A named collection of per-Device Bindings for one work mode. |
-| Momentary | Begin on press and end on release. User-facing copy says “Hold.” |
-| Toggle | Alternate between begin and end on successive presses. |
-| Active Action | An Action that began and has not yet ended. |
-| Formatting provider | A local model boundary that converts Edited text evidence into a Formatted document. |
-| Provider locality | The declared furthest boundary a model adapter can cross with Voice content: in-process, fixed loopback, or remote-capable. |
-| Raw transcript | Final on-device speech-recognition text before Dictionary replacement, spoken edits, or refinement. |
-| Edited transcript | Raw text after deterministic spoken edits and Dictionary replacements. |
-| Spoken edit | A typed, source-evidenced deterministic operation applied before formatting. |
-| Formatted document | Validated paragraph and list blocks linked to Raw evidence. |
-| Delivered text | A target-specific plain-text rendering of the Formatted document. |
-| Style | A versioned Natural, Casual Message, Formal, Technical, or Verbatim formatting policy. |
-| Voice trigger | An input adapter that begins, finishes, or cancels the same Voice-session workflow without changing its ASR, formatting, delivery, or History meaning. |
-| Voice chord | The optional machine-wide exact keyboard shortcut dedicated to Voice capture; it is distinct from a Binding keyboard fallback. |
-| Latched capture | A Voice session kept active after two short Voice-chord presses until the next valid double press. |
-| Retained audio | The optional app-owned CAF linked to one completed Voice session. |
-| Voice-session input | Typed microphone-capture or imported-audio provenance; it never substitutes for result-stage origin. |
-| Audio expiration | Automatic removal of Retained audio while keeping its session, results, timing metadata, and typed reason. |
-| Voice retention policy | Versioned age, byte, count, pin, recovery, and low-disk rules for Retained audio. |
-| Recovery session | A History session synthesized from readable app-owned audio after interruption; it has typed origin and no invented transcript. |
-| Partial audio | A session-scoped in-progress recording that startup may reconcile after interruption. |
-| Orphan audio | Finalized app-owned audio with no owning History row. |
-| Reconciliation | Deterministic startup repair of partial, orphaned, quarantined, or corrupt Voice History state before retention. |
-| Model residency policy | How long an app-started local formatting model remains loaded; distinct from Voice retention. |
+| Profile | A named, versioned collection of per-Device Bindings. |
+| Momentary | Begin on press, end on release. UI says **Hold**. |
+| Toggle | Alternate begin and end on successive presses. |
+| Active Action | An Action that began and has not ended. |
+| Raw / Edited / Formatted / Delivered | Speech text before edits; after spoken edits and Dictionary; validated paragraph/list blocks; the target-specific rendering. |
+| Spoken edit | A typed, source-evidenced command applied before formatting. |
+| Style | Versioned Natural, Casual Message, Formal, Technical, or Verbatim policy. |
+| Provider locality | Furthest boundary a model adapter can reach: in-process, fixed loopback, or remote-capable. |
+| Voice trigger | Any input that begins, finishes, or cancels the same Voice session. |
+| Voice chord | The optional machine-wide shortcut for Voice capture; not a Binding fallback. |
+| Retained audio | The optional app-owned CAF of one Voice session. |
+| Recovery session | A History session rebuilt from interrupted audio, with no invented text. |
 
-Use `pedal` only for Infinity-specific UI copy. Domain and reusable UI use
-`Control` so future buttons, knobs, switches, and MIDI controls fit without a
-rename.
+## Scope
 
-## Current scope
+- **Devices:** one or more VEC Infinity 3 pedals, all three Controls,
+  simultaneous presses, reconnect and sleep safety.
+- **Actions:** No Action, Local Dictation, Local AI Dictation, Keyboard
+  Shortcut, each with Hold and Toggle. One Dictation Action owns the
+  microphone at a time.
+- **Local AI:** spoken edits, Dictionary, Styles and casing, typed
+  paragraph/list output, validation of protected content, and a deterministic
+  Edited fallback within three seconds.
+- **Configuration:** Profiles with independent per-Device setups; center
+  defaults to Local Dictation (Hold), left and right to No Action; opt-in
+  keyboard fallbacks and Voice chord, never enabled automatically.
+- **History:** searchable, append-only sessions with bounded audio retention
+  that never deletes transcripts; correction, retranscription, reformatting,
+  explicit re-delivery, archives, and audio import.
+- **App:** foreground app with Dock and menu-bar presence; Controller, History,
+  Profiles, and General in one window; Launch at Login only on request.
+- **iOS:** containing app owns capture, local ASR, formatting, and History; the
+  custom keyboard inserts confirmed results; system controls and Shortcuts
+  start capture.
 
-### Device behavior
+## Approved boundaries
 
-- Support one or more VEC Infinity 3 Devices through a dedicated Driver.
-- Recognize all three Controls, including simultaneous presses.
-- Recover from unplug/replug, sleep/wake, relaunch, and disconnect while an
-  Action is active.
-- Show unsupported Devices without pretending they are configurable.
-
-### Actions
-
-- **No Action**.
-- **Local Dictation**, preserving adaptive live/final delivery.
-- **Local AI Dictation**, refining final Apple speech text through Apple
-  On-Device or fixed-loopback Ollama.
-- **Keyboard Shortcut**, including modifiers and ordinary keys.
-- Hold and Toggle wherever supported.
-- Idempotent end/cancel for every stateful Action on handoff, Device removal,
-  Profile replacement, permission loss, sleep, and shutdown.
-
-Only one Dictation Action may own the microphone. Choosing Local AI Dictation
-does not modify Local Dictation's behavior, defaults, live composition, or
-failure path.
-
-### Local AI behavior
-
-- Warm the selected model after an accepted begin while speech capture starts
-  independently.
-- Remove fillers and abandoned fragments, resolve clear self-corrections,
-  correct supported recognition mistakes, and add punctuation.
-- Produce validated paragraph, bullet, or numbered-step blocks, then preserve
-  structure for multiline targets or flatten it safely for single-line targets.
-- Apply the selected Natural, Casual Message, Formal, Technical, or Verbatim
-  Style. Casual Message prefers lowercase sentence starts; Verbatim skips
-  generative refinement.
-- Accept machine-wide recognition vocabulary, deterministic exact
-  replacements, and optional formatting instructions.
-- Apply a typed Style Default, Lowercase Prose, or Strict Lowercase policy after
-  formatting and on deterministic fallback. Preserve intentional operational
-  tokens; Lowercase Prose also preserves source-signaled names and acronyms.
-- Apply exact `scratch that`, `delete that sentence`, `new paragraph`, `start a
-  numbered list`, `start a bullet list`, `bullet`, `next item`, and `end list`
-  commands before formatting. `literal` preserves the immediately following
-  exact command phrase; near-misses and ordinary uses remain text.
-- Normalize explicit markers, sequential ordinals, and conservatively delimited
-  grocery, shopping, packing, task, or to-do list cues into typed list intent.
-- Optionally use a bounded caret window from the current nonsecure multiline
-  target. Never read browser URLs, terminal contents, whole documents,
-  screenshots, the pasteboard, or secure fields.
-- Treat transcript and context as untrusted data and require typed paragraph or
-  list blocks.
-- Preserve protected numbers, URLs, email addresses, paths, code-like tokens,
-  quotations, and dictionary values.
-- Deliver refined text once, or deterministic Edited text once after provider
-  failure, invalid output, or a three-second post-release deadline when target
-  ownership remains valid.
-- Require an empty captured caret and revalidate target process, secure status,
-  focused element, and expected caret before every Local AI mutation. Preserve
-  the captured delivery route; never fall through to a replacement adapter.
-- Store local audio plus distinct Raw, Edited, Formatted, and Delivered stages
-  for later History slices; keep current-session copy actions separate.
-- Reconcile interrupted app-owned audio into truthful Recovery sessions before
-  retention. Never invent transcript text; preserve playback and local
-  retranscription for 24 hours unless pinned.
-- Reject a remote-capable Formatting provider before invoking any adapter
-  method. When local formatting fails, deliver deterministic Edited text only
-  after target revalidation.
-- If recognition fails after capture produced audio, retain the CAF and a
-  truthful failed History item with delivery marked not attempted. Never mutate
-  the target.
-
-### Configuration
-
-- Create, rename, duplicate, delete, edit, and activate Profiles.
-- Store independent per-Device-model setups in each Profile.
-- Make left, center, and right independently configurable.
-- Default center to Local Dictation in Hold mode; default left and right to No
-  Action.
-- Optionally assign one exact keyboard fallback to a Binding. Suggest `⌃⇧⌘D`
-  but never enable it automatically.
-- Optionally assign one machine-wide Voice chord under General. Begin on the
-  first key-down; release after a hold to finish, or double press to latch and
-  double press again to finish. Never enable it automatically.
-- Keep Local AI provider, model/digest, Model residency policy, Style, context
-  permission, Dictionary, and additional instructions machine-wide under
-  General.
-- Recommend the measured Qwen 3.5 4B Ollama model while allowing explicitly
-  selected installed models to remain labeled unvalidated.
-- Persist Profiles and application preferences locally, atomically, and with
-  explicit version migrations and forward-schema protection.
-
-### App experience
-
-- A normal foreground Mac app with Dock, application-menu, and menu-bar
-  presence.
-- One window with Controller, History, Profiles, and General in an
-  expanded-by-default native sidebar.
-- Searchable local History with immutable result evidence, timed audio,
-  correction, retranscription, reformatting, explicit re-delivery, export,
-  pinning, deletion, and bounded audio retention that never removes searchable
-  transcript evidence.
-- Immediate physical state, active-Profile state, independent Action
-  readiness, and direct permission/provider recovery.
-- A click-through transcript HUD only while an active target cannot display
-  provisional text inline.
-- A dedicated Local AI status card for preparing, listening, finalizing,
-  refining, validating, delivering, completed, fallback, and failure states.
-- A menu-bar **Record Voice** action that preserves the external target and
-  starts or finishes the same session used by Controls and the Voice chord.
-- No Clean/Structured mode; target-aware formatting is automatic.
-- Optional launch at login and app-local microphone selection.
-
-## Acceptance stories
-
-### Local Dictation
-
-Given a focused editable field and a Local Dictation Binding:
-
-- begin starts capture and on-device recognition once;
-- duplicate presses do not duplicate starts;
-- stable Accessibility fields receive reversible provisional text;
-- web, terminal, and other compatibility targets receive guarded final text;
-- finish commits once without revising committed text;
-- focus or caret changes stop automatic insertion and retain explicit recovery;
-- Local AI settings and provider availability have no effect.
-
-### Local AI Dictation
-
-Given a focused editable field and a ready selected provider:
-
-- begin captures the target, starts the shared local speech path, and warms the
-  model concurrently;
-- provisional recognition appears only in the transient HUD;
-- finish obtains one Raw transcript, applies exact replacements and typed spoken
-  edits, refines, validates, and inserts one result;
-- formatted structure is preserved only for a target that safely supports it;
-- provider absence, digest drift, malformed output, overload, or timeout inserts
-  deterministic Edited text once if the original target remains valid;
-- cancellation, process change, secure-status change, focus change, or caret
-  change discards late model output and stores a typed delivery reason;
-- raw and refined recovery controls remain distinct.
-- General settings identify speech and formatting providers/models separately;
-  History identifies validation acceptance and deterministic fallback use.
-
-### Dictation handoff
-
-Given either Dictation Action is active:
-
-- beginning the other cancels the current workflow before the replacement
-  begins;
-- Profile replacement, microphone selection, permission loss, sleep,
-  disconnect, and shutdown clean both workflows idempotently;
-- hardware callbacks never wait on speech, model, persistence, or UI work.
-
-### Profiles and keyboard fallback
-
-Given Profiles contain different Device setups:
-
-- the active Profile is persisted before runtime adoption;
-- active Actions end before replacement;
-- a held input must release and press again under the new Profile;
-- exact fallbacks are active only for the active Profile and preserve the
-  Binding's Action and Hold/Toggle behavior;
-- duplicate, recursive, or unavailable fallback chords produce typed recovery.
-
-### Independent Voice chord
-
-Given a configured Voice chord and ready Local AI Dictation:
-
-- the chord works without a connected Device and never becomes a Binding;
-- first key-down begins capture without waiting to decide hold versus latch;
-- a held chord finishes on release, while two short presses latch;
-- the next valid double press finishes a latched session exactly once;
-- repeats and unmatched releases are inert; and
-- replacement, sleep, and shutdown cancel active capture before unregistering.
-
-### Permissions and provider readiness
-
-- Missing Accessibility blocks only Actions that require target mutation or
-  synthetic input while preserving physical state.
-- Missing Microphone blocks both Dictation Actions but not Keyboard Shortcut.
-- Missing legacy Speech Recognition permission blocks Dictation on macOS
-  15–25.
-- An unavailable Apple model or Ollama service/model/digest blocks only Local
-  AI Dictation for the selected provider.
-- A remote-capable provider is unavailable in local-only mode and receives no
-  readiness, lifecycle, transcript, context, or History call.
-- Provider testing uses a fixed sanitized phrase and never starts the
-  microphone or reads a target.
+| Decision | Approval | Record |
+| --- | --- | --- |
+| Privacy | On-device speech; Apple On-Device or fixed-loopback Ollama refinement; no cloud inference. | [0020](decisions/0020_local_ai_dictation.md), [0033](decisions/0033_local_only_voice_enforcement.md) |
+| Platforms | macOS 15+ on Apple silicon, and iOS. Android, Windows, and Linux stay in line of sight; web is deferred. | [0001](decisions/0001_native_macos_stack.md), [0029](decisions/0029_local_voice_platform_expansion.md) |
+| Profiles | Manual multi-Profile UI with per-Device setups. | [0014](decisions/0014_multi_profile_device_configuration.md) |
+| Model | Digest-pinned Qwen 3.5 4B recommended; other installed models allowed, labeled unvalidated. | [0021](decisions/0021_local_ai_model_selection.md) |
+| Builds | Every change installs as a signed private build; release promotion needs explicit approval. | [0023](decisions/0023_stable_personal_build_metadata.md) |
+| Source | Apache 2.0, Marcus John Rice Lee as copyright holder; contributions welcome, no CLA. | [0028](decisions/0028_apache_open_source_and_contributions.md) |
+| Workflow | Feature branches from `main`, squash-merged PRs. | [0052](decisions/0052_main_feature_branch_workflow.md) |
 
 ## Out of scope
 
-- Cloud sync, accounts, analytics, telemetry, remote control, or remote model
-  providers.
-- Private Cloud Compute fallback.
-- A second iOS ASR runtime or direct-audio language model before the pinned
-  transcribe.cpp file-ASR path meets its device quality gates.
-- Shipped Android, Windows, Linux, web, or mobile-web apps. Android and other
-  native desktops remain line of sight; web and mobile web are deferred.
-- Downloaded Driver code or user-authored plug-ins.
-- Arbitrary shell commands, scripts, or AppleScript.
-- Automatic per-application Profile switching.
-- Public App Store submission, payment, licensing, or update infrastructure.
+- Accounts, sync, analytics, telemetry, remote control, or remote models
+  (including Private Cloud Compute).
+- Downloaded Driver code, plug-ins, shell commands, or AppleScript.
+- Automatic per-app Profile switching.
+- App Store submission, payments, licensing, or update infrastructure.
 
-These are current boundaries, not prohibitions on measured future work. Durable
-changes require a decision record under [`decisions/`](decisions/).
-
-The accepted local-first Voice program supersedes these boundaries one tested
-vertical slice at a time. M1 persists Local AI Dictation audio and distinct
-final text stages; M2 adds the independent hold/latch Voice chord; M3 adds
-versioned Styles and structured formatting; M4 adds typed replayable spoken
-edits; M5 preserves target ownership; M6 adds searchable, reusable History.
-M7 bounds retained audio by age, bytes, count, and low disk while protecting
-active, pinned, and sole recovery artifacts. M8 reconciles crash artifacts and
-isolates corruption. M9 enforces provider locality and retains captured audio
-after ASR failure. M10 converges every macOS Voice trigger; M11 proves the first
-portable retention policy and C ABI without changing the shipped Swift runtime.
-M12 imports bounded user-selected audio into app-owned History and runs the same
-local ASR and formatting boundaries without automatic delivery. M13 admits
-only bounded, digest-complete portable Model packages and distinguishes
-catalog-authenticated downloads from explicit manual imports.
-M14 exports and restores one bounded, checksum-complete portable History
-archive without changing evidence or delivering text; Swift, Rust, and the C
-ABI share its V1 fixture. M15 links those portable validators into the Apple
-executable behind typed Swift values; production V1 import now verifies its
-private snapshot in Rust before complete Swift restore validation. iOS Gate K0
-proves the app-owned capture and keyboard handoff boundary. I1 implements local
-onboarding and bounded Model admission. I2 selects and revalidates one compatible
-package, produces real timed Raw text through a pinned transcribe.cpp runtime,
-applies shared deterministic edits and semantic formatting, and commits
-searchable/playable bounded local History before publishing text without
-exposing runtime, model, audio, or History bytes to either extension. App and
-keyboard surface defaults expose all five Styles; the exact keyboard stop
-captures its Style and insertion deduplicates by session. Only recognized
-general-text traits permit Voice, and an ephemeral session/document/change
-identity prevents a late result from crossing target state without retaining
-target content. Typed iOS lifecycle policy requires Live Activity ownership for
-background recording, stops privacy-sensitive interruptions without automatic
-resume, and preserves exact partial audio in 24-hour Recovery History. Active-
-phase heartbeats bound stale keyboard waits to three seconds; a strictly newer
-result and durable session receipt prevent automatic replay after completion.
-An unconfirmed host update exposes one explicit same-process retry and local-
-only ten-minute copy only while the exact result and target still match; every
-ambiguity recovers through History. I10 persists configurable iOS History caps
-and pinning, restores a 1 GiB basic-capacity reserve without invalidating a
-durable capture, keeps Model-package budgets independent, and statically rejects
-network/cloud product capabilities. I11 adds stateful system controls,
-Siri/App Shortcuts, Live Activity stop, orphan-ownership recovery, and explicit
-History copy/share without target inference. Physical-device keyboard,
-lifecycle, system-surface, airplane-mode, and performance evidence remain
-pending. See
-[`0029_local_voice_platform_expansion.md`](decisions/0029_local_voice_platform_expansion.md),
-[`0049_ios_offline_storage_enforcement.md`](decisions/0049_ios_offline_storage_enforcement.md),
-[`0050_ios_system_surface_capture.md`](decisions/0050_ios_system_surface_capture.md),
-[`voice_platform_design.md`](voice_platform_design.md), and
-[`voice_cujs.md`](voice_cujs.md).
+Changing any of these needs a new decision record.

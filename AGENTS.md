@@ -52,115 +52,63 @@
   before finishing.
 - Begin every reply by addressing me as "Ser".
 
-## Project specific intructinos
+## Project rules
 
-### Start here
+### Before changing behavior
 
-- Read `README.md`, `docs/product_brief.md`, `docs/game_plan.md`,
-  `docs/architecture.md`, and every relevant decision record before changing
-  product behavior.
-- Treat `docs/open_questions.md` as the approval gate. Do not create the Xcode
-  project or product code until its Gate 0 questions are resolved by the user.
-- Update the relevant docs and decision records when a product, architecture,
-  privacy, permission, or distribution decision changes.
-- Do not edit files outside this repository without explicit permission.
+- Read `docs/architecture.md` and the decisions it links for the area you
+  touch. Update docs, journey proofs in `docs/voice_cujs.md`, and decision
+  records in the same PR; never rewrite a superseded decision.
+- Mark unverified hardware claims as hypotheses until measured on the device.
 
 ### Product boundaries
 
-- Build a native macOS hardware-control app. The first supported device is the
-  VEC Infinity 3 USB Foot Pedal, but no domain or UI layer may depend directly
-  on that model.
-- Keep all app data and processing local. Do not add analytics, telemetry,
-  accounts, remote APIs, cloud storage, network entitlements, or dependencies
-  that call home without explicit approval.
-- Optimize the input-to-action hot path for deterministic low latency. Hardware
-  callbacks, event decoding, and action dispatch must not wait on the main
-  actor, UI rendering, persistence, logging, or network work.
-- The center pedal is the first-use focus. Left and right controls must still be
-  independently configurable in the first release.
-- Preserve momentary and toggle interaction semantics as first-class concepts;
-  do not implement either as UI-only special cases.
-
-### Domain language
-
-- **Device**: one connected physical controller.
-- **Control**: one independently actuated input on a Device. Use `pedal` only in
+- Native macOS hardware-control app plus the iOS Voice Input app. The VEC
+  Infinity 3 is the first Device; no domain or UI layer may depend on it.
+- All data and processing stay local. No analytics, telemetry, accounts,
+  remote APIs, cloud storage, network entitlements, or dependencies that call
+  home without explicit approval.
+- Hardware callbacks, decoding, and dispatch never wait on the main actor, UI,
+  persistence, logging, or network work.
+- Center pedal first; left and right stay independently configurable.
+  Momentary and Toggle are first-class domain concepts, never UI-only cases.
+- Use the canonical language in `docs/product_brief.md`. Say `pedal` only in
   Infinity-specific code and copy.
-- **Control event**: a timestamped Control transition or value change.
-- **Driver**: a Device-specific adapter that discovers hardware and converts
-  raw input into Control events.
-- **Action**: behavior the app can execute.
-- **Binding**: the mapping from a Control and interaction mode to an Action.
-- **Profile**: a versioned collection of Bindings.
-- **Momentary**: begin on press and end on release.
-- **Toggle**: alternate between begin and end on successive presses.
 
 ### Engineering
 
-- Use Swift 6 with strict concurrency checking. Prefer immutable, `Sendable`
-  values across isolation boundaries.
-- Keep IOKit, AppKit, Accessibility, persistence, and other system APIs behind
-  narrow protocols. Domain logic must run in tests without physical hardware or
-  macOS permission prompts.
-- Model errors and state transitions explicitly. Avoid force unwraps, forced
-  casts, implicitly unwrapped optionals, and swallowed errors.
-- Keep the main actor for presentation state only.
-- Use dependency injection at process boundaries; avoid global mutable state
-  and singleton service locators.
-- Prefer Apple frameworks and zero third-party runtime dependencies for the
-  first release.
-- Store configuration in a versioned, local format with atomic writes and
-  explicit migrations. Never commit user configuration, raw logs, or secrets.
-- Use unified logging with privacy annotations. Raw HID reports are debug-only
-  and must not be emitted by release builds.
-- Files and directories use `lowercase_with_underscores` except platform and
-  ecosystem conventions such as `README.md`, `AGENTS.md`, and Swift type names.
-- Comments are concise sentences that explain why, invariants, or non-obvious
-  system behavior.
-- Use decision matrices instead of pros/cons lists.
+- Swift 6 strict concurrency; immutable `Sendable` values across isolation.
+- IOKit, AppKit, Accessibility, persistence, and other system APIs stay behind
+  narrow protocols so domain logic tests without hardware or permission
+  prompts. Use dependency injection at process boundaries; no singletons or
+  global mutable state.
+- Typed errors and explicit state transitions. No force unwraps, forced casts,
+  implicitly unwrapped optionals, or swallowed errors.
+- The main actor is for presentation state only.
+- Apple frameworks only at runtime unless a decision approves otherwise.
+- Configuration is versioned, local, atomically written, and explicitly
+  migrated. Never commit user configuration, raw logs, or secrets.
+- Unified logging with privacy annotations; raw HID reports are debug-only.
 
 ### Verification
 
-- Add focused unit tests for every file containing domain or system-boundary
-  logic. Test files mirror their source name in the appropriate test target.
-- Use recorded, sanitized HID report fixtures for driver decoding tests.
-- Test press, release, repeat suppression, simultaneous controls, reconnect,
-  disconnect-while-active, permission denial, corrupted configuration, and
-  migration behavior.
-- Measure input callback to action-dispatch latency with a monotonic clock.
-  Report p50, p95, p99, maximum, and sample count; an average alone is not
-  sufficient.
-- Run formatting, build, unit, integration, and UI checks that cover every
-  changed line before handing work back.
-- Verify UI changes in light mode, dark mode, increased contrast, reduced
-  motion, keyboard navigation, and at least one large Dynamic Type setting.
-
-### Documentation
-
-- Keep `README.md` as the human entry point and command index.
-- Keep `docs/product_brief.md` to product scope and canonical language.
-- Keep `docs/game_plan.md` to milestones, gates, risks, acceptance criteria, and
-  remaining work.
-- Keep `docs/architecture.md` to current component boundaries, data flow,
-  concurrency, persistence, security, and performance design.
-- Record durable decisions under `docs/decisions/`; never rewrite a superseded
-  decision as if the earlier choice did not happen.
-- Mark unverified hardware claims as hypotheses until measured against the
-  physical device.
+- `scripts/check.sh` (and `scripts/check_ios.sh` for iOS or shared Voice code)
+  must pass before handing work back.
+- Driver tests use recorded, sanitized HID fixtures and cover press, release,
+  repeats, simultaneous Controls, reconnect, and disconnect-while-active.
+- Latency claims report p50, p95, p99, max, and sample count from a monotonic
+  clock.
+- UI changes are checked in light, dark, increased contrast, reduced motion,
+  keyboard navigation, and a large text size.
 
 ### Personal builds and releases
 
-- Keep signing identities and Team identifiers in ignored `.env.local` files.
-  Build every app intended for `/Applications` with an explicit Apple
-  Development identity and verify it against `HC_EXPECTED_TEAM_ID`. Never
-  install or hand off an ad-hoc-signed build.
-- Keep one canonical `/Applications/Hardware Controller.app`; quit it before
-  replacing it, verify the installed signature, then launch that exact bundle.
-- After every repository change, build and install the current source at the
-  canonical `/Applications/Hardware Controller.app`, then verify and launch it.
-- Treat version metadata as unreleased until the user explicitly approves that
-  exact version for release. Never create a release tag, GitHub Release, DMG,
-  or release record, or run `scripts/build_release.sh`, without that approval.
-- Preserve both `CFBundleShortVersionString` and `CFBundleVersion` during
-  routine changes. An agent may recommend changing either value, but must not
-  apply the exact new value without explicit user approval.
+- Signing identities and Team identifiers live only in ignored `.env.local`.
+  Every `/Applications` build uses an explicit Apple Development identity
+  verified against `HC_EXPECTED_TEAM_ID`; never install an ad-hoc build.
+- After every repository change, replace the single canonical
+  `/Applications/Hardware Controller.app` (quit it first), verify the installed
+  signature, and launch that exact bundle.
+- Never change `CFBundleShortVersionString` or `CFBundleVersion`, run
+  `scripts/build_release.sh`, or create a tag, DMG, GitHub Release, or release
+  record without explicit approval of that exact version.

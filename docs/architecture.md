@@ -1,855 +1,158 @@
 # Architecture
 
-**Status:** current source implementation.
+Detail and rationale live in the linked [decisions](decisions/); this page is
+the current map.
 
 ## Shape
 
 ```mermaid
 flowchart LR
-  DEVICE[Physical Device] --> HID[HID transport]
-  HID --> DRIVER[Device Driver]
-  DRIVER --> EVENTS[Normalized control events]
-  HOTKEY[Exact registered hot key] --> EVENTS
-  EVENTS --> ENGINE[Binding and interaction engine]
-  PROFILE[(Local profile store)] --> RUNTIME[Application runtime]
-  RUNTIME --> ENGINE
-  ENGINE --> ACTIONS[Action executors]
-  ACTIONS --> MACOS[macOS / focused app]
+  DEVICE[Device] --> HID[HID transport] --> DRIVER[Driver] --> EVENTS[Control events]
+  HOTKEY[Exact hot key] --> EVENTS
+  EVENTS --> ENGINE[Binding engine] --> ACTIONS[Action executors]
+  ACTIONS --> TARGET[Focused app]
   ACTIONS --> DICTATION[Dictation coordinator]
-  DICTATION --> SPEECH[Shared local speech boundary]
-  DICTATION --> REFINEMENT[Local AI refinement]
-  DICTATION --> HISTORY[(Local Voice History)]
-  REFINEMENT --> APPLE[Apple On-Device]
-  REFINEMENT --> OLLAMA[Fixed-loopback Ollama]
-
-  DRIVER -. process event .-> RUNTIME
-  ENGINE -. process event .-> RUNTIME
-  RUNTIME -. immutable snapshot .-> PRESENTATION[Presentation model]
-  PRESENTATION --> UI[Menu bar and application shell]
+  DICTATION --> SPEECH[On-device speech]
+  DICTATION --> REFINE[Local AI refinement]
+  DICTATION --> HISTORY[(Voice History)]
+  PROFILE[(Profiles)] --> RUNTIME[Application runtime] --> ENGINE
+  RUNTIME -. immutable snapshot .-> UI[Presentation]
   UI --> RUNTIME
-  PREFERENCES[(Local preference store)] --> PREF_MODEL[Preferences model]
-  PREF_MODEL --> UI
-  PREF_MODEL --> APPEARANCE[AppKit application appearance]
 ```
 
-The arrows on the top row are the latency-critical path. UI, persistence, and
-diagnostics observe that path but cannot block it.
+The top row is the latency-critical path. UI, persistence, and diagnostics
+observe it and never block it.
 
 ## Stack
 
-| Concern             | Choice                                                                        |
-| ------------------- | ----------------------------------------------------------------------------- |
-| Languages           | Swift 6 with strict concurrency; Rust 1.98 for portable Voice policy.         |
-| App UI              | SwiftUI four-destination macOS shell and iOS containing app; UIKit keyboard. |
-| Hardware            | IOKit `IOHIDManager` and `IOHIDDevice` APIs.                                  |
-| Synthetic shortcuts | Core Graphics `CGEvent`, guarded by Accessibility trust.                      |
-| Keyboard fallback   | Carbon `RegisterEventHotKey`; exact active-Profile chords only.                |
-| Audio capture        | Configuration-leased `AVAudioEngine`, bounded in-memory buffer stream.         |
-| Speech recognition   | `SpeechAnalyzer` on macOS 26+; on-device-required `SFSpeechRecognizer` before. |
-| Local AI refinement  | `SystemLanguageModel` on macOS 26+ or structured fixed-loopback Ollama generation. |
-| Transcript delivery  | Accessibility insertion plus guarded buffered Unicode event routes.            |
-| Persistence         | Versioned Codable JSON for configuration; system SQLite plus atomic CAF artifacts for Voice History. |
-| Logging and timing  | Unified Logging, `OSSignposter`, and a monotonic clock.                       |
-| Tests               | Swift Testing, XCTest, Rust/C conformance, and scripted packaged-UI and Accessibility inspection. |
-| Dependencies        | Apple frameworks only in the apps; portable Rust validators use serde and RustCrypto SHA-2 and link statically; Ollama is an optional separately installed local service. |
-| Distribution        | Apache License 2.0 source; Apple Development-signed personal iterations; gated Developer ID, notarization, and free-DMG workflow for a future approved public release. |
-
-[`decisions/0001_native_macos_stack.md`](decisions/0001_native_macos_stack.md)
-records the stack rationale.
-
-## Application identity and local data
-
-The app, logging subsystems, and process queues use
-`com.longdevity.hardwarecontroller`. The shared identity boundary resolves only
-that Application Support directory and rejects a file occupying the required
-path. Voice History uses its `voice/` child with one SQLite database and one
-retained CAF at most per Voice session. The public snapshot contains no
-predecessor personal namespace.
-
-Changing the signed bundle identifier creates a new macOS privacy identity.
-Accessibility, Microphone, Speech Recognition, and Launch at Login state may
-therefore require user approval again. Signing identities and Team identifiers
-remain in ignored local environment files, never source-controlled policy.
-
-[`decisions/0024_longdevity_application_identity.md`](decisions/0024_longdevity_application_identity.md)
-records the private transition, and
-[`decisions/0026_remove_legacy_personal_identity.md`](decisions/0026_remove_legacy_personal_identity.md)
-records its removal from the public snapshot.
-
-## Component boundaries
-
-### Domain
-
-Pure, hardware-agnostic value types and state machines:
-
-- stable Device and Control identifiers;
-- Device capability and presentation metadata;
-- timestamped Control events;
-- Action configuration and capabilities;
-- Binding and Profile models;
-- Momentary and Toggle interaction state;
-- active-action ownership and idempotent cleanup.
-
-Domain code imports no IOKit, SwiftUI, AppKit, Accessibility, file-system, or
-logging frameworks.
-
-### Portable Voice core
-
-`voice_core` is the first cross-platform engine tracer. It owns a dependency-
-free retention policy using UUID bytes, Unix epoch milliseconds, immutable
-candidates, typed validation failures, and ordered decisions. It imports no
-Apple type and denies unsafe Rust. macOS and iOS History both plan audio expiry
-through `RustVoiceHistoryRetentionPlanner`, which calls the linked policy; no
-Swift copy of the algorithm remains. `Tests/cuj/voice_retention_v1.json` is read
-by the Rust tests and by the Swift boundary test of the linked policy.
-
-`voice_ffi` exposes synchronous `V1` retention, Model-package, and History-
-archive functions. The
-caller owns every input and output buffer; capacity-probe calls report required
-storage without partial output. No callback, allocator, thread, runtime handle,
-file, or pointer survives return. Reserved bytes and Boolean encodings fail
-closed. Rust layout tests plus a real C17 consumer protect the source-controlled
-header. Swift and Kotlin wrappers remain typed platform adapters and may not add
-portable policy. See [decision 0035](decisions/0035_portable_voice_c_abi.md).
-
-`HardwareControllerVoiceFFI` is the Apple adapter. Its immutable `Sendable`
-values translate paths, caller-owned buffers, fixed metadata, and typed status
-codes without exposing an unsafe pointer to application code. A narrow C target
-imports the source-controlled header and statically links the optimized Rust
-archive. Canonical scripts build that archive first and update an ignored
-digest-stamp Swift source only when its bytes change, forcing SwiftPM to relink
-instead of reusing a stale executable. The packaged app has no Rust dynamic
-library or non-system runtime dependency. See
-[decision 0039](decisions/0039_linked_apple_voice_adapter.md).
-
-The iOS build produces device and simulator static archives, wraps them in one
-generated XCFramework, and imports the same C module into the typed adapter.
-The XCFramework is a build artifact, not a source-controlled dependency.
-
-`voice_models` owns bounded Model-package admission before any runtime sees
-weights. It strictly decodes V1 manifests, rejects symbolic links and
-undeclared or nonportable paths, streams SHA-256 over exact declared bytes, and
-optionally compares an authenticated catalog manifest digest. License evidence,
-capabilities, languages, runtime family, memory claims, and installed bytes
-cross `voice_ffi` through caller-owned UTF-8 buffers and fixed scalar fields.
-The verifier retains no pointer or file and links no inference runtime. See
-[decision 0037](decisions/0037_portable_model_package_validation.md).
-
-`voice_archive` owns the portable History container boundary. It admits only
-the exact link-free V1 inventory, enforces configurable manifest/checksum/audio
-and result limits, parses canonical session/result UUIDs, streams SHA-256 over
-the manifest and optional CAF, and returns fixed verified metadata. Swift and
-Rust consume the same fixture; the C ABI retains no archive path or file. The
-archive hashes establish internal integrity, not external authenticity. See
-[decision 0038](decisions/0038_portable_voice_history_archives.md).
-
-### iOS app and keyboard boundary
-
-```mermaid
-flowchart LR
-  FILES[User-selected Model package] --> STAGING[Bounded private staging]
-  STAGING --> RUST[Rust package admission]
-  RUST --> MODELS[(Private installed Models)]
-  MODELS --> OWNER
-  SYSTEM[Containing app or system control] --> OWNER[iOS capture owner]
-  OWNER --> AUDIO[(Private CAF)]
-  OWNER --> ACTIVITY[Live Activity]
-  OWNER --> BACKGROUND[Bounded finalization task]
-  AUDIO --> RECOVERY[(Recovery History)]
-  OWNER --> HANDOFF[(Bounded shared Keychain)]
-  KEYBOARD[Custom keyboard] --> HANDOFF
-  HANDOFF --> KEYBOARD
-  KEYBOARD --> TARGET[Text document proxy]
-```
-
-The containing app alone owns microphone permission, `AVAudioSession`, the
-recorder, audio artifacts, and Live Activity. The keyboard is a full QWERTY
-extension with voice status, stop, one automatic insertion attempt, and bounded
-explicit recovery. It cannot record or
-launch the app. A cold session starts through the app or a documented system
-surface invoking `AudioRecordingIntent`.
-
-The app, keyboard, and Control Center extension share one same-team generic-
-password Keychain service. Snapshot and single-slot command JSON is limited to
-64 KiB per record, marked this-device-only, and excluded from Keychain
-synchronization. Recording and Transcribing publish 500-millisecond heartbeats;
-the keyboard rejects active state after three seconds. Session identity, a
-strictly newer monotonic result sequence, 30-second command freshness, and a
-keyboard-local insertion receipt reject stale, duplicate, and late results. The
-keyboard polls Keychain only while awaiting a matching result and stops before
-showing one documented restart path. Audio, models, History, logs, host
-identity, and target context stay outside the handoff.
-
-Gate K0 established signing, extension, and lifecycle feasibility. The same
-generated project now lives at `apps/ios/voice_input/` as the production iOS
-target. Its onboarding policy distinguishes undetermined, denied, authorized,
-keyboard-unobserved, and ready states without requesting permission at launch.
-Its Model library imports one security-scoped folder, applies independent
-entry/file/byte limits, rejects links, validates through the statically linked
-Rust boundary, and atomically installs by identity/version. Packages use Data
-Protection, remain outside backup, and retain manual-versus-pinned provenance.
-The library separately defaults to 12 GiB and eight installed versions, with
-both limits injected as policy. It never age-evicts Model packages. Explicit
-removal revalidates and quarantines only the app-owned copy before deleting its
-provenance and bytes.
-
-The C4 runtime is pinned transcribe.cpp file ASR. Rust revalidates the active
-package and authenticated manifest immediately before resolving one model-role
-payload and an optional speech-detection payload. A Swift actor owns one
-prewarmed opaque C context, converts the app-owned 16 kHz mono CAF to finite
-float PCM, and receives bounded UTF-8 plus timed segments. With speech detection,
-the bridge decodes only speech, cut at pauses into chunks of at most 28 seconds,
-and reports silence as a typed no-speech failure. While recording, a separate
-engine tap feeds live pause-cut decoding so Stop decodes only the last chunk; the
-recorded file stays authoritative and replaces any live result that failed or
-does not cover it. The containing app alone links
-and embeds transcribe.cpp; neither
-extension sees runtime symbols or model paths. Stop produces real timed Raw text
-or an explicit failure, never the K0 placeholder. The same platform-neutral
-spoken-edit, semantic-document, renderer, Style, and retention sources used by
-macOS compile into a narrow static iOS core target. The containing app applies
-those deterministic stages, including typed casing and confident grocery,
-ordinal, and explicit-marker list normalization, copies the stopped CAF into
-actor-owned History,
-and commits a versioned SQLite payload before it publishes matching Formatted
-text to the Keychain handoff. History stores immutable Raw, Edited, Formatted,
-timed-segment, model, Style, digest, byte-count, and audio-expiry evidence; its
-UI searches, discloses Raw/model provenance, and plays retained CAFs. Startup
-reconciliation on first History access adopts only exact readable lowercase
-session partial/orphan audio into typed Recovery sessions. Invalid, unknown, or
-noncanonical files remain untouched and cannot block valid History. An exact
-post-commit partial is removed only when its digest matches committed audio;
-differing bytes recover under a new session identifier. Recovery
-audio expires after 24 hours without inventing transcript stages. Data
-Protection and backup exclusion apply to the owned History directory, database
-family, and audio. History payload revision 3 persists `isPinned`; earlier
-revisions migrate to unpinned. A versioned local preference envelope configures
-age, byte, and recording-count caps, while basic volume capacity requests a
-1 GiB free-space reserve. Retention runs after durable commit and on History
-access; maintenance failure stays visible and retries without invalidating the
-capture. Pinned and sole-Recovery audio remain protected. Model-package limits
-remain a separate admission boundary and never trigger implicit eviction.
-The app and keyboard retain separate surface Style defaults. A schema-revision-2
-stop command captures the keyboard's explicit Style for its exact session; the
-app maps that bounded identifier exhaustively into the canonical formatter.
-A bounded same-device Keychain claim is written before the first host-field
-insertion and deduplicates every automatic path by session identity, including
-re-published ready snapshots. If UIKit provides no text-change callback within
-500 milliseconds, the keyboard offers one explicit same-process retry and one
-local-only copy expiring after ten minutes. Both actions revalidate the exact
-Ready result, receipt, document, and host-change revision; any mismatch or
-extension restart recovers through History. The copy path is capped at 256 KiB
-of UTF-8 and never reads the pasteboard. See
-[decision 0040](decisions/0040_ios_keyboard_activation_and_handoff.md),
-[decision 0041](decisions/0041_ios_model_package_admission.md),
-[decision 0042](decisions/0042_ios_whisper_file_asr.md),
-[decision 0055](decisions/0055_transcribe_cpp_asr_runtime.md),
-[decision 0056](decisions/0056_ios_live_pause_cut_decoding.md),
-[decision 0043](decisions/0043_ios_local_formatting_and_history.md), and
-[decision 0044](decisions/0044_ios_style_qualified_keyboard_delivery.md). Only
-recognized general-text UIKit traits permit Voice. An ephemeral session UUID,
-opaque document UUID, and text/selection revision bind delivery without
-retaining target text or app identity; mismatch recovers from History. See
-[decision 0045](decisions/0045_ios_host_field_and_delivery_target_safety.md).
-The bounded insertion-recovery contract is in
-[decision 0048](decisions/0048_ios_bounded_insertion_recovery.md).
-The capture actor maps interruption, route, media-service, background, power,
-and thermal signals into explicit lifecycle policy. Visible Live Activity
-ownership is mandatory for background recording; stopped capture gets one
-bounded background-finalization task. Expiration invalidates late output,
-preserves the exact partial, and never auto-resumes. See
-[decision 0046](decisions/0046_ios_capture_lifecycle_and_recovery.md).
-The keyboard treats missing, future, expired, or unknown-schema active state as
-stale, clears its ephemeral delivery target, and never launches the app. See
-[decision 0047](decisions/0047_ios_stale_service_recovery.md). The iOS build
-also runs a static local-only source and capability check. See
-[decision 0049](decisions/0049_ios_offline_storage_enforcement.md).
-
-The WidgetKit control reads only the bounded current snapshot and uses a
-`SetValueIntent`; Audio Recording start/stop intents write the same single-slot
-command. Start foregrounds the containing app. Recording publishes a Live
-Activity with an exact stop action, and the actor consumes stop while recording
-under lock or in background. App activation with no in-memory owner ends
-orphaned activities, publishes Interrupted for an old active snapshot, and
-leaves partial audio for History reconciliation. See
-[decision 0050](decisions/0050_ios_system_surface_capture.md).
-
-### HID transport
-
-The hardware-input boundary owns `IOHIDManager`, exact matching, device removal,
-and typed input-value callbacks. The first implementation maps the three Button
-elements on its dedicated queue and emits immutable normalized events. It does
-not know what Dictation is.
-
-The Infinity 3 transport explicitly opens the exact supported VEC collection
-with exclusive ownership before activation. The connected unit proved this is
-necessary because macOS otherwise maps its Button elements to pointer clicks.
-Unsupported Devices and broader HID matches must never be seized. See
-[`decisions/0004_exclusive_vec_ownership.md`](decisions/0004_exclusive_vec_ownership.md).
-
-### Driver registry and Drivers
-
-The current `HardwareInputSource` protocol isolates lifecycle and Driver
-metadata from the app model. A future composite source can select Drivers using
-a narrow signature:
-vendor/product identity, usage metadata, report descriptor characteristics, and
-any required firmware marker. A Driver provides:
-
-- a stable model identifier and human-readable name;
-- an optional trustworthy stable hardware identifier;
-- supported Control descriptors;
-- a report decoder;
-- optional layout metadata for generic UI;
-- device-specific diagnostics that contain no Action logic.
-
-The Infinity 3 source matches vendor, product, primary usage page, and primary
-usage, then converts Button usages into stable logical Controls named `left`,
-`center`, and `right`. Other layers never inspect Infinity identity or report
-bytes.
-
-Drivers are compiled into the signed app. Downloadable code and third-party
-plug-ins are outside the first release. A new Driver should be additive: register
-a matcher, codec, fixtures, and layout metadata without changing the binding
-engine.
-
-### Binding and interaction engine
-
-Owns the authoritative pressed state and active Actions. For each normalized
-event it:
-
-1. suppresses duplicate transitions while preserving valid simultaneous state;
-2. receives the Device-specific Binding from an immutable active-Profile
-   resolver;
-3. applies Momentary or Toggle semantics;
-4. invokes an Action executor's idempotent begin or end operation;
-5. publishes a non-blocking presentation snapshot.
-
-Rebinding an active Control, removing a Device, revoking a required permission,
-sleeping, or shutting down must end affected Actions before discarding state.
-
-Each runtime transition has an input identity and a persistent Binding target.
-Physical and keyboard inputs for the same target share Action ownership.
-Momentary begins on the first owner and ends after the last release; Toggle
-changes on each distinct press. Input pressed state remains source-specific.
-
-### Exact keyboard fallback input
-
-The main application event target reserves only active-Profile fallback chords
-with `RegisterEventHotKey`. Carbon supplies exact press/release callbacks; the
-app does not install an `NSEvent` global monitor or `CGEvent` tap. Callbacks are
-timestamped immediately and queued into the existing Binding engine. Repeated
-presses and releases are suppressed before dispatch.
-
-Replacement, Profile switching, sleep, and shutdown synthesize releases for
-active registrations before unregistering them. Registration conflicts become
-typed failures in the immutable application snapshot. This input source does
-not require Accessibility permission; the selected Action retains its existing
-permission requirements. See
-[`decisions/0018_exact_keyboard_control_fallback.md`](decisions/0018_exact_keyboard_control_fallback.md).
-
-The same single Carbon owner may also reserve one independent machine-wide
-Voice chord. Its registration is not a Binding and routes into a pure
-hold/latch state machine: first key-down submits Local AI begin immediately, a
-long release submits finish, two short presses latch, and the next double press
-finishes once. A controller actor owns the decision deadline and forwards only
-typed commands through the process-wide Dictation coordinator. Repeats and
-unmatched releases are suppressed at the Carbon boundary. Replacement, sleep,
-and shutdown interrupt Voice ownership before active registrations synthesize
-release, so lifecycle teardown cancels rather than delivers partial speech.
-Binding and Voice registration failures remain separate typed snapshot state.
-
-### Application runtime
-
-One process-owned actor is the authoritative application seam above hardware,
-the binding engine, Profile persistence, permissions, speech/model warm-up,
-and Launch at Login. It serializes lifecycle and configuration transactions,
-then publishes immutable `ApplicationSnapshot` values to the main-actor
-presentation model.
-
-The runtime adopts a Profile only after its atomic write succeeds. It derives
-Action availability from current permissions, reconciles asynchronous process
-events, and keeps retry, sleep, wake, and shutdown ordering out of UI code.
-The AppKit application delegate forwards system events without becoming a
-second owner of runtime state.
-
-Every Profile change is one `ProfileEdit` value. The pure
-`ProfileEnvelope.applying(_:in:)` in Core returns the candidate envelope and
-the Profile the runtime must adopt, or a typed `ProfileEditFailure`; the
-runtime only commits and publishes. Active Profile changes wait for the Controller
-runtime to cancel active Actions and install its new immutable resolver before
-presentation publishes the candidate. Inactive Profile edits never replace the
-runtime resolver.
-
-`ApplicationProcessControlling` is the deep test seam. Its live adapter composes
-the HID manager, binding runtime, action executor, both Dictation controllers,
-their process-wide coordinator, exact-hot-key source, and permission boundaries.
-Tests replace that complete process boundary rather than mocking UI callbacks.
-
-### Action registry and executors
-
-The registry exposes Action types and their configuration schemas. Each
-executor declares whether it supports one-shot, Momentary, Toggle, or a subset.
-
-Current executors:
-
-- **No Action:** intentionally consumes no system behavior.
-- **Keyboard Shortcut:** posts an exact key-down/key-up sequence and releases
-  modifiers on cancellation.
-- **Local Dictation:** enqueues begin/finalize/cancel commands to one
-  app-owned transcription actor. It captures microphone audio in memory,
-  requires on-device Apple recognition, and publishes explicit lifecycle
-  state. Stable Accessibility ranges receive reversible live composition;
-  other native targets receive final text; web content and validated terminals
-  receive one guarded buffered payload. Finalization has a five-second
-  watchdog, every route revalidates focus and caret ownership, and failures
-  retain recoverable text.
-- **Local AI Dictation:** captures the same safe target and composes the shared
-  microphone and Apple recognition controller in final-only mode. It warms the
-  selected provider while speech continues, applies typed spoken-edit operations
-  to Raw before deterministic Dictionary replacements, sends immutable typed
-  context including normalized list intent and casing policy to one local
-  refiner, canonicalizes typed paragraph and list blocks, restores protected
-  token spelling, validates protected content and semantic bounds, then renders
-  target-safe refined or Edited fallback text exactly once. Verbatim Style bypasses provider
-  preparation and generation.
-  Preparation plus generation share a three-second
-  post-final-transcript deadline. The deadline race returns without awaiting a
-  provider that ignores cancellation; every late result is discarded. A
-  bounded nonblocking tee writes immutable capture buffers on a utility task.
-  After delivery, the controller atomically finalizes one CAF and commits Raw,
-  Edited, Formatted, and Delivered text plus replayable spoken-edit evidence,
-  the versioned structured document, and model evidence to an actor-owned
-  system SQLite store. Existing databases gain nullable structured-document,
-  spoken-edit, and typed delivery-failure evidence columns without rewriting
-  earlier rows.
-  Cancellation removes its owned artifact.
-
-One process-wide `DictationWorkflowCoordinator` serializes commands and cancels
-the other Dictation workflow before beginning a replacement. The Actions keep
-separate orchestration, presentation state, settings, and failure paths. Shared
-audio, recognition, target, writer, permission, and lifecycle services are
-composed rather than copied.
-
-Every macOS Local AI trigger converges before that orchestration boundary:
-
-| Trigger | Adapter semantics | Shared command destination |
-| --- | --- | --- |
-| Physical Control or exact Binding fallback | Binding-owned Hold or Toggle | Local AI `DictationCommand` dispatcher through the Action executor. |
-| Independent Voice chord | Hold or double-press latch | The same Local AI dispatcher through `VoiceKeyboardTriggerController`. |
-| Menu-bar record action | Phase-derived Record or Stop | The same Local AI dispatcher through the lifecycle-gated application runtime. |
-
-The menu-bar action does not open or activate the main window, preserving the
-external application's target opportunity. Presentation derives availability
-from the Local AI snapshot; the serialized dispatcher and session controller
-own idempotence and reject overlap. No trigger owns recognition, formatting,
-History, retention, target validation, or delivery.
-
-Local AI providers implement `TranscriptRefining`:
-
-- Every adapter declares one immutable `LocalAIProviderCapability` containing
-  provider identity and `inProcess`, `fixedLoopback`, or `remoteCapable`
-  locality. `LocalAIRefinementRouter` validates the declared and returned
-  identities. In local-only mode it rejects `remoteCapable` before readiness,
-  preparation, refinement, release, or shutdown can invoke that adapter.
-- `AppleFoundationModelRefiner` availability-gates macOS 26,
-  `SystemLanguageModel`, locale, Apple Intelligence, and installed assets. It
-  uses greedy typed generation and no Private Cloud Compute path.
-- `OllamaLocalAIRefiner` accepts only `http://127.0.0.1:11434`, disables proxy
-  routing, caching, and redirects, verifies the running version and installed
-  model digest, rejects cloud tags, requests one typed block schema, and
-  supports finite or process-lifetime retention. It records whether a
-  process-lifetime model was already running, then unloads only a model this app
-  started when settings change or the app shuts down. An unload attempt has a
-  two-second local deadline; a failed settings-change unload remains owned for
-  one shutdown retry.
-
-Prompt revision 6 keeps invariant policy and centralized Style/casing instructions
-separate from an encoded untrusted payload. The payload bounds transcript,
-locale, Profile, target app identity, role, multiline capability, optional
-nearby text, Dictionary data, Style kind, Style revision, casing policy, and
-list intent. Providers return typed paragraph, unordered-list, or ordered-list
-blocks. Confident explicit-marker, delimited-list-cue, and sequential-ordinal
-boundaries are normalized from Edited text before casing and document building.
-Output validation rejects empty, oversized, control-bearing,
-protected-token-changing, additive, destructive, or context-copying results.
-The typed document builder canonicalizes paragraph items, while the deterministic
-renderer alone decides whether the captured target receives structure or one
-plain line. Validation runs on the canonical rendering before delivery.
-The sanitized provider test shares the three-second preparation-plus-generation
-deadline; settings changes and shutdown cancel it and suppress stale results.
-General settings present speech and formatting provider/model identity as
-separate active-pipeline evidence together with typed output, validation, and
-fallback behavior. History renders the stored validation status and whether the
-Edited fallback was used; it does not infer success from provider identity.
-
-The revision-2 Swift spoken-edit engine recognizes only exact, case-insensitive
-command phrases in immutable Raw text, so a Dictionary replacement cannot
-synthesize a destructive command. Each accepted command records its source
-UTF-8 range, affected pre-Dictionary suffix, typed operation, and replacement.
-Replay rejects unsupported revisions, noncanonical command evidence,
-overlapping source evidence, non-suffix destructive ranges, invalid structure
-replacements, and mismatched stored results. Clause and sentence deletion stop at explicit
-stable punctuation or a list-item marker. Ordered and unordered modes accept
-`new paragraph` or `next item`; unordered mode also accepts `bullet`. Exact
-`start a bullet list` and `start a bulleted list` phrases enter unordered mode.
-A bare `bullet` starts a list only at the start of text or after a list cue, so
-ordinary noun use remains text. `literal` preserves one immediately following
-exact command. Revision-1 traces retain their original command vocabulary and
-remain replayable. An inapplicable destructive/list command and every
-near-match remain ordinary transcript text. The model receives only the resulting Edited
-text. If all Edited text is removed, the session completes without generation
-or insertion while retaining its Raw evidence. Dictionary replacements then
-produce the final Edited text.
-
-Local AI derives two views from one captured target. Recognition receives a
-final-only view so provisional text cannot mutate the field. Final delivery
-retains the captured native, web, or terminal route plus an empty-caret lease.
-Before every mutation, Accessibility classifies process replacement, secure
-status, and focused-element replacement; the writer separately proves the
-expected caret. A failed lease cannot fall through to another delivery adapter.
-History stores its stable typed reason while the current-session Raw and
-Formatted/Edited copy paths remain explicit. User-requested re-delivery waits
-three seconds for a fresh target, rechecks an empty caret, uses the safe writer,
-and appends a new Delivered result instead of mutating capture evidence.
-See [`decisions/0020_local_ai_dictation.md`](decisions/0020_local_ai_dictation.md)
-and
-[`decisions/0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md).
-
-Speech input copies each callback's valid sample planes before AVFAudio may
-reuse its mutable buffer. Only immutable `Sendable` samples cross isolation;
-recognition actors reconstruct mutable PCM locally. The queue is bounded at 32
-buffers, overflow fails explicitly, and stream termination requires a normal
-finalization or cancellation owner.
-
-The optional app-local microphone UID resolves to a current input or falls back
-to the system default without discarding the saved preference. An explicit
-app-local selection pins only this process's Audio Unit; System Default remains
-unpinned so AVFAudio can negotiate its route. Each prepared engine is leased to
-one Device/rate/channel generation and uses AVFAudio's negotiated tap format.
-Route changes invalidate the generation; same-route graph notifications receive
-one bounded restart. Failed generations stop, detach notifications, and remain
-inert so AVFAudio teardown cannot race an internal callback.
-
-A narrow Objective-C boundary converts AVFAudio tap, prepare, start, and stop
-exceptions into typed errors. It never catches exceptions from domain or
-application code, and failed graph generations are never reused.
-
-The two OS-specific recognizers implement one transcript-stream contract, and
-their asynchronous work never runs on the HID queue. See
-[`decisions/0005_app_owned_transcription.md`](decisions/0005_app_owned_transcription.md),
-[`decisions/0009_foreground_web_text_delivery.md`](decisions/0009_foreground_web_text_delivery.md),
-and
-[`decisions/0010_bounded_transcription_finalization.md`](decisions/0010_bounded_transcription_finalization.md).
-The immutable sample and termination contract is recorded in
-[`decisions/0011_owned_speech_input_and_explicit_termination.md`](decisions/0011_owned_speech_input_and_explicit_termination.md).
-Configuration leasing and exception containment are recorded in
-[`decisions/0012_configuration_aware_audio_capture.md`](decisions/0012_configuration_aware_audio_capture.md).
-App-local routing is recorded in
-[`decisions/0015_app_local_microphone_selection.md`](decisions/0015_app_local_microphone_selection.md).
-Same-route engine recovery is recorded in
-[`decisions/0017_same_route_audio_engine_recovery.md`](decisions/0017_same_route_audio_engine_recovery.md).
-System Default negotiation is recorded in
-[`decisions/0022_system_default_audio_negotiation.md`](decisions/0022_system_default_audio_negotiation.md).
-
-Future Actions such as application commands, media control, MIDI, or safe
-automation add executors without changing Drivers. Arbitrary shell execution is
-not a generic first-release escape hatch.
-
-### Profile store
-
-Stores an envelope containing:
-
-- schema version;
-- Profile identity and display name;
-- ordered per-Profile Device configurations;
-- typed model and optional stable-unit matching rules;
-- per-Device Control Bindings;
-- optional per-Binding activation shortcuts.
-
-Writes use a temporary sibling file followed by an atomic replace. Reads decode
-into a validated model; corrupted data is preserved for recovery and replaced
-with a safe Default Profile only after surfacing the problem.
-A syntactically valid later schema is not corruption: the app leaves it in
-place, asks for a newer app, and refuses to overwrite it.
-Presentation and runtime adopt an edited Profile only after its atomic write
-succeeds, preventing failed saves from creating divergent configuration.
-Rejected begin dispatches and asynchronous Action failures clear runtime Action
-ownership so Momentary and Toggle state cannot remain falsely active. Only an
-immediate executor rejection changes the last dispatch result; a later typed
-Dictation failure remains in transcription state and does not create duplicate
-presentation. See
-[`decisions/0016_precise_action_failure_presentation.md`](decisions/0016_precise_action_failure_presentation.md).
-
-Schema 3 moves each schema-1 or schema-2 Profile's global Bindings into one
-Infinity 3 model-level Device configuration. IDs, names, active selection,
-interaction modes, Actions, and valid shortcuts survive migration. Schema-1
-Dictation shortcuts remain explicitly removed.
-
-Schema 4 adds optional keyboard fallback storage. Schema-3 Profiles migrate
-without an activation shortcut, so an update never reserves a global chord.
-Validation rejects a fallback on No Action, duplicate fallbacks within one
-Profile, and fallbacks matching an output Keyboard Shortcut Action.
-
-Schema 5 adds the Local AI Dictation Action identity. Schema-4 Profiles migrate
-without changing any Action, Binding, interaction mode, or fallback.
-
-Application appearance, sidebar visibility, microphone identity, Local AI
-settings, and the Voice chord use a separate schema-7 `preferences.json` file.
-Earlier schemas
-migrate with System Default microphone and conservative Local AI defaults:
-Apple On-Device, recommended Ollama model identity, five-minute retention,
-nearby context off, empty dictionary, no additional instructions, and the Voice
-chord disabled. Schema 7 adds typed casing; schema 6 defaults it to Style
-Default without changing prior output. A valid
-future preference schema is preserved and never overwritten. This store uses
-the same atomic-write and corruption-preservation policy because application
-preferences are not work-mode data.
-
-### Voice History store
-
-One actor owns the SQLite connection, schema migration, result validation, and
-session transactions. `voice_sessions` retains typed microphone-capture or
-imported-audio provenance and the single optional CAF path. `voice_results`
-stores immutable linked results with typed
-stage, origin, Style, model, prompt, structured-document, timed-span, and
-delivery evidence. Legacy session rows receive baseline Raw, Edited, Formatted,
-and Delivered results lazily and transactionally; the original rows are not
-rewritten.
-
-Search joins all result stages and escapes wildcard input. Result reads reject
-invalid stage/origin pairs, contradictory formatting or delivery provenance,
-broken source links, and spans outside measured audio duration by isolating the
-malformed session row while returning unrelated valid rows. Appending a
-derived result validates its source against the same session. Export writes an
-atomic portable V1 directory containing `manifest.json`, `checksums.json`, and
-optional `audio.caf` without modifying the database. Import snapshots that
-exact bounded inventory in a private temporary directory, verifies every
-declared digest, migrates the final revision 4 `session.json` shape when needed,
-and validates the complete baseline/result graph before transactionally copying
-audio and inserting metadata. Identical UUID/evidence is idempotent; different
-evidence with the same UUID fails without mutation or delivery.
-
-For V1, the archive importer invokes the linked Rust verifier against the
-private snapshot before Swift decodes the complete evidence graph and enters
-the restore transaction. It compares Rust session, result-count, and audio
-metadata with the Swift model. The final revision 4 migration remains a
-macOS-only Swift compatibility path and never enters the V1 verifier.
-
-The History presentation composes a separate import actor with the same Apple
-on-device ASR and local formatting boundaries used for retained-audio reuse.
-It balances security-scoped source access, validates configurable source-byte,
-decoded-byte, and duration caps before model work, and reads/writes sequential
-4,096-frame PCM buffers. The importer syncs and atomically renames one partial
-CAF before SQLite commit; database failure removes that artifact. It never
-mutates or retains a path to the selected source. ASR failure commits audio-only
-evidence; formatting failure commits Raw text as the deterministic Formatted
-fallback; import never performs delivery. Existing rows migrate to
-`microphoneCapture`, and portable archive V1 carries the input kind. Decision
-[`0036`](decisions/0036_imported_voice_audio.md) owns this flow.
-
-Deletion first quarantines owned audio, commits metadata removal, then removes
-the quarantine; a failed database commit restores the file. A separate
-retention actor reads the same SQLite database and owns quota selection,
-expiration transactions, and file lifecycle. One shared History service applies
-versioned preference schema 6 after finalization and on first startup access.
-Both actor-owned connections share a five-second SQLite coordination bound, so
-transient writer contention converges without entering the input-to-action hot
-path; exhaustion remains a typed storage failure.
-Age, count, byte-to-90%-low-water, and 1 GiB basic-volume-reserve rules select the
-oldest eligible audio deterministically while excluding active, pinned, and sole
-recovery artifacts. Expiration stores a typed reason and time, removes only the
-CAF, and retains searchable text, timing, and export evidence.
-
-One startup reconciliation actor runs before retention. A pure planner maps
-exact app-owned partial, final, and expiration-quarantine names plus database
-evidence to deterministic restore, discard, recover, or stale-unreadable
-actions. Readable orphaned audio becomes a Recovery session with typed kind,
-reconciliation time, four empty baseline stages, `notAttempted` delivery, whole-
-file playback, and local retranscription. Unpinned recovered audio expires after
-24 hours with a typed reason while the session remains searchable.
-
-CAF finalization failure commits completed text without audio before surfacing
-the typed failure. Malformed rows are isolated. A physically corrupt SQLite
-database family is preserved under a unique local recovery filename before a
-clean database is created; permission, coordination, and disk errors are not
-misclassified as corruption. Decision
-[`0032`](decisions/0032_voice_history_crash_recovery.md) owns these boundaries.
-
-### Presentation
-
-A main-actor model renders immutable runtime snapshots and forwards user
-intents. UI can miss intermediate animation frames; the runtime and action
-engine cannot miss a hardware transition. Presentation does not own hardware,
-Profile transactions, permission polling, or transcription lifecycle.
-
-One `NavigationSplitView` presents Controller, History, Profiles, and General.
-A small navigation model owns only destination routing. A separate preference model
-owns app-wide appearance, sidebar visibility, app-local microphone selection,
-transactional Local AI settings, and transactional Voice-trigger settings.
-Controller retains the device-centered
-studio composition; History uses a searchable archive and evidence detail;
-Profiles and General use native lists and forms. General's
-Local AI section progressively reveals installed Ollama models and retention,
-provider readiness/test state, bounded context, dictionary, and instructions.
-
-`VoiceHistoryModel` owns presentation state only. `VoiceHistoryService`
-serializes correction, retranscription, reformatting, and re-delivery workflows;
-after a correction, `VoiceDictionarySuggester` diffs the source and corrected
-text and offers at most three Dictionary entries that persist only through
-confirmed Local AI settings writes (see
-[decision 0058](decisions/0058_dictionary_suggestions_from_corrections.md));
-system adapters isolate AVFAudio, Apple speech, local refinement, target capture,
-text writing, and package export. SQLite remains actor-owned. Every derived
-operation appends a linked immutable `VoiceHistoryResult` carrying its stage,
-origin, source result, Style, provider/model/prompt, structured document, timed
-spans, and delivery outcome where applicable.
-
-Device layout is data supplied by the Driver, allowing the Infinity 3 to render
-three spatial controls while a future device renders a different arrangement
-through the same UI components.
-Each connected Device retains its own descriptor, pressed Controls, and active
-Controls. Presentation renders every Device and derives editors from the union
-of Driver-supplied Control descriptors.
-The Control editor offers the suggested fallback, exact recording, clearing,
-inactive-Profile scope copy, and active registration-failure recovery.
-
-The main-actor presentation model also drives a click-through, nonactivating
-AppKit transcript HUD. It exists only while a non-live target has nonempty
-active transcript text. Local AI always uses this provisional HUD because it
-delivers only one validated final result. The HUD uses Accessibility range
-bounds to sit beside the text caret when available and otherwise uses one
-stable screen-edge position. It never follows the pointer, reports passive
-readiness, or remains after completion/failure. The HUD cannot accept input or
-activate the app.
-
-Opening the app manually always presents or raises Controller. Settings and
-Command–Comma route the same window to General. A login-item launch stays
-quiet. The process uses the regular foreground activation policy,
-appears in the Dock while running, owns the **Hardware Controller** application
-menu, and also keeps its menu-bar status/control surface after the window
-closes.
+| Concern | Choice |
+| --- | --- |
+| Languages | Swift 6 strict concurrency; Rust (pinned) for portable Voice policy; C for narrow bridges. |
+| UI | SwiftUI macOS shell and iOS app; UIKit keyboard extension. |
+| Hardware | IOKit `IOHIDManager`, exclusive open of the exact VEC collection ([0004](decisions/0004_exclusive_vec_ownership.md)). |
+| Synthetic input | `CGEvent`, guarded by Accessibility trust. Fallback chords use Carbon `RegisterEventHotKey` ([0018](decisions/0018_exact_keyboard_control_fallback.md)). |
+| macOS speech | `SpeechAnalyzer` on macOS 26+; on-device-required `SFSpeechRecognizer` on 15–25. |
+| iOS speech | transcribe.cpp 0.4.1 with Silero VAD ([0055](decisions/0055_transcribe_cpp_asr_runtime.md)). |
+| Refinement | `SystemLanguageModel` (macOS 26+) or fixed-loopback Ollama ([0020](decisions/0020_local_ai_dictation.md), [0021](decisions/0021_local_ai_model_selection.md)). |
+| Persistence | Versioned Codable JSON for configuration; system SQLite plus atomic CAF files for History. |
+| Dependencies | Apple frameworks only in apps. Rust validators use serde and RustCrypto SHA-2, statically linked. |
+| Tests | Swift Testing, XCTest, Rust tests, and real C consumers. |
+
+## Components
+
+| Component | Path | Owns | Invariant |
+| --- | --- | --- | --- |
+| Domain | `Sources/HardwareControllerCore` | Devices, Controls, events, Bindings, Profiles, `ProfileEdit`, interaction state, transcript policy. | No IOKit, AppKit, SwiftUI, Accessibility, file, or logging imports. |
+| HID transport + Driver | `HardwareControllerMac/infinity_hid_manager.swift`, `HardwareControllerCore/infinity_3_driver.swift` | Exact matching, exclusive ownership, report decoding into `left`/`center`/`right`. | Only Drivers see vendor identity or report bytes; unsupported Devices are never seized. |
+| Binding engine | `ControllerRuntime` | Pressed state, Momentary/Toggle, active-Action ownership. | Duplicates suppressed; every exit path ends active Actions once. |
+| Application runtime | `HardwareControllerApp/application_runtime*.swift` | Lifecycle, Profile transactions, permissions, warm-up, snapshots. | Adopts a Profile only after its atomic write succeeds. |
+| Process seam | `application_process.swift`, `live_application_process.swift` | Composition of HID, engine, executors, Dictation, hot keys. | Tests replace the whole seam, never UI callbacks. |
+| Dictation | `OwnedTranscriptionController`, `LocalAIDictationController`, `DictationWorkflowCoordinator` | Capture, recognition, refinement, delivery, History commit. | One microphone owner process-wide; the hot path never awaits speech or models. |
+| Voice History | `SQLiteVoiceSessionStore`, retention and reconciliation actors | Sessions, immutable results, CAF lifecycle. | Results are append-only; audio expiry never removes text. |
+| Portable Voice core | `crates/voice_core`, `voice_models`, `voice_archive` | Retention policy, Model-package and archive verification. | No platform types; unsafe Rust denied outside `voice_ffi`. |
+| Voice FFI | `crates/voice_ffi`, `Sources/hardware_controller_voice_ffi` | Versioned synchronous C ABI and typed Swift wrappers. | Caller owns every buffer; no pointer survives a call ([0035](decisions/0035_portable_voice_c_abi.md)). |
+| ASR bridge | `Sources/voice_asr_bridge` | One transcribe.cpp model, session, and optional VAD session. | Typed failures for no speech and incomplete decode; never partial text. |
+| Presentation | `HardwareControllerApp` views and models | Main-actor rendering of snapshots; forwards intents. | Owns no hardware, transactions, or transcription lifecycle. |
+| iOS app | `apps/ios/voice_input/app` | Microphone, audio, ASR, formatting, History, Live Activity. | The only process that links transcribe.cpp or touches audio. |
+| iOS keyboard | `apps/ios/voice_input/keyboard` | QWERTY, voice status, one insertion attempt, bounded recovery. | Cannot record or launch the app; reads only the bounded handoff. |
+
+## Flows
+
+**Profile edits.** Every change is a `ProfileEdit` value. Pure
+`ProfileEnvelope.applying(_:in:)` returns the candidate envelope and the
+Profile the runtime must adopt, or a typed `ProfileEditFailure`. The runtime
+saves atomically, installs the new resolver after cancelling active Actions,
+then publishes. Inactive edits never touch the resolver.
+
+**Local Dictation.** Begin captures the target and starts on-device
+recognition. Stable Accessibility ranges get reversible live text; other
+fields get final text; web and terminal targets get one guarded payload.
+Finalization has a five-second watchdog.
+
+**Local AI Dictation.** Recognition is final-only. Model preparation starts at
+begin, off the hot path. Raw text → exact spoken edits → Dictionary
+replacements → typed paragraph/list blocks from the provider → casing and list
+normalization → validation of protected tokens and meaning → one rendering for
+the captured target. Preparation plus generation share a three-second deadline;
+on any failure the Edited text is delivered once if the target is still valid.
+A bounded tee writes the CAF on a utility task; after delivery the session
+commits Raw, Edited, Formatted, Delivered, and evidence to SQLite
+([0020](decisions/0020_local_ai_dictation.md), [0054](decisions/0054_typed_local_ai_formatting_output.md)).
+
+**Triggers.** Physical Controls, the Voice chord (hold or double-press latch),
+and the menu-bar Record action all submit `DictationCommand`s to the same
+serialized dispatcher ([0034](decisions/0034_voice_trigger_convergence.md)).
+
+**iOS capture.** The containing app records a CAF and, in parallel, feeds a
+live tap into pause-cut decoding so Stop waits only for the last chunk. The
+recorded file is authoritative: an incomplete live result falls back to file
+decoding ([0056](decisions/0056_ios_live_pause_cut_decoding.md)). History
+commits before the result is published to the keyboard through a bounded,
+this-device-only Keychain handoff with heartbeats, session identity, and
+monotonic sequence numbers ([0040](decisions/0040_ios_keyboard_activation_and_handoff.md),
+[0047](decisions/0047_ios_stale_service_recovery.md),
+[0048](decisions/0048_ios_bounded_insertion_recovery.md)).
 
 ## Concurrency and latency
 
-- Schedule HID callbacks on a dedicated run loop or serial executor with
-  user-interactive quality of service.
-- Timestamp input at callback entry using a monotonic source.
-- Timestamp exact hot-key callbacks at entry, then dispatch on the same serial
-  Action queue as hardware transitions.
-- Copy only the bytes and descriptor identity needed after the callback
-  returns.
-- Copy mutable microphone samples before their callback returns; reconstruct
-  mutable PCM only inside a recognition actor.
-- Decode, normalize, resolve, and dispatch on the dedicated serial hot path.
-- Keep persistence, full diagnostic formatting, and main-actor publication
-  outside the measured interval.
-- Serialize stateful Action changes to preserve ordering. Never create an
-  unstructured task per event.
-- Enqueue Dictation handoff on one process-wide command stream. Start model
-  preparation only after begin dispatch and never await it from the input hot
-  path or microphone startup.
-- Start the Local AI post-release deadline before awaiting unfinished model
-  preparation. Cancel preparation and generation when the deadline, lifecycle,
-  or target ownership ends.
-- Route Accessibility insertion into the app's own AppKit text field through
-  the main thread. External-app insertion remains off the main actor.
-- Keep caret/HUD placement and rendering on the main actor and
-  outside the measured HID callback-to-action interval.
-- Coalesce presentation-only pressed-state updates if the main actor is busy;
-  never coalesce domain transitions.
-- Delay AppKit termination until serialized Action cleanup, microphone stop,
-  and speech-resource release complete.
-- On sleep, stop input, end active Actions, and cancel transcription. On wake,
-  restart the same process resources and republish readiness.
+- HID and hot-key callbacks are timestamped at entry with a monotonic clock and
+  run decode → resolve → dispatch on one user-interactive serial queue.
+- Persistence, logging, main-actor publication, speech, and model work stay
+  outside the measured callback-to-dispatch interval. Domain transitions are
+  never coalesced; presentation updates may be.
+- Microphone samples are copied before their callback returns; only immutable
+  `Sendable` samples cross isolation. The audio queue is bounded at 32 buffers
+  and overflow fails explicitly ([0011](decisions/0011_owned_speech_input_and_explicit_termination.md)).
+- Audio engines are leased per device/rate/channel; a route change fails the
+  session once and rebuilds ([0012](decisions/0012_configuration_aware_audio_capture.md)).
+  An Objective-C boundary converts AVFAudio exceptions into typed errors.
+- Sleep, disconnect, Profile switch, permission loss, and shutdown synthesize
+  releases and end active Actions before state is discarded. Termination waits
+  for Action cleanup and microphone release.
 
-The first release uses `IOHIDManagerRegisterInputValueCallback` on the same
-user-interactive serial queue as normalization and action dispatch. A
-10,000-transition soak measures the implemented arrangement.
+## Persistence
 
-## Identity and reconnect
-
-A physical attachment receives an ephemeral runtime identity. Bindings resolve
-through a stable Device matching rule based on the Driver's model identity and,
-when available, a trustworthy serial number.
-
-If two indistinguishable Devices are connected, the app must show the ambiguity
-instead of silently assigning per-unit Bindings. The Default Profile may apply
-the same model-level Bindings to both.
-
-Removal produces synthetic releases for every pressed Control before the
-runtime identity disappears. Reconnect starts with all Controls released and
-reuses the matching Profile.
+| Store | Format | Rules |
+| --- | --- | --- |
+| Profiles | `profiles.json`, schema 5 | Atomic replace; explicit migrations; corrupt files preserved and replaced by a safe default; newer schemas never overwritten. |
+| Preferences | `preferences.json`, schema 7 | Same rules; separate from Profiles. |
+| macOS History | `voice/` SQLite + CAF | Actor-owned connections with a five-second contention bound; startup reconciliation before retention ([0032](decisions/0032_voice_history_crash_recovery.md)); age/bytes/count/low-disk retention protects active, pinned, and recovery audio ([0031](decisions/0031_bounded_voice_history_audio.md)); one Rust retention policy for both platforms ([0057](decisions/0057_single_rust_retention_policy.md)). |
+| iOS History | SQLite + CAF, Data Protection, excluded from backup | Commit before publish; same retention policy with iOS defaults ([0049](decisions/0049_ios_offline_storage_enforcement.md)). |
+| Portable archive | `.voice_history` V1 directory | Verified in Rust before Swift restore; identical imports are no-ops ([0038](decisions/0038_portable_voice_history_archives.md)). |
+| iOS Model packages | Private, Data Protection, no backup | Rust admission with digests and limits; never implicitly evicted ([0041](decisions/0041_ios_model_package_admission.md)). |
 
 ## Permissions and security
 
-| Capability            | Why                                                   | Behavior without it                                                                 |
-| --------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| USB HID access        | Read the exact supported HID collection.               | Device remains disconnected; no raw-input retries loop.                             |
-| Accessibility trust   | Capture/revalidate editable focus, insert selected text, optionally read bounded Local AI context, and post guarded input events. | Physical state still appears; affected Actions are disabled with recovery guidance. |
-| Microphone            | Capture audio only during an owned Dictation session. | Both Dictation Actions are disabled; keyboard shortcuts remain independently available. |
-| Speech Recognition    | macOS 15–25 authorization for the legacy local recognizer. | Both Dictation Actions are disabled on those releases. |
-| Loopback HTTP         | Reach a separately installed Ollama service at one fixed numeric endpoint. | Apple On-Device and non-AI Actions remain independent. |
-| Exact global hot key   | Trigger one opt-in Binding without hardware. | No permission is required; a reservation conflict disables only that fallback. |
+| Capability | Used for | Without it |
+| --- | --- | --- |
+| HID | The exact pedal collection. | Device stays disconnected. |
+| Accessibility | Target capture, insertion, synthetic shortcuts, optional bounded context. | Physical state still shows; affected Actions are disabled. |
+| Microphone | Capture during an owned Dictation session. | Both Dictation Actions disabled. |
+| Speech Recognition | macOS 15–25 legacy recognizer. | Dictation disabled on those releases. |
+| Loopback HTTP | Ollama at `127.0.0.1:11434` only. | Apple On-Device and non-AI Actions unaffected. |
 
-The personal direct build uses hardened runtime with only the audio-input
-entitlement. It is not App Sandbox enabled. A future App Store build must
-repeat physical HID validation under its sandbox and USB entitlement posture
-rather than assuming parity with the direct build.
-
-Microphone buffers, transcripts, context, prompt payloads, and generated text
-exist only in memory for the active session and are absent from logs. Nearby
-context is disabled by default. When enabled, the Accessibility boundary reads
-at most 600 UTF-16 units around the caret only from an approved multiline,
-nonsecure target; it excludes compatibility targets, terminal contents,
-browser URLs, whole documents, screenshots, and the pasteboard.
-
-macOS 26+ speech uses installed `SpeechAnalyzer` assets; macOS 15–25 sets
-`requiresOnDeviceRecognition` and rejects unsupported local recognition. Apple
-refinement uses only the on-device system model. Ollama uses an ephemeral
-URLSession with fixed numeric loopback, no proxy dictionary, no redirects, and
-no cache. The app never falls back to server recognition or remote inference.
-Apple declares in-process locality and Ollama declares fixed-loopback locality;
-the router fails closed on any remote-capable or identity-mismatched adapter.
-It reserves only configured exact fallback chords and never reads the global
-keyboard event stream.
+- The direct build uses hardened runtime with only the audio-input entitlement;
+  no App Sandbox.
+- Providers declare locality (`inProcess`, `fixedLoopback`, `remoteCapable`);
+  the router rejects `remoteCapable` before any call ([0033](decisions/0033_local_only_voice_enforcement.md)).
+- Ollama uses an ephemeral session with no proxy, redirects, or cache, and a
+  pinned model digest.
+- Speech content, context, and prompts are never logged. Nearby context is off
+  by default and capped at 600 UTF-16 units from a nonsecure multiline field.
+- iOS product sources are scanned for network clients and capabilities on every
+  check ([0049](decisions/0049_ios_offline_storage_enforcement.md)).
 
 ## Failure behavior
 
-- Unsupported or changed firmware: do not guess; show an unsupported-device
-  diagnostic containing safe descriptor fields.
-- Exclusive-open conflict: show that another app or copy owns the pedal and
-  offer Retry; never display Ready for a matched but unopened Device.
-- Malformed report: drop it, count it, and retain prior pressed state.
-- Known executor unavailability: per-Action permission preflight prevents only
-  the affected Action from becoming active.
-- Dictation target failure: reject missing, selected, or secure fields at begin;
-  if process, secure status, focused element, caret ownership, or selected-text
-  insertion changes later, cancel automatic delivery, retain final text, store
-  the typed reason for Local AI, and expose explicit copy recovery.
-- Buffered event delivery failure: do not replay through Accessibility or the
-  pasteboard; retain final text for explicit recovery.
-- Recognition failure: publish the typed locale, asset, permission, audio,
-  conversion, or recognition failure and never mutate the target. Local AI
-  finalizes any captured audio into History with delivery not attempted; a
-  failure before the first buffer has no audio to retain. Local Dictation keeps
-  its existing in-memory-only behavior.
-- Local AI provider failure: distinguish provider absence, missing model,
-  digest drift, prohibited remote capability, timeout, overload, malformed
-  output, validation rejection, and delivery failure. Deliver Edited text once
-  only when target revalidation passes; discard late output after cancellation
-  or timeout.
-- App-local microphone unavailable: retain the saved UID, use the current
-  system default, and restore the saved Device automatically after reconnect.
-- Microphone configuration change: fail the active Dictation once, discard its
-  engine generation, and rebuild from the current Device/rate/channel shape on
-  the next activation.
-- Corrupt Profile: preserve the file, load a safe in-memory default, and offer a
-  deliberate reset/export path. Report read, backup, and migration-write
-  failures separately; a migration-write failure keeps the valid migrated
-  Profile active in memory.
-- Newer Profile schema: leave the file unchanged, request an app update, and
-  reject every save from the older process.
-- Permission loss: stop issuing affected events and end local active state.
-- Device removal: synthesize releases and clean up before publishing removal.
-- Keyboard fallback conflict: keep the Binding configured, disable only the
-  unavailable registration, and ask the user to record another chord.
+| Failure | Behavior |
+| --- | --- |
+| Unsupported firmware | Diagnostic with safe descriptor fields; no guessing. |
+| Exclusive-open conflict | Explain the owner and offer Retry; never show Ready. |
+| Malformed report | Drop, count, keep prior pressed state. |
+| Target changed | Stop automatic delivery, keep text, store a typed reason, offer copy. |
+| Recognition failure | Typed reason; target untouched; Local AI keeps captured audio in History. |
+| Provider failure | Typed reason (absent, digest drift, remote, timeout, invalid output); Edited fallback once. |
+| Microphone change | Fail the session once; rebuild on next use. |
+| Corrupt or newer configuration | Preserve the file; safe default or refuse to overwrite. |
+| Device removal | Synthesize releases, clean up, then publish removal. |
+| Fallback chord conflict | Keep the Binding; disable only that registration. |
