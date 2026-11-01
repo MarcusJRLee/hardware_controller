@@ -1,4 +1,4 @@
-# Decision 0060: macOS Parakeet ASR in an XPC service
+# Decision 0060: transcribe.cpp as the macOS default speech engine
 
 **Status:** Proposed; awaiting approval before implementation. Amends the
 in-process rule in [0029](0029_local_voice_platform_expansion.md) and the
@@ -8,8 +8,9 @@ isolation consequence in [0055](0055_transcribe_cpp_asr_runtime.md).
 
 macOS transcribes with Apple `DictationTranscriber`
 (`.progressiveLongDictation`) on macOS 26 and the legacy on-device recognizer
-on macOS 15–25. Parakeet TDT 0.6B v3 already runs on iOS through the pinned
-transcribe.cpp runtime. The macOS app does not link that runtime today.
+on macOS 15–25. Its accuracy is the main complaint about Dictation. The iOS app
+already runs transcribe.cpp, which hosts Parakeet TDT 0.6B v3; the macOS app
+does not link that runtime.
 
 The Device hot path shares the app process. ggml reports internal errors with
 `abort()`, and a Metal fault or hang inside a decode would take every Device,
@@ -37,23 +38,36 @@ waits only for the last chunk (a 2.3-second clip decodes in 39 ms); on macOS
 that is a hypothesis until implemented. Synthetic speech measures cost, not
 real dictation quality.
 
-| Criterion | Apple only (today) | Parakeet in-process | Parakeet in an XPC service | Moonshine streaming in XPC |
+Where the kernel runs:
+
+| Criterion | In the app process | App-embedded XPC service |
+| --- | --- | --- |
+| Kernel abort, Metal fault, or hang | Kills the app and the Device hot path | Kills only the service; the app falls back |
+| Memory after use | App grows about 380 MB until ggml frees | Service exit returns everything |
+| Third-party code in the app binary | ggml linked into the app | Only the service links it |
+| Added latency | None | Local IPC (hypothesis: under 10 ms) |
+| Decision | Rejected | Selected |
+
+How the default model reaches the Mac (app today: 10 MB):
+
+| Criterion | Apple default (today) | Parakeet, one-click download at onboarding | Bundled Whisper tiny, Parakeet as upgrade | Bundled Parakeet Q4_K_M |
 | --- | --- | --- | --- | --- |
-| Release latency, measured | p50 245 ms, p95 995 ms | p50 72 ms, p95 563 ms | Same plus IPC (hypothesis: under 10 ms) | Not measured; the bridge has no streaming API |
-| WER, synthetic | 2.7% | 0.0% | 0.0% | Not measured |
-| macOS 15–25 | Legacy recognizer | Supported (runtime minimum macOS 13) | Supported | Supported |
-| Kernel abort, fault, or hang | Isolated by the system | Kills the app and the Device hot path | Kills only the service; app falls back | Same as XPC |
-| Memory after use | System-managed | App grows about 380 MB until ggml frees | Service exit returns everything | Same as XPC |
-| Third-party code in the app binary | None | ggml linked into the app | Only the embedded service links it | Same as XPC |
-| Model setup | System asset | Explicit 485–740 MB package | Same | Same, different package |
-| Cost | None | Small | Medium: target, bundle, signing, protocol, supervisor | Large: streaming bridge first |
-| Decision | Stays the default | Rejected | Selected, opt-in | Deferred until measured |
+| Accuracy | 2.7% synthetic WER; weak in use | 0.0% synthetic | Smallest Whisper; likely weak on real speech (hypothesis) | 0.8% synthetic |
+| First launch | Works | Apple until the download completes | Works | Works |
+| App size | 10 MB | 23 MB; model stored separately | About 70 MB | About 500 MB on every update |
+| Dictionary recognition hints | Supported | Not supported by Parakeet yet | Supported | Not supported |
+| Model update | System-managed | Replace the package | Tied to app versions | Tied to app versions |
+| Decision | Fallback only | Selected | Rejected | Rejected |
+
+Moonshine streaming could cut release latency further, but the bridge has no
+streaming API and nothing is measured; it is a later comparison.
 
 ## Decision
 
-- Add an opt-in Parakeet provider on macOS. Apple stays the default on every
-  macOS version; nothing changes for a user who does not select Parakeet.
-- Run it in `HardwareControllerASRService.xpc`, embedded in
+- transcribe.cpp is the macOS default speech engine and Parakeet TDT 0.6B v3 is
+  its default Model package. Apple's recognizer is the fallback only: before a
+  package is installed, after a service failure, and when the user chooses it.
+- Run the kernel in `HardwareControllerASRService.xpc`, embedded in
   `Contents/XPCServices`, launched on demand by launchd. Same Team signature,
   hardened runtime, and no network entitlement. Only the service links the
   pinned `CTranscribe.framework`; release binary policy allows it there alone,
@@ -71,18 +85,23 @@ real dictation quality.
     retranscribes the retained recording with Apple's recognizer. The
     recording is the durable capture, so no audio is lost.
   - A crash during a Metal decode reloads the service CPU-only. A second crash
-    in the same app run disables Parakeet until relaunch and says so in
+    in the same app run falls back to Apple until relaunch and says so in
     settings.
   - A decode exceeding max(2 s, 0.25 × audio duration) invalidates the
     connection, which kills the service, and falls back.
   - Five idle minutes unloads the service so its memory returns to the system.
-- Model packages reuse the V1 schema and Rust's `voice_asr_model_resolve_v2`.
-  The app resolves the package; the service revalidates digests immediately
-  before load. v1 offers explicit import of a prepared package only; an in-app
-  download from a pinned source is a later, separate change.
-- Local AI settings gain a speech recognition choice: Apple (default) or
-  Parakeet, with the installed package and its state.
-- History records the ASR provider and Model package identity and digest per
+- Onboarding and Local AI settings offer one explicit download of the pinned
+  Parakeet package from an approved source, as 0029 permits. It shows the size
+  before starting, carries no Voice content, and installs only after Rust
+  validates identity, digest, license, size, and compatibility. Import of a
+  prepared package stays available. The service revalidates digests
+  immediately before load.
+- Local AI settings show the active engine (transcribe.cpp or Apple), the
+  installed package, and why Apple is active when it is.
+- Dictionary replacements apply to every engine. Parakeet ignores recognition
+  hints until transcribe.cpp supports them for its family; the Dictionary view
+  says so while Parakeet is active.
+- History records the ASR engine and Model package identity and digest per
   Voice session through an explicit migration. Existing sessions read as
   Apple.
 
@@ -95,17 +114,26 @@ real dictation quality.
 | IPC | Round trip p99 ≤ 10 ms for 30 s of audio. |
 | Recovery | Killing the service mid-decode yields Apple text from the same recording, with no lost audio and no duplicate delivery. |
 | Memory | Service exit after idle returns its footprint; the app's footprint does not grow. |
+| Real speech | Parakeet's WER on a private corpus of the owner's recordings is no worse than Apple's; a regression reopens this decision. |
 
 ## Delivery
 
-Each slice ships with its tests and docs: the service, protocol, and
-supervisor with whole-recording transcription behind a disabled setting; then
-settings and History provenance; then pause-cut live decoding; then a
-Moonshine streaming measurement.
+Each slice ships with its tests and docs:
+
+1. Service, protocol, and supervisor with whole-recording transcription and
+   Apple fallback.
+2. Package download and import, settings, and the default switch.
+3. History provenance.
+4. Pause-cut live decoding.
+5. Moonshine streaming measurement.
 
 ## Consequences
 
+- Dictation quality on macOS depends on a 485–740 MB download; until it
+  completes, users get today's Apple behavior.
 - The app bundle gains a 13 MB runtime inside the service. Packaging, signing,
   smoke, and release verification cover two executables.
-- Parakeet users import a 485–740 MB package before first use.
+- Names that relied on Apple recognition hints may regress under Parakeet until
+  hint support exists; Dictionary replacements still apply.
+- macOS 15–25 gain the same engine as macOS 26.
 - iOS is unchanged; it cannot spawn processes and keeps in-process inference.
