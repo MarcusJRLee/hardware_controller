@@ -14,3 +14,5 @@ done
 scripts/classify_changes_test.sh
 scripts/check_workflows_test.sh
 scripts/check_workflows.sh
+scripts/check_docs_test.sh
+scripts/check_docs.sh

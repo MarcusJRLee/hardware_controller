@@ -129,9 +129,9 @@ now.
 
 ## Acceptance authority
 
-- [`../voice_platform_design.md`](../voice_platform_design.md)
+- [`voice_platform_design.md`](https://github.com/MarcusJRLee/hardware_controller/blob/8bed2198de775e43d2eef9ec0cfa97694bec02bd/docs/voice_platform_design.md) (retired; archived at that commit)
 - [`../voice_cujs.md`](../voice_cujs.md)
-- [`../voice_implementation_goal_prompt.md`](../voice_implementation_goal_prompt.md)
+- [`voice_implementation_goal_prompt.md`](https://github.com/MarcusJRLee/hardware_controller/blob/8bed2198de775e43d2eef9ec0cfa97694bec02bd/docs/voice_implementation_goal_prompt.md) (retired; archived at that commit)
 
 ## Implementation progress
 
