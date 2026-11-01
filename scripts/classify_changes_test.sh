@@ -23,6 +23,8 @@ expect "Sources/HardwareControllerMac/action_executor.swift" "macos=true ios=fal
 expect "Sources/HardwareControllerCore/profile.swift" "$all"
 expect "apps/ios/voice_input/app/voice_input_app.swift" "macos=true ios=true codeql_macos=false codeql_ios=true"
 expect "Tests/HardwareControllerMacTests/action_executor_tests.swift" "macos=true ios=false codeql_macos=false codeql_ios=false"
+expect "scripts/check_ios.sh" "macos=true ios=true codeql_macos=false codeql_ios=false"
+expect "scripts/build_ios_rust_ffi.sh" "macos=true ios=true codeql_macos=false codeql_ios=true"
 expect "scripts/check.sh" "macos=true ios=false codeql_macos=false codeql_ios=false"
 expect ".github/workflows/ci.yml" "$all"
 expect "docs/user_guide.md
