@@ -72,7 +72,7 @@ gated. See
 
 | Gate | Contract | Current automated evidence |
 | --- | --- | --- |
-| HID dispatch | p50 ≤ 3 ms, p95 ≤ 8 ms, p99 ≤ 15 ms, max ≤ 30 ms across 10,000 transitions; no loss or duplication. | Current-source p50 0.011 ms, p95 0.016 ms, p99 0.022 ms, max 0.174 ms; 10,000 ordered dispatches. |
+| HID dispatch | p50 ≤ 3 ms, p95 ≤ 8 ms, p99 ≤ 15 ms, max ≤ 30 ms across 10,000 transitions (max on dedicated hardware only; shared CI VMs preempt); no loss or duplication. | Current-source p50 0.011 ms, p95 0.016 ms, p99 0.022 ms, max 0.174 ms; 10,000 ordered dispatches. |
 | Microphone activation | Warm maximum ≤ 250 ms. | p50 48.118 ms, p95/p99/max 87.050 ms across five starts; one-time preparation 149.539 ms. |
 | Local AI semantic safety | No final candidate may violate requested casing, required list structure, or protected content; invalid output falls back to Edited text once. | Prompt-6 fixed 19-case corpus: Qwen 4B 2 semantic failures, Qwen 9B 0, Apple 1; every provider passes the typed gate. |
 | Local AI refinement | Warm raw-final-to-refined p95 ≤ 1 s on the reference Mac. | Open: prompt-6 Qwen 4B p95 15.739 s includes one provider timeout. |
