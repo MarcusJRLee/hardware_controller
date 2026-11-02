@@ -150,15 +150,17 @@ public final class ASRKernel {
       throw .invalidRequest
     }
     let detectSpeech = request.detectSpeech && capabilities.supportsSpeechDetection
-    return try Self.withCStrings(request.vocabulary) { vocabulary throws(ASRKernelError) in
-      try request.language.withCString { language throws(ASRKernelError) in
+    // Older SDKs declare these pointer helpers `rethrows`, which erases typed
+    // throws, so the closures return a Result that is unwrapped here.
+    let result = Self.withCStrings(request.vocabulary) { vocabulary in
+      request.language.withCString { language in
         var bridgeRequest = VoiceASRRequestV1()
         bridgeRequest.language_utf8 = language
         bridgeRequest.vocabulary_utf8 = vocabulary.baseAddress
         bridgeRequest.vocabulary_count = UInt32(request.vocabulary.count)
         bridgeRequest.detect_speech = detectSpeech ? 1 : 0
-        return try samples.withUnsafeBufferPointer { buffer throws(ASRKernelError) in
-          try Self.readResult { output in
+        return samples.withUnsafeBufferPointer { buffer in
+          Self.readResultCapturing { output in
             voice_asr_transcribe_v1(
               context,
               buffer.baseAddress,
@@ -169,6 +171,17 @@ public final class ASRKernel {
           }
         }
       }
+    }
+    return try result.get()
+  }
+
+  private static func readResultCapturing(
+    run: (inout VoiceASRResultV1) -> UInt32
+  ) -> Result<ASRKernelTranscript, ASRKernelError> {
+    do throws(ASRKernelError) {
+      return .success(try readResult(run: run))
+    } catch {
+      return .failure(error)
     }
   }
 
@@ -280,10 +293,10 @@ public final class ASRKernel {
   }
 
   /// Exposes null-terminated copies of `strings` for one synchronous call.
-  private static func withCStrings<Result>(
+  private static func withCStrings<Value>(
     _ strings: [String],
-    _ body: (UnsafeBufferPointer<UnsafePointer<CChar>?>) throws(ASRKernelError) -> Result
-  ) throws(ASRKernelError) -> Result {
+    _ body: (UnsafeBufferPointer<UnsafePointer<CChar>?>) -> Result<Value, ASRKernelError>
+  ) -> Result<Value, ASRKernelError> {
     let copies = strings.map { strdup($0) }
     defer {
       for copy in copies {
@@ -291,11 +304,11 @@ public final class ASRKernel {
       }
     }
     guard copies.allSatisfy({ $0 != nil }) else {
-      throw .invalidRequest
+      return .failure(.invalidRequest)
     }
     let pointers = copies.map { UnsafePointer($0) }
-    return try pointers.withUnsafeBufferPointer { buffer throws(ASRKernelError) in
-      try body(strings.isEmpty ? UnsafeBufferPointer(start: nil, count: 0) : buffer)
+    return pointers.withUnsafeBufferPointer { buffer in
+      body(strings.isEmpty ? UnsafeBufferPointer(start: nil, count: 0) : buffer)
     }
   }
 }

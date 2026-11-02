@@ -110,8 +110,9 @@ struct ASRSampleAccumulator {
   func pcmBuffers(framesPerBuffer: Int = 1_600) throws(SpeechRecognitionBackendError)
     -> [AVAudioPCMBuffer]
   {
-    try stride(from: 0, to: samples.count, by: framesPerBuffer).map {
-      start throws(SpeechRecognitionBackendError) in
+    // A loop, not `map`: older SDKs' `map` is `rethrows`, which erases typed throws.
+    var buffers: [AVAudioPCMBuffer] = []
+    for start in stride(from: 0, to: samples.count, by: framesPerBuffer) {
       let count = min(framesPerBuffer, samples.count - start)
       guard
         let buffer = AVAudioPCMBuffer(
@@ -129,8 +130,9 @@ struct ASRSampleAccumulator {
         }
         channel.update(from: base + start, count: count)
       }
-      return buffer
+      buffers.append(buffer)
     }
+    return buffers
   }
 
   private mutating func converter(
