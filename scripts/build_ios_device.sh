@@ -52,8 +52,10 @@ if [[ -f .env.local ]]; then
   set +a
 fi
 
-[[ -n "${HC_EXPECTED_TEAM_ID:-}" ]] || {
-  print -u2 "HC_EXPECTED_TEAM_ID must be configured privately in .env.local."
+# Voice Input may sign with a different team than the Mac app.
+ios_team_id="${HC_IOS_TEAM_ID:-${HC_EXPECTED_TEAM_ID:-}}"
+[[ -n "$ios_team_id" ]] || {
+  print -u2 "HC_IOS_TEAM_ID or HC_EXPECTED_TEAM_ID must be configured privately in .env.local."
   exit 1
 }
 
@@ -67,7 +69,7 @@ xcodebuild build -quiet \
   -configuration "$build_configuration" \
   -destination "generic/platform=iOS" \
   -derivedDataPath "$derived_data" \
-  DEVELOPMENT_TEAM="$HC_EXPECTED_TEAM_ID" \
+  DEVELOPMENT_TEAM="$ios_team_id" \
   CODE_SIGN_STYLE=Automatic
 
 app_bundle="$derived_data/Build/Products/$build_product_directory/VoiceInput.app"
@@ -132,8 +134,8 @@ for signed_bundle in \
   "$app_bundle"/PlugIns/*.appex; do
   signed_team="$(codesign -dv --verbose=4 "$signed_bundle" 2>&1 \
     | awk -F= '/^TeamIdentifier=/{print $2}')"
-  [[ "$signed_team" == "$HC_EXPECTED_TEAM_ID" ]] || {
-    print -u2 "$signed_bundle Team $signed_team does not match HC_EXPECTED_TEAM_ID."
+  [[ "$signed_team" == "$ios_team_id" ]] || {
+    print -u2 "$signed_bundle Team $signed_team does not match $ios_team_id."
     exit 1
   }
 done
