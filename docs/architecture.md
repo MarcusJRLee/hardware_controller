@@ -31,7 +31,7 @@ observe it and never block it.
 | UI | SwiftUI macOS shell and iOS app; UIKit keyboard extension. |
 | Hardware | IOKit `IOHIDManager`, exclusive open of the exact VEC collection ([0004](decisions/0004_exclusive_vec_ownership.md)). |
 | Synthetic input | `CGEvent`, guarded by Accessibility trust. Fallback chords use Carbon `RegisterEventHotKey` ([0018](decisions/0018_exact_keyboard_control_fallback.md)). |
-| macOS speech | `SpeechAnalyzer` on macOS 26+; on-device-required `SFSpeechRecognizer` on 15–25. |
+| macOS speech | transcribe.cpp 0.4.1 with Parakeet TDT 0.6B v3 in an app-embedded XPC service (default); Apple `SpeechAnalyzer` (26+) or `SFSpeechRecognizer` (15–25) when chosen or as a fallback ([0060](decisions/0060_macos_transcribe_cpp_default_asr.md)). |
 | iOS speech | transcribe.cpp 0.4.1 with Silero VAD ([0055](decisions/0055_transcribe_cpp_asr_runtime.md)). |
 | Refinement | `SystemLanguageModel` (macOS 26+) or fixed-loopback Ollama ([0020](decisions/0020_local_ai_dictation.md), [0021](decisions/0021_local_ai_model_selection.md)). |
 | Persistence | Versioned Codable JSON for configuration; system SQLite plus atomic CAF files for History. |
@@ -51,7 +51,9 @@ observe it and never block it.
 | Voice History | `SQLiteVoiceSessionStore`, retention and reconciliation actors | Sessions, immutable results, CAF lifecycle. | Results are append-only; audio expiry never removes text. |
 | Portable Voice core | `crates/voice_core`, `voice_models`, `voice_archive` | Retention policy, Model-package and archive verification. | No platform types; unsafe Rust denied outside `voice_ffi`. |
 | Voice FFI | `crates/voice_ffi`, `Sources/hardware_controller_voice_ffi` | Versioned synchronous C ABI and typed Swift wrappers. | Caller owns every buffer; no pointer survives a call ([0035](decisions/0035_portable_voice_c_abi.md)). |
-| ASR bridge | `Sources/voice_asr_bridge` | One transcribe.cpp model, session, and optional VAD session. | Typed failures for no speech and incomplete decode; never partial text. |
+| ASR bridge | `Sources/voice_asr_bridge`, `Sources/voice_asr_runtime` | One transcribe.cpp model, session, and optional VAD session; `ASRKernel` is its typed Swift owner. | Typed failures for no speech and incomplete decode; never partial text. |
+| macOS ASR service | `Sources/hardware_controller_asr_service*`, `Contents/XPCServices/HardwareControllerASRService.xpc` | The only macOS code that links transcribe.cpp; revalidates the package digest, then decodes. | A ggml abort, Metal fault, or hang kills only this process; no entitlements. |
+| Speech engine | `SpeechEngineSessionFactory`, `TranscribeCppSpeechEngine`, `TranscribeCppSpeechRecognitionSession` | Engine selection, supervision (deadline, CPU retry, disable after two crashes, idle kill), Apple fallback from the buffered recording. | A missing package refuses the session; it never silently uses Apple. Every fallback is announced and recorded. |
 | Presentation | `HardwareControllerApp` views and models | Main-actor rendering of snapshots; forwards intents. | Owns no hardware, transactions, or transcription lifecycle. |
 | iOS app | `apps/ios/voice_input/app` | Microphone, audio, ASR, formatting, History, Live Activity. | The only process that links transcribe.cpp or touches audio. |
 | iOS keyboard | `apps/ios/voice_input/keyboard` | QWERTY, voice status, one insertion attempt, bounded recovery. | Cannot record or launch the app; reads only the bounded handoff. |
@@ -120,6 +122,7 @@ monotonic sequence numbers ([0040](decisions/0040_ios_keyboard_activation_and_ha
 | iOS History | SQLite + CAF, Data Protection, excluded from backup | Commit before publish; same retention policy with iOS defaults ([0049](decisions/0049_ios_offline_storage_enforcement.md)). |
 | Portable archive | `.voice_history` V1 directory | Verified in Rust before Swift restore; identical imports are no-ops ([0038](decisions/0038_portable_voice_history_archives.md)). |
 | iOS Model packages | Private, Data Protection, no backup | Rust admission with digests and limits; never implicitly evicted ([0041](decisions/0041_ios_model_package_admission.md)). |
+| macOS Model package | `Application Support/…/SpeechModels`, one package plus `installed.json` | Pinned size and SHA-256 per file, then Rust admission; the record switches packages in one atomic rename. |
 
 ## Permissions and security
 
@@ -128,11 +131,13 @@ monotonic sequence numbers ([0040](decisions/0040_ios_keyboard_activation_and_ha
 | HID | The exact pedal collection. | Device stays disconnected. |
 | Accessibility | Target capture, insertion, synthetic shortcuts, optional bounded context. | Physical state still shows; affected Actions are disabled. |
 | Microphone | Capture during an owned Dictation session. | Both Dictation Actions disabled. |
-| Speech Recognition | macOS 15–25 legacy recognizer. | Dictation disabled on those releases. |
+| Speech Recognition | macOS 15–25 legacy recognizer, only when Apple is the chosen engine. | Apple Dictation disabled on those releases. |
 | Loopback HTTP | Ollama at `127.0.0.1:11434` only. | Apple On-Device and non-AI Actions unaffected. |
+| HTTPS download | One explicit, pinned speech-model download from Hugging Face; no Voice content. | Dictation stays off until the model is installed or Apple is chosen. |
 
 - The direct build uses hardened runtime with only the audio-input entitlement;
-  no App Sandbox.
+  no App Sandbox. The ASR service has hardened runtime and no entitlements, and
+  links only Apple libraries plus its bundled, pinned `CTranscribe.framework`.
 - Providers declare locality (`inProcess`, `fixedLoopback`, `remoteCapable`);
   the router rejects `remoteCapable` before any call ([0033](decisions/0033_local_only_voice_enforcement.md)).
 - Ollama uses an ephemeral session with no proxy, redirects, or cache, and a

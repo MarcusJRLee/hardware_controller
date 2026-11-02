@@ -160,6 +160,41 @@ struct OwnedTranscriptionControllerTest {
     )
   }
 
+  /// transcribe.cpp publishes once on release, and the field receives it.
+  @Test
+  func transcribeCppTextIsInsertedOnRelease() async throws {
+    let fixture = Fixture()
+    let controller = fixture.makeController(
+      factory: SpeechEngineSessionFactory(
+        configuration: SpeechEngineConfiguration(
+          selection: .transcribeCpp, package: ASRTestFixtures.package),
+        apple: FakeAppleRecognizer(),
+        engine: ASRTestFixtures.engine(FakeASRServiceConnection())
+      )
+    )
+    await controller.handle(.begin)
+    try await waitUntil { await controller.snapshot().phase == .listening }
+    fixture.microphone.emit(try capturedAudio())
+    await controller.handle(.finish)
+    try await waitUntil { await controller.snapshot().phase == .completed }
+    #expect(fixture.writer.inserted == ["parakeet text"])
+    #expect(await controller.latestEngineUsage?.engine == .transcribeCpp)
+  }
+
+  /// Without a package, Dictation fails with setup required and never runs Apple.
+  @Test
+  func transcribeCppWithoutPackageRequiresSetup() async throws {
+    let fixture = Fixture()
+    let apple = FakeAppleRecognizer()
+    let controller = fixture.makeController(
+      factory: SpeechEngineSessionFactory(configuration: .unconfigured, apple: apple)
+    )
+    await controller.handle(.begin)
+    try await waitUntil { await controller.snapshot().failure == .speechEngineSetupRequired }
+    #expect(await apple.sessions.isEmpty)
+    #expect(fixture.writer.inserted.isEmpty)
+  }
+
   @Test
   func bufferedTargetWaitsForFinalization()
     async throws
@@ -801,11 +836,12 @@ private final class Fixture: @unchecked Sendable {
   }
 
   func makeController(
+    factory override: (any SpeechRecognitionSessionCreating)? = nil,
     audioBufferHandler:
       @escaping @Sendable (CapturedAudioBuffer) -> Void = { _ in }
   ) -> OwnedTranscriptionController {
     OwnedTranscriptionController(
-      factory: factory,
+      factory: override ?? factory,
       microphone: microphone,
       targeter: FixedTargeter(
         deliveryCapability: deliveryCapability,

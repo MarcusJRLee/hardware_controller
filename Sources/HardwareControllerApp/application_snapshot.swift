@@ -25,6 +25,8 @@ struct ApplicationSnapshot: Equatable, Sendable {
   var hardwareInputFailure: HardwareInputStartFailure?
   var keyboardFallbackFailures: [KeyboardFallbackRegistrationFailure] = []
   var voiceShortcutFailure: VoiceShortcutRegistrationFailure?
+  /// The latest session that used Apple although transcribe.cpp was selected.
+  var speechEngineFallback: SpeechEngineFallbackReason?
   var lastError: String?
   var recoveryNotice: String?
 }

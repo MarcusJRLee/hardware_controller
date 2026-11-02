@@ -42,7 +42,7 @@ struct PreferredMicrophone: Codable, Equatable, Identifiable, Sendable {
 
 /// Stores versioned application presentation preferences.
 struct ApplicationPreferences: Codable, Equatable, Sendable {
-  static let currentSchemaVersion = 7
+  static let currentSchemaVersion = 8
 
   var appearance: ApplicationAppearance
   var sidebarVisibility: SidebarVisibilityPreference
@@ -50,6 +50,7 @@ struct ApplicationPreferences: Codable, Equatable, Sendable {
   var localAI: LocalAISettings
   var voiceTrigger: VoiceTriggerSettings
   var voiceHistoryRetention: VoiceHistoryRetentionSettings
+  var speechEngine: SpeechEngine
   var schemaVersion: Int
 
   /// Creates one complete preference value.
@@ -60,6 +61,7 @@ struct ApplicationPreferences: Codable, Equatable, Sendable {
     localAI: LocalAISettings = .default,
     voiceTrigger: VoiceTriggerSettings = .default,
     voiceHistoryRetention: VoiceHistoryRetentionSettings = .macOSDefault,
+    speechEngine: SpeechEngine = .transcribeCpp,
     schemaVersion: Int = currentSchemaVersion
   ) {
     self.appearance = appearance
@@ -68,6 +70,7 @@ struct ApplicationPreferences: Codable, Equatable, Sendable {
     self.localAI = localAI
     self.voiceTrigger = voiceTrigger
     self.voiceHistoryRetention = voiceHistoryRetention
+    self.speechEngine = speechEngine
     self.schemaVersion = schemaVersion
   }
 
@@ -78,6 +81,7 @@ struct ApplicationPreferences: Codable, Equatable, Sendable {
     case localAI
     case voiceTrigger
     case voiceHistoryRetention
+    case speechEngine
     case schemaVersion
   }
 
@@ -111,6 +115,11 @@ struct ApplicationPreferences: Codable, Equatable, Sendable {
         VoiceHistoryRetentionSettings.self,
         forKey: .voiceHistoryRetention
       ) ?? .macOSDefault
+    speechEngine =
+      try container.decodeIfPresent(
+        SpeechEngine.self,
+        forKey: .speechEngine
+      ) ?? .transcribeCpp
     schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
   }
 
@@ -306,7 +315,7 @@ struct ApplicationPreferencesStore:
     _ preferences: ApplicationPreferences
   ) throws -> ApplicationPreferences {
     switch preferences.schemaVersion {
-    case 1, 2, 3, 4, 5, 6:
+    case 1, 2, 3, 4, 5, 6, 7:
       var migrated = preferences
       migrated.schemaVersion = ApplicationPreferences.currentSchemaVersion
       if preferences.schemaVersion == 1 {
@@ -320,6 +329,11 @@ struct ApplicationPreferencesStore:
       }
       if preferences.schemaVersion < 6 {
         migrated.voiceHistoryRetention = .macOSDefault
+      }
+      if preferences.schemaVersion < 8 {
+        // Decision 0060: existing users move to transcribe.cpp and are asked
+        // to download its model or explicitly keep Apple.
+        migrated.speechEngine = .transcribeCpp
       }
       return migrated
     case ApplicationPreferences.currentSchemaVersion:
@@ -452,6 +466,8 @@ final class ApplicationPreferencesModel {
   private var voiceTriggerSettingsHandler: ((VoiceTriggerSettings) -> Void)?
   @ObservationIgnored
   private var voiceHistoryRetentionHandler: ((VoiceHistoryRetentionSettings) -> Void)?
+  @ObservationIgnored
+  private var speechEngineHandler: ((SpeechEngine) -> Void)?
 
   /// Loads, overrides, and applies presentation preferences once.
   init(
@@ -512,6 +528,10 @@ final class ApplicationPreferencesModel {
 
   var voiceHistoryRetention: VoiceHistoryRetentionSettings {
     preferences.voiceHistoryRetention
+  }
+
+  var speechEngine: SpeechEngine {
+    preferences.speechEngine
   }
 
   /// Keeps an unavailable saved Device selectable while default fallback is active.
@@ -575,6 +595,24 @@ final class ApplicationPreferencesModel {
     _ handler: @escaping (LocalAISettings) -> Void
   ) {
     localAISettingsHandler = handler
+  }
+
+  /// Installs the speech engine callback after application composition completes.
+  func setSpeechEngineHandler(_ handler: @escaping (SpeechEngine) -> Void) {
+    speechEngineHandler = handler
+  }
+
+  /// Persists the selected speech engine before applying it.
+  @discardableResult
+  func setSpeechEngine(_ engine: SpeechEngine) -> Bool {
+    guard engine != preferences.speechEngine else {
+      return true
+    }
+    var candidate = preferences
+    candidate.speechEngine = engine
+    return persist(candidate) { [weak self] in
+      self?.speechEngineHandler?(engine)
+    }
   }
 
   /// Installs the process callback after application composition completes.

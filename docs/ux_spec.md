@@ -10,13 +10,13 @@ typography, spacing, and position carry everything else.
 
 | Surface | Contract |
 | --- | --- |
-| Dock and app menu | Regular foreground app named **Hardware Controller**. Manual launch opens Controller; login-item launch stays quiet. |
+| Dock and app menu | Regular foreground app named **Hardware Controller**. Manual launch opens Controller; login-item launch stays quiet unless speech setup is required. |
 | Menu bar | Monochrome pedal icon. Lists Device status, active Profile picker, **Record Voice**, each destination, Launch at Login, Quit. Record never activates the window, so the target app keeps focus. |
 | Window | Native sidebar with exactly Controller, History, Profiles, General; opens expanded; content starts below the title bar; no horizontal scrolling. |
-| Controller | One Device card with Driver-supplied layout, a prominent center Control, each Control's Action, mode, and optional fallback, and immediate press feedback. Selecting a Control edits it in place. |
+| Controller | Until the speech model is installed or Apple is chosen, an amber card above the Device card with one prominent **Download** action and a quiet **Use Apple Instead** that asks for confirmation. One Device card with Driver-supplied layout, a prominent center Control, each Control's Action, mode, and optional fallback, and immediate press feedback. Selecting a Control edits it in place. |
 | History | Searchable session list plus evidence detail. Prior results are immutable; reruns and re-delivery are explicit; delete is visually distinct. Expired audio names its rule. |
 | Profiles | Stable list and editor; active state is separate from selection. |
-| General | Native form sections: Appearance, microphone, Local AI, Voice chord, History storage, Launch at Login. |
+| General | Native form sections: Speech recognition (first), Appearance, microphone, Local AI, Voice chord, History storage, Launch at Login. Apple stays visibly marked as the less accurate engine while selected. |
 | Transcript HUD | Click-through, nonactivating; only while a target cannot show live text and text exists; anchored to the caret or one stable edge, never the pointer. |
 
 ## Behavior

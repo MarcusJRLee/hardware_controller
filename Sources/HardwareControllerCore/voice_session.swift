@@ -49,6 +49,7 @@ public enum VoiceSessionDeliveryFailureReason:
       .speechRecognitionPermissionDenied,
       .localeUnsupported,
       .modelUnavailable,
+      .speechEngineSetupRequired,
       .noFocusedTextField,
       .audioUnavailable,
       .recognitionFailed:
@@ -73,6 +74,8 @@ public struct VoiceSessionDocument: Codable, Equatable, Sendable {
   public let formattedDocument: VoiceFormattedDocument?
   public let spokenEdits: VoiceSpokenEditResult?
   public let inputKind: VoiceSessionInputKind
+  /// The engine and Model package that produced `rawText` (decision 0060).
+  public let speechEngine: SpeechEngineUsage
 
   public init(
     id: UUID,
@@ -88,7 +91,8 @@ public struct VoiceSessionDocument: Codable, Equatable, Sendable {
     deliveryFailureReason: VoiceSessionDeliveryFailureReason? = nil,
     formattedDocument: VoiceFormattedDocument? = nil,
     spokenEdits: VoiceSpokenEditResult? = nil,
-    inputKind: VoiceSessionInputKind = .microphoneCapture
+    inputKind: VoiceSessionInputKind = .microphoneCapture,
+    speechEngine: SpeechEngineUsage = .apple
   ) {
     self.id = id
     self.startedAt = startedAt
@@ -104,6 +108,7 @@ public struct VoiceSessionDocument: Codable, Equatable, Sendable {
     self.formattedDocument = formattedDocument
     self.spokenEdits = spokenEdits
     self.inputKind = inputKind
+    self.speechEngine = speechEngine
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -121,6 +126,7 @@ public struct VoiceSessionDocument: Codable, Equatable, Sendable {
     case formattedDocument
     case spokenEdits
     case inputKind
+    case speechEngine
   }
 
   public init(from decoder: any Decoder) throws {
@@ -161,5 +167,11 @@ public struct VoiceSessionDocument: Codable, Equatable, Sendable {
         VoiceSessionInputKind.self,
         forKey: .inputKind
       ) ?? .microphoneCapture
+    // Sessions recorded before decision 0060 used Apple's recognizer.
+    speechEngine =
+      try container.decodeIfPresent(
+        SpeechEngineUsage.self,
+        forKey: .speechEngine
+      ) ?? .apple
   }
 }

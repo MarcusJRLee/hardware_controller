@@ -6,6 +6,7 @@ struct ApplicationShellView: View {
   let model: AppModel
   let preferencesModel: ApplicationPreferencesModel
   let historyModel: VoiceHistoryModel
+  let speechEngineModel: SpeechEngineModel
 
   @State private var columnVisibility: NavigationSplitViewVisibility
 
@@ -14,12 +15,14 @@ struct ApplicationShellView: View {
     model: AppModel,
     navigation: ApplicationNavigationModel,
     preferencesModel: ApplicationPreferencesModel,
-    historyModel: VoiceHistoryModel
+    historyModel: VoiceHistoryModel,
+    speechEngineModel: SpeechEngineModel
   ) {
     self.model = model
     self.navigation = navigation
     self.preferencesModel = preferencesModel
     self.historyModel = historyModel
+    self.speechEngineModel = speechEngineModel
     _columnVisibility = State(
       initialValue:
         preferencesModel.sidebarVisibility == .collapsed
@@ -101,6 +104,7 @@ struct ApplicationShellView: View {
     case .controller:
       ControllerView(
         model: model,
+        speech: speechEngineModel,
         manageProfiles: { navigation.select(.profiles) }
       )
     case .history:
@@ -110,7 +114,8 @@ struct ApplicationShellView: View {
     case .general:
       GeneralSettingsView(
         model: model,
-        preferencesModel: preferencesModel
+        preferencesModel: preferencesModel,
+        speech: speechEngineModel
       )
     }
   }

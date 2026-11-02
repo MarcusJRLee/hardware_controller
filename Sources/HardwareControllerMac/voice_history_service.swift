@@ -294,6 +294,7 @@ public actor VoiceHistoryService: VoiceHistoryServicing {
       .speechRecognitionPermissionDenied,
       .localeUnsupported,
       .modelUnavailable,
+      .speechEngineSetupRequired,
       .audioUnavailable,
       .recognitionFailed:
       "Voice History could not re-deliver the text."

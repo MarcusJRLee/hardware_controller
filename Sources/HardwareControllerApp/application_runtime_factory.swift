@@ -12,6 +12,7 @@ extension ApplicationRuntime {
       (any ProfilePersisting)? = nil,
     preferredMicrophoneUID: String? = nil,
     localAISettings: LocalAISettings = .default,
+    speechEngine: SpeechEngineConfiguration = .unconfigured,
     voiceTriggerSettings: VoiceTriggerSettings = .default,
     voiceSessionHistory: (any VoiceSessionHistoryRecording)? = nil
   ) -> ApplicationRuntime {
@@ -75,6 +76,7 @@ extension ApplicationRuntime {
       system: system,
       preferredMicrophoneUID: preferredMicrophoneUID,
       localAISettings: localAISettings,
+      speechEngine: speechEngine,
       voiceTriggerSettings: voiceTriggerSettings,
       voiceSessionHistory: voiceSessionHistory,
       loadsProfileOnStart: !isDemoMode

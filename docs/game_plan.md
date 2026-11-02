@@ -17,6 +17,7 @@ Shipped behavior per journey is in [voice_cujs.md](voice_cujs.md).
 | Local AI safety | No casing, list, or protected-content violation reaches delivery. | Fixed 19-case corpus passes the typed gate for every provider. |
 | Local AI deadline | Fallback within 3 s after final speech. | Deterministic deadline and late-output tests. |
 | History search | Warm 5,000-session p95 ≤ 250 ms. | p95 2.6 ms. |
+| macOS speech | Release p95 ≤ 1 s; IPC p99 ≤ 10 ms; a service crash yields Apple text from the same audio ([0060](decisions/0060_macos_transcribe_cpp_default_asr.md)). | Parakeet v3 Q8_0 through the installed service: 84 s clip p95 408 ms; 0.0% synthetic WER; IPC p99 2.2 ms at 84 s; crash mid-decode recovers (`scripts/check_speech_engine.sh`, every install). |
 | iOS ASR | File RTF ≤ 0.75 on the pinned corpus; bytes revalidated before load. | Whisper tiny.en Q8_0 RTF 0.004, Parakeet v3 Q8_0 RTF 0.005, WER 0.8% / 0.0% (synthetic corpus, M5 Max; `scripts/benchmark_asr.sh`). |
 | Privacy | No speech logged; no remote-capable provider called; Ollama loopback only; iOS has no network code. | Provider-boundary, transport, and iOS source/capability scan on every check. |
 | Docs | Docs describe current behavior; links resolve. | Reviewed with each PR. |
@@ -41,8 +42,10 @@ Reference-Mac results do not establish lower-tier support.
 
 ## Next work
 
-- macOS default speech engine: transcribe.cpp with Parakeet in an XPC service
-  ([0060](decisions/0060_macos_transcribe_cpp_default_asr.md), proposed).
+- macOS speech: pause-cut live decoding so Parakeet text arrives while
+  speaking; Parakeet contextual biasing for Dictionary terms; a Moonshine
+  streaming measurement; HID soak during a live service crash; your
+  real-speech comparison against Apple (the 0060 gate).
 - Portability: keep Apple types out of the Rust boundary; document Android,
   Windows, and Linux seams without building them. Remote providers need a new
   privacy decision first.

@@ -44,7 +44,8 @@ struct HardwareControllerAppTests {
         model: model,
         navigation: navigation,
         preferencesModel: preferences,
-        historyModel: history.model
+        historyModel: history.model,
+        speechEngineModel: SpeechEngineModel(selection: .transcribeCpp, store: nil) { _ in true }
       )
     )
     let window = NSWindow(contentViewController: hostingController)

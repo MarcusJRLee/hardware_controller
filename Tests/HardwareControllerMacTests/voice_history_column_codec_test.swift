@@ -45,4 +45,18 @@ struct VoiceHistoryColumnCodecTest {
     #expect(try Codec.encodedTimedSpans([]) == nil)
     #expect(try Codec.timedSpans(from: nil).isEmpty)
   }
+
+  /// Engine evidence round-trips; rows from before decision 0060 read as Apple.
+  @Test
+  func speechEngineRoundTripsAndLegacyRowsReadAsApple() throws {
+    let usage = SpeechEngineUsage(
+      engine: .transcribeCpp,
+      modelPackageID: "com.longdevity.asr.parakeet_tdt_v3",
+      modelPackageVersion: "d8d8c32-q8_0",
+      modelDisplayName: "Parakeet TDT 0.6B v3"
+    )
+    #expect(try Codec.speechEngine(from: Codec.encodedSpeechEngine(usage)) == usage)
+    #expect(try Codec.speechEngine(from: nil) == .apple)
+    #expect(throws: VoiceSessionHistoryError.self) { try Codec.speechEngine(from: "{") }
+  }
 }

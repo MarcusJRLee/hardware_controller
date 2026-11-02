@@ -3,8 +3,11 @@
 ## Requirements
 
 - Apple-silicon Mac, macOS 15+, and a VEC Infinity USB-3 (IN-USB-3) pedal.
-- Accessibility and Microphone permission; Speech Recognition too on macOS
-  15–25. macOS Dictation does not need to be enabled.
+- Accessibility and Microphone permission. macOS Dictation does not need to be
+  enabled.
+- A one-time 741 MB download of the Parakeet speech model, or an explicit choice
+  of Apple's less accurate recognizer (which needs Speech Recognition permission
+  on macOS 15–25).
 - For Local AI Dictation: Apple Intelligence on macOS 26+, or a local
   [Ollama](https://ollama.com) service.
 
@@ -22,9 +25,12 @@ click the app and choose **Open**.
    **Ready**, meaning the app exclusively owns the pedal, so its buttons no
    longer act as mouse clicks.
 2. Press each pedal; its drawing turns blue and shows **PRESSED**.
-3. Follow each amber card to allow Accessibility, Microphone, and (macOS 15–25)
-   Speech Recognition. If a card stays after you allow it, relaunch once.
-4. Click a text field, hold the center pedal, speak, and release.
+3. Follow each amber card to allow Accessibility and Microphone. If a card stays
+   after you allow it, relaunch once.
+4. On **Download the speech model to dictate**, click **Download**. Dictation
+   stays off until the model is installed, so you never get a weaker engine by
+   accident. **Use Apple Instead** asks you to confirm the less accurate choice.
+5. Click a text field, hold the center pedal, speak, and release.
 
 The center pedal defaults to Local Dictation in Hold mode; left and right
 default to No Action.
@@ -34,7 +40,7 @@ default to No Action.
 | Action | What happens |
 | --- | --- |
 | No Action | Nothing. |
-| Local Dictation | Live on-device speech. Fields that support it show words as you speak; others get final text on release. |
+| Local Dictation | On-device speech. With Parakeet, text arrives on release. With Apple, fields that support it show words as you speak. |
 | Local AI Dictation | One corrected, formatted result after release, refined by Apple On-Device or local Ollama. |
 | Keyboard Shortcut | Sends one recorded chord per press. Needs Accessibility only. |
 
@@ -47,6 +53,21 @@ rechecked before every change. If focus or the caret moves, insertion stops and
 one payload on release; Terminal and Cursor's terminal get sanitized text with
 no Return, so a command is never submitted. Where a field cannot show live text,
 a click-through HUD near the caret shows it instead.
+
+## Speech recognition
+
+**General → Speech recognition** chooses the engine for both Dictation Actions.
+
+| Engine | Details |
+| --- | --- |
+| Parakeet (default) | NVIDIA Parakeet TDT 0.6B v3 through transcribe.cpp, in a separate local process. A crash there cannot affect the pedal. One 741 MB download, verified file by file before install. |
+| Apple | macOS's on-device recognizer. Needs a confirmation, because it is less accurate on the benchmark (2.7% vs 0.0% word errors). |
+
+If the Parakeet process stops during a session, that recording is transcribed
+by Apple instead and the settings note says so; History shows **Speech: Apple
+(speech service stopped)**. After two such stops, Apple is used until you quit
+and reopen. Parakeet ignores Dictionary recognition hints for now; Dictionary
+replacements still apply.
 
 ## Local AI Dictation
 
@@ -164,7 +185,9 @@ network access and never downloads models.
 | --- | --- |
 | Pedal still clicks | Quit every other copy, open only the Applications copy, choose **Retry**. |
 | **Controller unavailable** | Another copy or pedal utility owns the device; quit it and choose **Retry**. |
-| Pressed, but no dictation | Check the Action is a Dictation Action, permissions are granted, and a normal (non-password) field has focus. |
+| Pressed, but no dictation | Check the Action is a Dictation Action, permissions are granted, the speech model is downloaded (or Apple chosen), and a normal (non-password) field has focus. |
+| **Download the speech model to dictate** | Click **Download**, or **Use Apple Instead**. A failed download names the file; nothing partial is installed. |
+| Parakeet stopped twice | Apple is in use until relaunch; quit and reopen to retry Parakeet. |
 | A Control–Option chord starts macOS Dictation | That pedal is a Keyboard Shortcut; change it to Local Dictation. |
 | Text stopped after switching apps | Intentional; start again or use **Copy Text**. |
 | Dictation stopped after changing microphones | The session ends when the input changes; start again. |

@@ -35,7 +35,18 @@ test_team_identifier_validation() {
   expect_failure verify_team_identifier "EXPECTED123" ""
 }
 
+# Verifies the ASR service may load only Apple code and its bundled runtime.
+test_asr_service_policy() {
+  local apple=$'/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation\n/usr/lib/libSystem.B.dylib'
+  verify_asr_service_libraries "$apple"$'\n'"$asr_service_runtime_library"
+  expect_failure verify_asr_service_libraries "$apple"
+  expect_failure verify_asr_service_libraries "$apple"$'\n'"$asr_service_runtime_library"$'\n@rpath/libextra.dylib'
+  verify_asr_service_rpaths $'/usr/lib/swift\n@executable_path/../Frameworks'
+  expect_failure verify_asr_service_rpaths $'/usr/lib/swift\n/Users/builder/.build/asr_runtime'
+}
+
 test_release_version_validation
 test_release_approval_validation
+test_asr_service_policy
 test_team_identifier_validation
 print "build_release tests passed."

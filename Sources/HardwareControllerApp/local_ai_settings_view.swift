@@ -4,6 +4,7 @@ import SwiftUI
 struct LocalAISettingsSection: View {
   let model: AppModel
   let preferencesModel: ApplicationPreferencesModel
+  let speech: SpeechEngineModel
 
   @State private var vocabularyEntry = ""
   @State private var spokenForm = ""
@@ -235,7 +236,7 @@ struct LocalAISettingsSection: View {
   }
 
   private var pipeline: LocalAIPipelinePresentation {
-    LocalAIPipelinePresentation(settings: settings)
+    LocalAIPipelinePresentation(settings: settings, speechEngine: speech.configuration)
   }
 
   private var selectedReadiness: LocalAIProviderReadiness {

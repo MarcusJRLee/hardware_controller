@@ -380,6 +380,9 @@ struct VoiceHistoryView: View {
           spacing: 10
         ) {
           evidenceLabel("Stage", value: result.stage.title)
+          if result.stage == .raw {
+            evidenceLabel("Speech", value: session.document.speechEngine.title)
+          }
           evidenceLabel("Source", value: result.origin.title)
           evidenceLabel(
             "From",

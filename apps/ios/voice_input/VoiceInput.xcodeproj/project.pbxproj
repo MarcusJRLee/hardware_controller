@@ -1172,7 +1172,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MODULEMAP_FILE = "$(SRCROOT)/../../../Sources/voice_asr_bridge/include/module.modulemap";
+				MODULEMAP_FILE = "$(SRCROOT)/config/voice_asr_bridge.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = com.longdevity.hardwarecontroller.voiceinput.asrbridge;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -1541,7 +1541,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MODULEMAP_FILE = "$(SRCROOT)/../../../Sources/voice_asr_bridge/include/module.modulemap";
+				MODULEMAP_FILE = "$(SRCROOT)/config/voice_asr_bridge.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = com.longdevity.hardwarecontroller.voiceinput.asrbridge;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;

@@ -26,13 +26,19 @@ public protocol TranscriptionAuthorizationProviding:
 public struct SystemTranscriptionAuthorizationProvider:
   TranscriptionAuthorizationProviding
 {
-  public init() {}
+  private let usesAppleSpeech: @Sendable () -> Bool
+
+  /// `usesAppleSpeech` reports whether the selected engine is Apple's; only
+  /// Apple's legacy recognizer needs Speech Recognition permission.
+  public init(usesAppleSpeech: @escaping @Sendable () -> Bool = { true }) {
+    self.usesAppleSpeech = usesAppleSpeech
+  }
 
   public var current: TranscriptionAuthorization {
     TranscriptionAuthorization(
       microphone: MicrophonePermission.status,
       speechRecognition:
-        LegacySpeechPermission.isRequired
+        usesAppleSpeech() && LegacySpeechPermission.isRequired
         ? LegacySpeechPermission.status
         : .authorized
     )
@@ -59,6 +65,8 @@ public actor OwnedTranscriptionController {
   private var composition: TranscriptComposition?
   private var compositionAnchor: FocusedTextRange?
   private var recognitionSession: (any SpeechRecognitionSession)?
+  /// Which engine the current or latest session used; updated after a fallback.
+  public private(set) var latestEngineUsage: SpeechEngineUsage?
   private var preparationTask: Task<Void, Never>?
   private var audioTask: Task<Void, Never>?
   private var updateTask: Task<Void, Never>?
@@ -132,6 +140,12 @@ public actor OwnedTranscriptionController {
     } catch {
       return map(error)
     }
+  }
+
+  private static func engineUsage(of session: any SpeechRecognitionSession) async
+    -> SpeechEngineUsage
+  {
+    await (session as? any SpeechEngineReporting)?.engineUsage ?? .apple
   }
 
   public func shutdown() async {
@@ -246,6 +260,7 @@ public actor OwnedTranscriptionController {
         await session.cancel()
         return
       }
+      latestEngineUsage = await Self.engineUsage(of: session)
 
       let audioStream = try await microphone.start()
       guard isCurrent(sessionID) else {
@@ -487,6 +502,7 @@ public actor OwnedTranscriptionController {
 
     do {
       try await session.finish()
+      latestEngineUsage = await Self.engineUsage(of: session)
       await updateTask?.value
       guard
         isCurrent(sessionID),
@@ -647,6 +663,8 @@ public actor OwnedTranscriptionController {
         return .localeUnsupported
       case .modelUnavailable:
         return .modelUnavailable
+      case .engineSetupRequired:
+        return .speechEngineSetupRequired
       case .conversionFailed(let message),
         .recognitionFailed(let message):
         return .recognitionFailed(message)

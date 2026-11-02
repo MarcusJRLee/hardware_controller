@@ -10,6 +10,7 @@ Sources/HardwareControllerApp/controller_view.swift | View; Control state in `ap
 Sources/HardwareControllerApp/design_system.swift | Style constants.
 Sources/HardwareControllerApp/device_binding_editor.swift | View; edits in `control_editor_view_test`, `profile_edit_test`.
 Sources/HardwareControllerApp/general_settings_view.swift | View; settings in `application_preferences_test`.
+Sources/HardwareControllerApp/speech_engine_views.swift | View; setup, download, and Apple choice in `speech_engine_model_test`.
 Sources/HardwareControllerApp/local_ai_settings_view.swift | View; settings in `application_preferences_test`, `local_ai_pipeline_presentation_test`.
 Sources/HardwareControllerApp/profiles_view.swift | View; edits in `profile_edit_test`, `application_runtime_test`.
 Sources/HardwareControllerApp/shortcut_recorder.swift | AppKit key-capture view; shortcut values in `profile_tests`.
@@ -53,3 +54,9 @@ apps/ios/voice_input/shared/voice_input_local_copy.swift | Policy in `voice_inpu
 apps/ios/voice_input/shared/voice_input_onboarding.swift | Policy in `voice_input_onboarding_policy_test`.
 apps/ios/voice_input/shared/voice_input_shared.swift | Handoff values; behavior in `voice_input_keychain_store_test`, `voice_input_keyboard_policy_test`.
 apps/ios/voice_input/shared/voice_input_store.swift | Command policy; behavior in `voice_input_keychain_store_test`.
+
+# Process and XPC shells; the installed-app speech check drives them end to end.
+Sources/HardwareControllerApp/application_entry.swift | Launch dispatch; the speech check runs its diagnostic path on every signed install.
+Sources/HardwareControllerMac/asr_service_connection.swift | XPC transport; supervision in `transcribe_cpp_speech_engine_test`, real process proven by the installed-app speech check.
+Sources/HardwareControllerMac/speech_engine_self_check.swift | The installed-app speech check itself; percentiles share logic tested in `transcribe_cpp_speech_engine_test`.
+Sources/hardware_controller_asr_service/main.swift | XPC listener bootstrap; handler logic in `asr_service_core_test`.

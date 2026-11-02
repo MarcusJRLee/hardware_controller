@@ -313,4 +313,30 @@ enum VoiceHistoryColumnCodec {
       )
     }
   }
+
+  /// Rows written before decision 0060 have no engine column value; they used Apple.
+  static func speechEngine(from json: String?) throws -> SpeechEngineUsage {
+    guard let json else {
+      return .apple
+    }
+    do {
+      return try JSONDecoder().decode(SpeechEngineUsage.self, from: Data(json.utf8))
+    } catch {
+      throw VoiceSessionHistoryError.storageUnavailable(
+        "Voice History contains invalid speech engine evidence."
+      )
+    }
+  }
+
+  static func encodedSpeechEngine(_ usage: SpeechEngineUsage) throws -> String {
+    do {
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.sortedKeys]
+      return String(decoding: try encoder.encode(usage), as: UTF8.self)
+    } catch {
+      throw VoiceSessionHistoryError.storageUnavailable(
+        "Voice History could not store speech engine evidence."
+      )
+    }
+  }
 }

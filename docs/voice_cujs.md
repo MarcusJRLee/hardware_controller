@@ -44,6 +44,9 @@ events.
 | M12 | Import a recording | Bounded copy, local ASR and formatting, source untouched, never auto-inserted. | `voice_audio_import_service_test`, `voice_audio_artifact_importer_test` |
 | M13 | Admit Model packages | Bounded manifest, inventory, license, and SHA-256 verification. | `crates/voice_models`, `portable_voice_validator_test`, `Tests/cuj/voice_model_package_v1` |
 | M14 | Move a session | V1 archive round trip; identical import is a no-op; conflicts fail closed. | `voice_history_exporter_test`, `voice_history_archive_importer_test`, `Tests/cuj/voice_history_archive_v1` |
+| M15 | Set up speech | transcribe.cpp is the default; Dictation is refused until its pinned package is downloaded and Rust-admitted, or Apple is explicitly confirmed. | `speech_engine_model_test`, `speech_engine_session_factory_test`, `asr_model_downloader_test`, `application_preferences_test` |
+| M16 | Survive a speech crash | Decode in the XPC service; a crash, hang, or repeat crash falls back to Apple on the same audio and is announced. | `transcribe_cpp_speech_engine_test`, `transcribe_cpp_speech_recognition_session_test`, `asr_service_core_test`, `scripts/check_speech_engine.sh` |
+| M17 | Know which engine ran | History records engine, package, and fallback; sessions from before 0060 read as Apple. | `voice_history_column_codec_test`, `speech_engine_test` |
 
 ## iOS
 

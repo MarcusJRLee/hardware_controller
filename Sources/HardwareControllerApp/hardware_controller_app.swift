@@ -76,7 +76,6 @@ final class WorkspaceLifecycleCoordinator: NSObject {
   }
 }
 
-@main
 struct HardwareControllerApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self)
   private var appDelegate
@@ -128,6 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   let navigation: ApplicationNavigationModel
   let preferencesModel: ApplicationPreferencesModel
   let historyModel: VoiceHistoryModel
+  let speechEngineModel: SpeechEngineModel
 
   private var isLoginItemLaunch = false
   private var applicationWindowController: NSWindowController?
@@ -147,6 +147,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       isDemoMode: arguments.contains("--demo"),
       appearanceApplier: appearanceAdapter
     )
+    let isDemoMode = arguments.contains("--demo")
+    // Demo mode never touches Application Support; it shows the setup state.
+    let speechEngineModel = SpeechEngineModel(
+      selection: preferencesModel.speechEngine,
+      store: isDemoMode ? nil : try? ASRModelPackageStore.applicationSupport(),
+      persist: { [preferencesModel] engine in preferencesModel.setSpeechEngine(engine) }
+    )
     let voiceSessionHistory = VoiceHistoryPresentation.makeHistory(
       arguments: arguments,
       retentionSettings: preferencesModel.voiceHistoryRetention
@@ -156,6 +163,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       preferredMicrophoneUID:
         preferencesModel.preferredMicrophone?.id,
       localAISettings: preferencesModel.localAISettings,
+      speechEngine: speechEngineModel.configuration,
       voiceTriggerSettings: preferencesModel.voiceTriggerSettings,
       voiceSessionHistory: voiceSessionHistory
     )
@@ -169,6 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     navigation = ApplicationNavigationModel(arguments: arguments)
     self.appearanceAdapter = appearanceAdapter
     self.preferencesModel = preferencesModel
+    self.speechEngineModel = speechEngineModel
     historyModel = historyPresentation.model
     historyReformatter = historyPresentation.reformatter
     super.init()
@@ -182,6 +191,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       Task {
         await historyReformatter.setSettings(settings)
       }
+    }
+    speechEngineModel.connect { [weak model] configuration in
+      model?.setSpeechEngineConfiguration(configuration)
     }
     preferencesModel.setVoiceTriggerSettingsHandler {
       [weak model] settings in
@@ -213,10 +225,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     Task { [weak historyModel] in
       await historyModel?.load()
     }
-    if AppLaunchPresentation.shouldPresentApplicationWindow(
-      arguments: ProcessInfo.processInfo.arguments,
-      isLoginItemLaunch: isLoginItemLaunch
-    ) {
+    // An unset speech engine blocks Dictation, so the window that resolves it
+    // opens even for a login-item launch.
+    if speechEngineModel.requiresSetup
+      || AppLaunchPresentation.shouldPresentApplicationWindow(
+        arguments: ProcessInfo.processInfo.arguments,
+        isLoginItemLaunch: isLoginItemLaunch
+      )
+    {
       DispatchQueue.main.async { [weak self] in
         guard let self else {
           return
@@ -286,7 +302,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model: model,
         navigation: navigation,
         preferencesModel: preferencesModel,
-        historyModel: historyModel
+        historyModel: historyModel,
+        speechEngineModel: speechEngineModel
       )
     )
     guard model.isDemoMode else {

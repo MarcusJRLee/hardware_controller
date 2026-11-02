@@ -75,12 +75,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # CodeQL traces every process started after initialization. Rust and
-      # SwiftPM manifest evaluation produce no Swift evidence, so preparing them
-      # first keeps the traced build to Swift.
+      # CodeQL traces every process started after initialization. Rust, the
+      # pinned ASR runtime fetch, and SwiftPM manifest evaluation produce no
+      # Swift evidence, so preparing them first keeps the traced build to Swift.
       - name: Prepare untraced build inputs
         run: |
           scripts/build_rust_ffi.sh
+          scripts/fetch_asr_runtime.sh >/dev/null
           swift package describe --type json >/dev/null
       - name: Initialize CodeQL
         uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9

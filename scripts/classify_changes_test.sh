@@ -25,6 +25,8 @@ expect "apps/ios/voice_input/app/voice_input_app.swift" "macos=true ios=true cod
 expect "Tests/HardwareControllerMacTests/action_executor_tests.swift" "macos=true ios=false codeql_macos=false codeql_ios=false"
 expect "scripts/check_ios.sh" "macos=true ios=true codeql_macos=false codeql_ios=false"
 expect "scripts/build_ios_rust_ffi.sh" "macos=true ios=true codeql_macos=false codeql_ios=true"
+expect "scripts/fetch_asr_runtime.sh" "macos=true ios=true codeql_macos=true codeql_ios=true"
+expect "Sources/hardware_controller_asr_service_kit/asr_service_core.swift" "macos=true ios=false codeql_macos=true codeql_ios=false"
 expect "scripts/check.sh" "macos=true ios=false codeql_macos=false codeql_ios=false"
 expect ".github/workflows/ci.yml" "$all"
 expect "docs/user_guide.md

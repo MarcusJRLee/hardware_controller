@@ -14,14 +14,23 @@ struct LocalAIPipelinePresentation: Equatable, Sendable {
 
   init(
     settings: LocalAISettings,
+    speechEngine: SpeechEngineConfiguration,
     operatingSystemVersion: OperatingSystemVersion =
       ProcessInfo.processInfo.operatingSystemVersion
   ) {
-    speechProvider = "Apple On-Device"
-    speechModel =
-      operatingSystemVersion.majorVersion >= 26
-      ? "SpeechAnalyzer + DictationTranscriber (OS-managed)"
-      : "SFSpeechRecognizer (OS-managed)"
+    switch speechEngine.selection {
+    case .transcribeCpp:
+      speechProvider = "transcribe.cpp (local service)"
+      speechModel =
+        speechEngine.package.map { "\($0.displayName) · \($0.version)" }
+        ?? "Not installed — Dictation is off until it is downloaded"
+    case .apple:
+      speechProvider = "Apple On-Device"
+      speechModel =
+        operatingSystemVersion.majorVersion >= 26
+        ? "SpeechAnalyzer + DictationTranscriber (OS-managed)"
+        : "SFSpeechRecognizer (OS-managed)"
+    }
     formattingOutput =
       "Typed paragraph/list blocks · prompt r\(VersionedLocalAIPromptBuilder.currentRevision)"
     effectiveCasing = Self.casingTitle(settings.effectiveCasingPolicy)
