@@ -5,12 +5,12 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
+command -v jq >/dev/null || {
+  print -u2 "jq is required to select a simulator and report test failures."
+  exit 1
+}
 simulator_udid="${HC_IOS_SIMULATOR_UDID:-}"
 if [[ -z "$simulator_udid" ]]; then
-  command -v jq >/dev/null || {
-    print -u2 "jq or HC_IOS_SIMULATOR_UDID is required to select an iOS simulator."
-    exit 1
-  }
   simulator_udid="$(xcrun simctl list devices available -j \
     | jq -r '
       ([.devices[][] | select(.isAvailable == true and .name == "iPhone 17 Pro")][0]
@@ -56,8 +56,15 @@ xcrun simctl privacy "$simulator_udid" grant microphone \
   com.longdevity.hardwarecontroller.voiceinput
 # UI tests drive real capture with this recorded clip in place of the microphone.
 jfk_fixture="$(scripts/fetch_asr_test_assets.sh | grep '/jfk\.wav$')"
-TEST_RUNNER_VOICE_INPUT_AUDIO_FIXTURE="$jfk_fixture" \
-  xcodebuild test-without-building -quiet "${xcode_test_flags[@]}"
+result_bundle="$derived_data/tests.xcresult"
+if ! TEST_RUNNER_VOICE_INPUT_AUDIO_FIXTURE="$jfk_fixture" \
+  xcodebuild test-without-building -quiet "${xcode_test_flags[@]}" \
+  -resultBundlePath "$result_bundle"; then
+  # -quiet hides assertion text; print each failure so CI logs are actionable.
+  xcrun xcresulttool get test-results summary --path "$result_bundle" --compact \
+    | jq -r '.testFailures[] | "\(.testIdentifierString): \(.failureText)"' >&2
+  exit 1
+fi
 
 scripts/check_ios_system_capture_metadata.sh \
   "$derived_data/Build/Products/Debug-iphonesimulator/VoiceInput.app"

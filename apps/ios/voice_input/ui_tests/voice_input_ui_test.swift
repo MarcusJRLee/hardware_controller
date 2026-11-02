@@ -88,9 +88,12 @@ final class VoiceInputUITest: XCTestCase {
       XCTAssertTrue(app.buttons[label].waitForExistence(timeout: Self.timeout), label)
     }
     app.buttons["Formal"].tap()
-    XCTAssertEqual(style.value as? String, "Formal")
+    wait(for: style, toBe: "value == 'Formal'")
     style.tap()
-    app.buttons["Natural"].tap()
+    let natural = app.buttons["Natural"]
+    XCTAssertTrue(natural.waitForExistence(timeout: Self.timeout))
+    natural.tap()
+    wait(for: style, toBe: "value == 'Natural'")
   }
 
   @MainActor

@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import VoiceInputShared
 import XCTest
@@ -19,6 +20,23 @@ final class VoiceInputAppModelTest: XCTestCase {
     XCTAssertTrue(model.keyboardHandoffObserved)
     XCTAssertEqual(model.onboardingStep, .ready)
     XCTAssertNil(model.onboardingErrorMessage)
+  }
+
+  @MainActor
+  func testAnUnchangedRefreshPublishesNothing() {
+    let model = VoiceInputAppModel(
+      microphoneAuthorizationProvider: { .authorized },
+      microphonePermissionRequester: { true },
+      keyboardObservedAtReader: { nil }
+    )
+    model.refreshOnboarding()
+    var publications = 0
+    let subscription = model.objectWillChange.sink { publications += 1 }
+
+    model.refreshOnboarding()
+
+    XCTAssertEqual(publications, 0)
+    subscription.cancel()
   }
 
   @MainActor
