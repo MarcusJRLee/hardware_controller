@@ -3,7 +3,7 @@
 ```bash
 rustup target add aarch64-apple-ios aarch64-apple-ios-sim
 scripts/check_ios.sh          # Simulator build, unit and UI tests, local-only scan.
-scripts/build_ios_device.sh   # Signed device .app (reads .env.local); does not install.
+scripts/build_ios_device.sh   # Signed device .app (reads .env.local; HC_IOS_TEAM_ID picks its team).
 scripts/install_ios.sh        # Build, install, and launch on a connected iPhone.
 ```
 
