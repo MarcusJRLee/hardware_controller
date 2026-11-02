@@ -31,6 +31,8 @@ targets:
       - target: HardwareControllerCore
       - target: HardwareControllerVoiceFFI
         embed: false
+      - target: HardwareControllerModelDownload
+        embed: false
       - target: VoiceASRBridge
         embed: false
       - target: VoiceInputKeyboard
@@ -125,6 +127,19 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.voiceffi
 
+  # Pinned speech-model downloads: the app's only network code (decision 0062).
+  HardwareControllerModelDownload:
+    type: framework.static
+    platform: iOS
+    sources:
+      - path: ../../../Sources/hardware_controller_model_download
+        group: portable
+        createIntermediateGroups: false
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.modeldownload
+
   VoiceASRBridge:
     type: framework.static
     platform: iOS
@@ -215,6 +230,8 @@ targets:
       - target: VoiceInput
       - target: HardwareControllerCore
       - target: HardwareControllerVoiceFFI
+        embed: false
+      - target: HardwareControllerModelDownload
         embed: false
     entitlements:
       path: config/tests.entitlements

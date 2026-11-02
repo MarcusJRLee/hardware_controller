@@ -40,6 +40,66 @@ final class VoiceInputHistoryRepositoryTest: XCTestCase {
     XCTAssertTrue(FileManager.default.fileExists(atPath: artifact.url.path))
   }
 
+  func testDeleteRemovesOneSessionAndItsAudioAndSurvivesReload() async throws {
+    let fixture = try Fixture()
+    addTeardownBlock { try await fixture.remove() }
+    let kept = try await fixture.save("Keep this one.", at: 20)
+    let deleted = try await fixture.save("Delete this one.", at: 30)
+
+    try await fixture.repository.delete(sessionID: deleted.id)
+    let reloaded = try VoiceInputHistoryRepository(
+      rootURL: fixture.historyRoot,
+      retentionSettings: .iOSDefault
+    )
+    addTeardownBlock { try await reloaded.close() }
+
+    let remaining = try await reloaded.recent(limit: 20)
+    XCTAssertEqual(remaining.map(\.id), [kept.id])
+    let deletedAudio = try XCTUnwrap(deleted.audioArtifact)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: deletedAudio.url.path))
+    let keptAudio = try XCTUnwrap(kept.audioArtifact)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: keptAudio.url.path))
+    do {
+      try await fixture.repository.delete(sessionID: deleted.id)
+      XCTFail("Deleting a missing session must fail explicitly.")
+    } catch VoiceInputHistoryError.invalidSession {}
+  }
+
+  func testDeleteAllClearsHistoryButKeepsAnActiveCapture() async throws {
+    let fixture = try Fixture()
+    addTeardownBlock { try await fixture.remove() }
+    _ = try await fixture.save("First.", at: 20)
+    _ = try await fixture.save("Second.", at: 30)
+    let activeCapture = fixture.historyRoot
+      .appendingPathComponent("audio", isDirectory: true)
+      .appendingPathComponent("\(UUID().uuidString.lowercased()).partial")
+    try Data("recording".utf8).write(to: activeCapture)
+
+    try await fixture.repository.deleteAll()
+
+    let remaining = try await fixture.repository.recent(limit: 20)
+    XCTAssertEqual(remaining, [])
+    let audio = try FileManager.default.contentsOfDirectory(
+      atPath: activeCapture.deletingLastPathComponent().path
+    )
+    XCTAssertEqual(audio, [activeCapture.lastPathComponent])
+  }
+
+  func testFailedAudioRemovalKeepsTheSessionForRetry() async throws {
+    let fixture = try Fixture(removeRetainedAudio: { _ in throw CocoaError(.fileWriteNoPermission) }
+    )
+    addTeardownBlock { try await fixture.remove() }
+    let saved = try await fixture.save("Stay until audio is gone.", at: 20)
+
+    do {
+      try await fixture.repository.delete(sessionID: saved.id)
+      XCTFail("A failed audio removal must surface.")
+    } catch VoiceInputHistoryError.storageUnavailable {}
+
+    let remaining = try await fixture.repository.recent(limit: 20)
+    XCTAssertEqual(remaining.map(\.id), [saved.id])
+  }
+
   func testConfiguredArtifactCapExpiresOldAudioWithoutDeletingTranscript() async throws {
     let fixture = try Fixture(
       retentionSettings: VoiceHistoryRetentionSettings(
@@ -694,6 +754,16 @@ private struct Fixture {
         modelVersion: "b4938"
       ),
       style: .natural
+    )
+  }
+
+  func save(_ text: String, at endedAt: TimeInterval) async throws -> VoiceInputHistorySession {
+    try await repository.save(
+      sessionID: UUID(),
+      startedAt: Date(timeIntervalSince1970: endedAt - 1),
+      endedAt: Date(timeIntervalSince1970: endedAt),
+      transcript: try process(text),
+      sourceAudioURL: audioURL
     )
   }
 

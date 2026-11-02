@@ -70,6 +70,8 @@ without a timeout, over budget, or on macOS without `needs: changes` or push
 | `Sources/hardware_controller_voice_ffi/`, `Sources/voice_ffi_bridge/` | Typed Swift over the Rust C ABI. |
 | `Sources/voice_asr_bridge/`, `Sources/voice_asr_runtime/` | C bridge over transcribe.cpp and its typed Swift owner. |
 | `Sources/hardware_controller_asr_*` | macOS ASR XPC service, its kit, and the app-to-service protocol. |
+| `Sources/hardware_controller_model_download/` | Pinned speech-model catalog, HTTPS fetcher, and verifying assembler for both apps. |
+| `tools/app_icons/` | Code that renders both app icons. |
 | `crates/` | Portable Rust: `voice_core`, `voice_models`, `voice_archive`, `voice_ffi`. |
 | `apps/ios/voice_input/` | iOS app, keyboard, widgets, and their tests. |
 | `schemas/` | Versioned Model-package and archive contracts. |

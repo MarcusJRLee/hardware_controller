@@ -18,6 +18,8 @@ protocol VoiceInputHistoryAccessing: Sendable {
     isPinned: Bool
   ) async throws -> VoiceInputHistorySession
   func retentionMaintenanceMessage() async -> String?
+  func delete(sessionID: UUID) async throws
+  func deleteAll() async throws
 }
 
 extension VoiceInputHistoryRepository: VoiceInputHistoryAccessing {}
@@ -82,6 +84,33 @@ final class VoiceInputHistoryModel: ObservableObject {
       await load(searching: !query.isEmpty)
     } catch {
       errorMessage = error.localizedDescription
+    }
+  }
+
+  func delete(sessionID: UUID) async {
+    guard let history else {
+      return
+    }
+    do {
+      try await history.delete(sessionID: sessionID)
+      sessions.removeAll { $0.id == sessionID }
+      errorMessage = nil
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  func deleteAll() async {
+    guard let history else {
+      return
+    }
+    do {
+      try await history.deleteAll()
+      sessions = []
+      errorMessage = nil
+    } catch {
+      errorMessage = error.localizedDescription
+      await load(searching: !query.isEmpty)
     }
   }
 

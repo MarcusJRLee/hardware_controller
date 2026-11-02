@@ -19,10 +19,11 @@ apps/ios/voice_input/app/voice_input_history_view.swift | View; state in `voice_
 apps/ios/voice_input/app/voice_input_dictate_view.swift | View; state in `voice_input_dictation_presentation_test`, driven by `voice_input_ui_test`.
 apps/ios/voice_input/app/voice_input_root_view.swift | Tab container; driven by `voice_input_ui_test`.
 apps/ios/voice_input/app/voice_input_settings_view.swift | View; state in `voice_input_history_model_test`, driven by `voice_input_ui_test`.
-apps/ios/voice_input/app/voice_input_theme.swift | Style constant.
+apps/ios/voice_input/shared/voice_input_theme.swift | Style constant.
 apps/ios/voice_input/app/voice_input_model_library_view.swift | View; state in `voice_input_model_library_model_test`, driven by `voice_input_ui_test`.
 apps/ios/voice_input/app/voice_input_onboarding_view.swift | View; policy in `voice_input_onboarding_policy_test`.
-apps/ios/voice_input/keyboard/keyboard_view_controller.swift | UIKit host; policy in `voice_input_keyboard_policy_test`.
+apps/ios/voice_input/keyboard/keyboard_view_controller.swift | UIKit host; policy in `voice_input_keyboard_policy_test`, layout in `voice_input_keyboard_layout_test`.
+apps/ios/voice_input/keyboard/keyboard_keys_view.swift | UIKit key rendering; rows and widths in `voice_input_keyboard_layout_test`.
 apps/ios/voice_input/widgets/voice_input_widgets.swift | WidgetKit declarations.
 
 # Composition roots and system boundaries, exercised through their seams.

@@ -121,8 +121,9 @@ for extension_bundle in "$app_bundle"/PlugIns/*.appex; do
   if [[ "$extension_dependencies" == *"CTranscribe.framework/CTranscribe"* \
     || "$extension_symbols" == *"_voice_asr_context_"* \
     || "$extension_symbols" == *"_transcribe_"* \
-    || "$extension_symbols" == *"_voice_asr_model_resolve_v2"* ]]; then
-    print -u2 "$extension_bundle must not link model or ASR runtime code."
+    || "$extension_symbols" == *"_voice_asr_model_resolve_v2"* \
+    || "$extension_symbols" == *"URLSessionModelFileFetcher"* ]]; then
+    print -u2 "$extension_bundle must not link model, download, or ASR runtime code."
     exit 1
   fi
 done

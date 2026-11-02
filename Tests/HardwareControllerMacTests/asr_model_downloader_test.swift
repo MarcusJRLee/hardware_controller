@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import HardwareControllerModelDownload
 import Testing
 
 @testable import HardwareControllerMac
@@ -104,15 +105,6 @@ struct ASRModelDownloaderTest {
       ).download { _ in }
     }
     #expect(store.installed() == nil)
-  }
-
-  @Test
-  func pinnedCatalogIsComplete() throws {
-    let entry = try #require(ASRModelCatalog.parakeetV3)
-    #expect(
-      entry.files.allSatisfy { $0.url.scheme == "https" && $0.sha256.count == 64 && $0.bytes > 0 })
-    #expect(entry.files.compactMap(\.role).sorted() == ["model", "speech_detection"])
-    #expect(entry.downloadBytes > 700_000_000)
   }
 }
 

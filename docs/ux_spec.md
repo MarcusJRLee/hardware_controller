@@ -18,7 +18,8 @@ typography, spacing, and position carry everything else.
 | Profiles | Stable list and editor; active state is separate from selection. |
 | General | Native form sections: Speech recognition (first), Appearance, microphone, Local AI, Voice chord, History storage, Launch at Login. Apple stays visibly marked as the less accurate engine while selected. |
 | iOS Dictate | One centered record button: primary-colored at rest, amber only while recording. Status title and one line above it; the timer line is always reserved so nothing moves. Finished text above with quiet **Copy** and **Share**. |
-| iOS History / Settings | Native searchable list with detail; Settings is a Form: Setup, Speech model, History storage, Without the keyboard, notices. |
+| iOS History / Settings | Native searchable list with detail; swipe or detail **Delete Dictation**, **⋯ → Clear All History**, each confirmed. Settings is a Form: Setup, Speech model (built in, then downloads with size, progress, and Cancel; ✓ marks the active one), Import from Files, History storage, Without the keyboard, notices. |
+| iOS Voice Keyboard | System-proportioned keys with letter, number, and symbol layers. One bar above: Style menu, a one-line status in plain words, and a round mic that is primary-colored at rest and amber while the app records. |
 | Transcript HUD | Click-through, nonactivating; only while a target cannot show live text and text exists; anchored to the caret or one stable edge, never the pointer. |
 
 ## Behavior

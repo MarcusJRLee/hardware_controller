@@ -5,6 +5,7 @@ import VoiceInputShared
 struct VoiceInputHistoryView: View {
   @ObservedObject var model: VoiceInputHistoryModel
   @ObservedObject var audioPlayer: VoiceInputHistoryAudioPlayerModel
+  @State private var isConfirmingClearAll = false
 
   var body: some View {
     NavigationStack {
@@ -21,10 +22,17 @@ struct VoiceInputHistoryView: View {
               audioPlayer: audioPlayer,
               setPinned: { isPinned in
                 Task { await model.setPinned(sessionID: session.id, isPinned: isPinned) }
-              }
+              },
+              delete: { await delete(session) }
             )
           } label: {
             VoiceInputHistoryRow(session: session)
+          }
+          .swipeActions {
+            Button("Delete", systemImage: "trash", role: .destructive) {
+              Task { await delete(session) }
+            }
+            .accessibilityIdentifier("history_delete_row")
           }
         }
       }
@@ -50,8 +58,44 @@ struct VoiceInputHistoryView: View {
         if query.isEmpty { Task { await model.refresh() } }
       }
       .refreshable { await model.refresh() }
-      .accessibilityIdentifier("voice_history")
+      .toolbar {
+        if !model.sessions.isEmpty {
+          ToolbarItem(placement: .topBarTrailing) {
+            Menu {
+              Button("Clear All History…", systemImage: "trash", role: .destructive) {
+                isConfirmingClearAll = true
+              }
+              .accessibilityIdentifier("history_clear_all")
+            } label: {
+              Label("More", systemImage: "ellipsis")
+            }
+            .accessibilityIdentifier("history_menu")
+          }
+        }
+      }
+      .confirmationDialog(
+        "Delete every dictation and its audio?",
+        isPresented: $isConfirmingClearAll,
+        titleVisibility: .visible
+      ) {
+        Button("Clear All History", role: .destructive) {
+          Task {
+            audioPlayer.stop()
+            await model.deleteAll()
+          }
+        }
+        .accessibilityIdentifier("history_confirm_clear_all")
+      } message: {
+        Text("This can't be undone.")
+      }
     }
+  }
+
+  private func delete(_ session: VoiceInputHistorySession) async {
+    if audioPlayer.playingSessionID == session.id {
+      audioPlayer.stop()
+    }
+    await model.delete(sessionID: session.id)
   }
 }
 
@@ -86,7 +130,10 @@ private struct VoiceInputHistoryDetailView: View {
   let session: VoiceInputHistorySession
   @ObservedObject var audioPlayer: VoiceInputHistoryAudioPlayerModel
   let setPinned: (Bool) -> Void
+  let delete: () async -> Void
   @State private var copyMessage: String?
+  @State private var isConfirmingDelete = false
+  @Environment(\.dismiss) private var dismiss
   private let localClipboard = VoiceInputSystemLocalClipboard()
 
   var body: some View {
@@ -167,10 +214,30 @@ private struct VoiceInputHistoryDetailView: View {
             "\(session.style.kind.displayName) · \(session.modelPackageID) \(session.modelVersion)")
         }
       }
+
+      Section {
+        Button("Delete Dictation", role: .destructive) {
+          isConfirmingDelete = true
+        }
+        .accessibilityIdentifier("history_delete")
+      }
     }
     .navigationTitle(Text(session.endedAt, format: .dateTime.month().day().hour().minute()))
     .navigationBarTitleDisplayMode(.inline)
     .onDisappear { audioPlayer.stop() }
+    .confirmationDialog(
+      "Delete this dictation and its audio?",
+      isPresented: $isConfirmingDelete,
+      titleVisibility: .visible
+    ) {
+      Button("Delete", role: .destructive) {
+        Task {
+          await delete()
+          dismiss()
+        }
+      }
+      .accessibilityIdentifier("history_confirm_delete")
+    }
   }
 
   private var isPlaying: Bool {

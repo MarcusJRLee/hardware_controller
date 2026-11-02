@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import HardwareControllerModelDownload
 
 protocol VoiceInputModelPackageInstalling: Sendable {
   func install(
@@ -21,11 +22,16 @@ final class VoiceInputModelLibraryModel: ObservableObject {
   @Published private(set) var isImporting = false
   @Published private(set) var isRemoving = false
   @Published private(set) var isPreparingStarter = false
+  /// Download progress from 0 to 1, keyed by catalog package ID.
+  @Published private(set) var downloads: [String: Double] = [:]
   @Published private(set) var errorMessage: String?
 
+  let catalog: [ASRModelCatalogEntry]
   private let manager: any VoiceInputModelManaging
   private let asrWorkflow: VoiceInputASRWorkflow?
   private let starter: VoiceInputStarterModel?
+  private let downloader: VoiceInputModelDownloader?
+  private var downloadTasks: [String: Task<Void, Never>] = [:]
   /// Provisioning runs once per launch, so removing the starter is not undone
   /// until the next launch finds the library without a speech model.
   private var starterProvisioningAttempted = false
@@ -59,11 +65,86 @@ final class VoiceInputModelLibraryModel: ObservableObject {
   init(
     manager: any VoiceInputModelManaging,
     asrWorkflow: VoiceInputASRWorkflow? = nil,
-    starter: VoiceInputStarterModel? = nil
+    starter: VoiceInputStarterModel? = nil,
+    downloader: VoiceInputModelDownloader? = nil,
+    catalog: [ASRModelCatalogEntry] = ASRModelCatalog.voiceInputDownloads
   ) {
     self.manager = manager
     self.asrWorkflow = asrWorkflow
     self.starter = starter
+    self.downloader = downloader
+    self.catalog = downloader == nil ? [] : catalog
+  }
+
+  var choices: [VoiceInputModelChoice] {
+    VoiceInputModelChoice.choices(
+      installed: packages,
+      active: activeASRModel,
+      catalog: catalog,
+      downloads: downloads
+    )
+  }
+
+  /// Downloads, verifies, installs, and then activates one catalog package,
+  /// as on the Mac: the user asked for it, so it becomes the speech model.
+  func download(_ entry: ASRModelCatalogEntry) {
+    guard let downloader, downloads[entry.packageID] == nil else {
+      return
+    }
+    downloads[entry.packageID] = 0
+    errorMessage = nil
+    // Progress arrives on the download's threads; a stream keeps every
+    // published change on the main actor.
+    let (progress, reporter) = AsyncStream<Double>.makeStream(
+      bufferingPolicy: .bufferingNewest(1)
+    )
+    downloadTasks[entry.packageID] = Task { [weak self] in
+      let updates = Task { [weak self] in
+        for await fraction in progress {
+          self?.showProgress(fraction, for: entry.packageID)
+        }
+      }
+      defer { updates.cancel() }
+      do {
+        let installed = try await downloader.download(entry) { reporter.yield($0.fraction) }
+        reporter.finish()
+        await self?.finishDownload(entry.packageID, installed: installed)
+      } catch {
+        reporter.finish()
+        self?.failDownload(entry.packageID, error: error)
+      }
+    }
+  }
+
+  func cancelDownload(_ entry: ASRModelCatalogEntry) {
+    downloadTasks.removeValue(forKey: entry.packageID)?.cancel()
+    downloads[entry.packageID] = nil
+  }
+
+  private func showProgress(_ fraction: Double, for packageID: String) {
+    guard downloads[packageID] != nil else {
+      return
+    }
+    downloads[packageID] = fraction
+  }
+
+  private func finishDownload(
+    _ packageID: String,
+    installed: VoiceInputInstalledModelPackage
+  ) async {
+    downloadTasks[packageID] = nil
+    downloads[packageID] = nil
+    await refresh()
+    await selectASRModel(installed)
+  }
+
+  private func failDownload(_ packageID: String, error: any Error) {
+    downloadTasks[packageID] = nil
+    let wasCancelled = downloads[packageID] == nil || Task.isCancelled
+    downloads[packageID] = nil
+    if !wasCancelled, (error as? ASRModelDownloadError) != .cancelled {
+      errorMessage = VoiceInputModelDownloader.message(for: error)
+    }
   }
 
   func refresh() async {

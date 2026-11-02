@@ -300,6 +300,32 @@ actor VoiceInputHistoryRepository {
     return updated
   }
 
+  /// Deletes one session and its audio. Audio goes first: an orphaned `.caf`
+  /// would be adopted as recovery audio, while a row whose audio is already
+  /// gone simply retries cleanly.
+  func delete(sessionID: UUID) throws {
+    try reconcileIfNeeded()
+    try requireOpen()
+    guard let existing = try storedSession(id: sessionID) else {
+      throw VoiceInputHistoryError.invalidSession
+    }
+    try removeAudio(of: existing)
+    try deleteRows(sql: "DELETE FROM voice_input_history WHERE id = ?1;") { statement in
+      try Self.bind(sessionID.uuidString, at: 1, in: statement)
+    }
+  }
+
+  /// Deletes every session and its audio. An in-progress capture's `.partial`
+  /// file is not a session, so recording continues unaffected.
+  func deleteAll() throws {
+    try reconcileIfNeeded()
+    try requireOpen()
+    for session in try allSessions() {
+      try removeAudio(of: session)
+    }
+    try deleteRows(sql: "DELETE FROM voice_input_history;") { _ in }
+  }
+
   func retentionMaintenanceMessage() -> String? {
     maintenanceMessage
   }
@@ -418,6 +444,38 @@ actor VoiceInputHistoryRepository {
     try Self.bind(try Self.encode(session), at: 3, in: statement)
     try Self.bind(session.id.uuidString, at: 4, in: statement)
     guard sqlite3_step(statement) == SQLITE_DONE, sqlite3_changes(database) == 1 else {
+      throw VoiceInputHistoryError.storageUnavailable
+    }
+  }
+
+  private func removeAudio(of session: VoiceInputHistorySession) throws {
+    guard
+      let artifact = session.audioArtifact,
+      FileManager.default.fileExists(atPath: artifact.url.path)
+    else {
+      return
+    }
+    do {
+      try removeRetainedAudio(artifact.url)
+    } catch {
+      throw VoiceInputHistoryError.storageUnavailable
+    }
+  }
+
+  private func deleteRows(
+    sql: String,
+    bind: (OpaquePointer) throws -> Void
+  ) throws {
+    var statement: OpaquePointer?
+    guard
+      sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
+      let statement
+    else {
+      throw VoiceInputHistoryError.storageUnavailable
+    }
+    defer { sqlite3_finalize(statement) }
+    try bind(statement)
+    guard sqlite3_step(statement) == SQLITE_DONE else {
       throw VoiceInputHistoryError.storageUnavailable
     }
   }

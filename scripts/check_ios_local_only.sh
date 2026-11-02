@@ -2,6 +2,11 @@
 
 set -euo pipefail
 
+# Voice Input's own sources stay free of network code. Its one network path is
+# the shared, pinned speech-model fetcher in
+# Sources/hardware_controller_model_download (decision 0062), which only the
+# containing app links; the extensions never do.
+
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
@@ -33,5 +38,15 @@ if rg -n --glob '*.entitlements' --glob '*.plist' --glob '*.yml' \
   print -u2 "iOS local-only check failed: network or cloud capability found."
   exit 1
 fi
+
+# Only the containing app may link the model-download module.
+linking_targets="$(awk '
+  /^  [A-Za-z]+:$/ { target = $1 }
+  /target: HardwareControllerModelDownload$/ { print target }
+' apps/ios/voice_input/project.yml | sort -u | tr '\n' ' ')"
+[[ "$linking_targets" == "VoiceInput: VoiceInputTests: " ]] || {
+  print -u2 "iOS local-only check failed: model downloads linked by $linking_targets"
+  exit 1
+}
 
 print "iOS local-only boundary: PASS"

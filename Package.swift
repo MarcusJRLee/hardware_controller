@@ -104,11 +104,16 @@ let package = Package(
       path: "Sources/hardware_controller_asr_service"
     ),
     .target(
+      name: "HardwareControllerModelDownload",
+      path: "Sources/hardware_controller_model_download"
+    ),
+    .target(
       name: "HardwareControllerMac",
       dependencies: [
         "HardwareControllerASRProtocol",
         "HardwareControllerAudioBoundary",
         "HardwareControllerCore",
+        "HardwareControllerModelDownload",
         "HardwareControllerVoiceFFI",
       ],
       linkerSettings: [
@@ -127,6 +132,7 @@ let package = Package(
       dependencies: [
         "HardwareControllerCore",
         "HardwareControllerMac",
+        "HardwareControllerModelDownload",
       ]
     ),
     .testTarget(
@@ -149,6 +155,7 @@ let package = Package(
       dependencies: [
         "HardwareControllerCore",
         "HardwareControllerMac",
+        "HardwareControllerModelDownload",
         "HardwareControllerVoiceFFI",
       ]
     ),
@@ -177,7 +184,13 @@ let package = Package(
       dependencies: [
         "HardwareControllerApp",
         "HardwareControllerCore",
+        "HardwareControllerModelDownload",
       ]
+    ),
+    .testTarget(
+      name: "HardwareControllerModelDownloadTests",
+      dependencies: ["HardwareControllerModelDownload"],
+      path: "Tests/hardware_controller_model_download_tests"
     ),
   ],
   swiftLanguageModes: [.v6]

@@ -1,4 +1,4 @@
-import HardwareControllerVoiceFFI
+import HardwareControllerModelDownload
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -14,20 +14,21 @@ struct VoiceInputModelLibrarySection: View {
       if model.isPreparingStarter {
         LabeledContent("Installing built-in model") { ProgressView() }
       }
-      ForEach(model.packages, id: \.rootURL) { installed in
-        packageRow(installed)
-      }
-      Button {
-        isImporterPresented = true
-      } label: {
-        Label(
-          model.isImporting ? "Importing…" : "Import Model package…",
-          systemImage: "square.and.arrow.down"
+      ForEach(model.choices) { choice in
+        VoiceInputModelChoiceRow(
+          choice: choice,
+          isBusy: model.isImporting || model.isRemoving,
+          select: { installed in Task { await model.selectASRModel(installed) } },
+          download: model.download,
+          cancel: model.cancelDownload
         )
+        .swipeActions {
+          if let installed = choice.installed {
+            Button("Remove", role: .destructive) { pendingRemoval = installed }
+              .accessibilityIdentifier("remove_model_package")
+          }
+        }
       }
-      .disabled(model.isImporting || model.isRemoving)
-      .accessibilityIdentifier("import_model_package")
-
       if let errorMessage = model.errorMessage ?? pickerErrorMessage {
         Text(errorMessage)
           .foregroundStyle(.red)
@@ -37,7 +38,9 @@ struct VoiceInputModelLibrarySection: View {
       Text("Speech model")
         .accessibilityIdentifier("local_model_library")
     } footer: {
-      Text("Models are verified and stay in this app's private storage.")
+      Text(
+        "Speech never leaves this iPhone. Downloads come from pinned Hugging Face files, are checked against fixed checksums, and need no account."
+      )
     }
     .fileImporter(
       isPresented: $isImporterPresented,
@@ -50,7 +53,7 @@ struct VoiceInputModelLibrarySection: View {
       isPresented: removalConfirmationIsPresented,
       titleVisibility: .visible
     ) {
-      Button("Remove installed copy", role: .destructive) {
+      Button("Remove", role: .destructive) {
         guard let installed = pendingRemoval else {
           return
         }
@@ -59,57 +62,25 @@ struct VoiceInputModelLibrarySection: View {
       }
       Button("Cancel", role: .cancel) { pendingRemoval = nil }
     } message: {
-      Text("The original imported folder is not changed.")
+      Text("You can download it again later.")
     }
-  }
 
-  private func packageRow(_ installed: VoiceInputInstalledModelPackage) -> some View {
-    let isActive = model.isActiveASRModel(installed)
-    let canSelect = VoiceInputASRModelRegistry.isCompatible(installed.package) && !isActive
-    return Button {
-      guard canSelect else {
-        return
+    Section {
+      Button {
+        isImporterPresented = true
+      } label: {
+        Label(
+          model.isImporting ? "Importing…" : "Import from Files…",
+          systemImage: "folder"
+        )
       }
-      Task { await model.selectASRModel(installed) }
-    } label: {
-      HStack {
-        VStack(alignment: .leading, spacing: 2) {
-          Text(installed.package.displayName)
-            .foregroundStyle(.primary)
-          Text(packageSummary(installed))
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-        Spacer()
-        if isActive {
-          Image(systemName: "checkmark")
-            .accessibilityLabel("Active")
-            .accessibilityIdentifier("active_asr_model")
-        }
-      }
+      .disabled(model.isImporting || model.isRemoving)
+      .accessibilityIdentifier("import_model_package")
+    } footer: {
+      Text(
+        "For a Model package folder made on a Mac with scripts/prepare_ios_asr_model_package.sh and copied into Files."
+      )
     }
-    .disabled(model.isImporting || model.isRemoving)
-    .accessibilityHint(canSelect ? "Use for speech to text" : "")
-    .accessibilityIdentifier(canSelect ? "select_asr_model" : "model_package_card")
-    .swipeActions {
-      Button("Remove", role: .destructive) { pendingRemoval = installed }
-        .accessibilityIdentifier("remove_model_package")
-    }
-    .contextMenu {
-      Button("Remove", systemImage: "trash", role: .destructive) { pendingRemoval = installed }
-    }
-  }
-
-  private func packageSummary(_ installed: VoiceInputInstalledModelPackage) -> String {
-    let package = installed.package
-    let languages =
-      package.languages.isEmpty ? "No declared language" : package.languages.joined(separator: ", ")
-    let bytes = ByteCountFormatter.string(
-      fromByteCount: Int64(clamping: package.verifiedBytes),
-      countStyle: .file
-    )
-    let provenance = installed.publisherVerified ? "Verified" : "Manual import"
-    return "\(languages) · \(bytes) · \(provenance)"
   }
 
   private func handleSelection(_ result: Result<[URL], Error>) {
@@ -135,5 +106,83 @@ struct VoiceInputModelLibrarySection: View {
         }
       }
     )
+  }
+}
+
+private struct VoiceInputModelChoiceRow: View {
+  let choice: VoiceInputModelChoice
+  let isBusy: Bool
+  let select: (VoiceInputInstalledModelPackage) -> Void
+  let download: (ASRModelCatalogEntry) -> Void
+  let cancel: (ASRModelCatalogEntry) -> Void
+
+  var body: some View {
+    HStack(spacing: 12) {
+      VStack(alignment: .leading, spacing: 2) {
+        Text(choice.title)
+        Text(subtitle)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+      Spacer(minLength: 8)
+      accessory
+    }
+    .contentShape(Rectangle())
+    .onTapGesture {
+      if case .installed(let installed) = choice.state, !isBusy {
+        select(installed)
+      }
+    }
+    .accessibilityElement(children: .combine)
+    .accessibilityAddTraits(isSelectable ? .isButton : [])
+    .accessibilityHint(isSelectable ? "Use for speech to text" : "")
+    .accessibilityIdentifier("model_choice_\(choice.id)")
+  }
+
+  private var isSelectable: Bool {
+    if case .installed = choice.state { return true }
+    return false
+  }
+
+  private var subtitle: String {
+    let size = ByteCountFormatter.string(fromByteCount: choice.bytes, countStyle: .file)
+    return "\(choice.summary) · \(size)"
+  }
+
+  @ViewBuilder
+  private var accessory: some View {
+    switch choice.state {
+    case .active:
+      Image(systemName: "checkmark")
+        .fontWeight(.semibold)
+        .accessibilityLabel("Active")
+        .accessibilityIdentifier("active_asr_model")
+    case .installed:
+      Text("Use")
+        .foregroundStyle(.secondary)
+    case .downloading(let entry, let fraction):
+      HStack(spacing: 10) {
+        ProgressView(value: fraction)
+          .progressViewStyle(.circular)
+          .accessibilityLabel("Downloading")
+          .accessibilityValue("\(Int(fraction * 100)) percent")
+        Button {
+          cancel(entry)
+        } label: {
+          Image(systemName: "xmark.circle.fill")
+            .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel("Cancel download")
+        .accessibilityIdentifier("cancel_model_download")
+      }
+    case .available(let entry):
+      Button("Download") { download(entry) }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .controlSize(.small)
+        .disabled(isBusy)
+        .accessibilityIdentifier("download_model_\(entry.packageID)")
+    }
   }
 }

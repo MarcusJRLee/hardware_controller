@@ -24,17 +24,33 @@ final class KeyboardViewController: UIInputViewController {
   private var insertionRecovery: VoiceInputInsertionRecovery?
   private var hostChangeRevision: UInt64 = 0
   private var selectedStyleKind = VoiceInputStyleKind.natural
+  private let keysView = KeyboardKeysView()
+  private var layer = VoiceInputKeyboardLayer.letters
   private var isUppercase = false
+  private var isCapsLocked = false
+  private var lastShiftTap: Date?
+  private var indicatorTimer: Timer?
+  private var indicatedPhase: VoiceInputSnapshot.Phase?
 
   override func viewDidLoad() {
     super.viewDidLoad()
+    inputView = KeyboardInputView(frame: .zero, inputViewStyle: .keyboard)
     selectedStyleKind = stylePreference.read()
     buildKeyboard()
   }
 
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
+    updateAutoCapitalization()
+    renderKeys()
     refreshStatus()
+    startIndicator()
+  }
+
+  override func viewWillLayoutSubviews() {
+    super.viewWillLayoutSubviews()
+    // The globe key depends on the host, which is known only once presented.
+    renderKeys()
   }
 
   private func startPolling() {
@@ -53,6 +69,8 @@ final class KeyboardViewController: UIInputViewController {
   override func viewDidDisappear(_ animated: Bool) {
     super.viewDidDisappear(animated)
     stopPolling()
+    indicatorTimer?.invalidate()
+    indicatorTimer = nil
     clearInsertionRecovery()
   }
 
@@ -65,6 +83,8 @@ final class KeyboardViewController: UIInputViewController {
     let insertionWasPending = insertionRecovery != nil
     hostChangeRevision &+= 1
     super.textDidChange(textInput)
+    updateAutoCapitalization()
+    renderKeys()
     refreshStatus()
     if insertionWasPending {
       clearInsertionRecovery()
@@ -79,48 +99,53 @@ final class KeyboardViewController: UIInputViewController {
     refreshStatus()
     if insertionWasPending {
       clearInsertionRecovery()
-      showStatus("The field changed. The transcript remains in Voice Input History.")
+      showStatus("The field changed. The text is in Voice Input History.")
     }
   }
 
   private func buildKeyboard() {
-    view.backgroundColor = .systemGray6
-    view.heightAnchor.constraint(greaterThanOrEqualToConstant: 250).isActive = true
-
     statusLabel.font = .preferredFont(forTextStyle: .caption1)
+    statusLabel.adjustsFontForContentSizeCategory = false
     statusLabel.textColor = .secondaryLabel
     statusLabel.numberOfLines = 2
     statusLabel.textAlignment = .center
+    statusLabel.lineBreakMode = .byTruncatingTail
     statusLabel.accessibilityIdentifier = "voice_status"
 
-    let rows = UIStackView(arrangedSubviews: [
-      statusAndStyleRow,
-      letterRow("qwertyuiop"),
-      letterRow("asdfghjkl"),
-      thirdRow,
-      utilityRow,
-    ])
-    rows.axis = .vertical
-    rows.spacing = 7
-    rows.translatesAutoresizingMaskIntoConstraints = false
-    view.addSubview(rows)
+    keysView.onKey = { [weak self] key in self?.handle(key) }
+    let bar = voiceBar
+    bar.translatesAutoresizingMaskIntoConstraints = false
+    keysView.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(bar)
+    view.addSubview(keysView)
+    // The system may resize the keyboard; one height keeps keys stable.
+    let height = view.heightAnchor.constraint(equalToConstant: 270)
+    height.priority = .defaultHigh
     NSLayoutConstraint.activate([
-      rows.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 5),
-      rows.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -5),
-      rows.topAnchor.constraint(equalTo: view.topAnchor, constant: 6),
-      rows.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -6),
+      height,
+      bar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
+      bar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
+      bar.topAnchor.constraint(equalTo: view.topAnchor, constant: 6),
+      bar.heightAnchor.constraint(equalToConstant: 44),
+      keysView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      keysView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      keysView.topAnchor.constraint(equalTo: bar.bottomAnchor),
+      keysView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
     ])
+    configureMicrophoneButton()
+    renderKeys()
   }
 
-  private var statusAndStyleRow: UIStackView {
-    insertionRecoveryButton.setTitle("Recover…", for: .normal)
+  /// Style on the left, status in the middle, the voice button on the right.
+  private var voiceBar: UIStackView {
+    insertionRecoveryButton.configuration = Self.barButtonConfiguration(title: "Recover…")
     insertionRecoveryButton.accessibilityLabel = "Recover unconfirmed voice insertion"
     insertionRecoveryButton.accessibilityIdentifier = "voice_insertion_recovery"
     insertionRecoveryButton.showsMenuAsPrimaryAction = true
     insertionRecoveryButton.isHidden = true
     insertionRecoveryButton.setContentHuggingPriority(.required, for: .horizontal)
 
-    restartButton.setTitle("Restart…", for: .normal)
+    restartButton.configuration = Self.barButtonConfiguration(title: "Restart…")
     restartButton.accessibilityLabel = "Show voice restart steps"
     restartButton.accessibilityIdentifier = "voice_restart"
     restartButton.isHidden = true
@@ -131,131 +156,183 @@ final class KeyboardViewController: UIInputViewController {
     styleButton.accessibilityIdentifier = "voice_style"
     styleButton.showsMenuAsPrimaryAction = true
     styleButton.setContentHuggingPriority(.required, for: .horizontal)
+    styleButton.setContentCompressionResistancePriority(.required, for: .horizontal)
     configureStyleMenu()
 
+    statusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
     let row = UIStackView(arrangedSubviews: [
+      styleButton,
       statusLabel,
       insertionRecoveryButton,
       restartButton,
-      styleButton,
+      microphoneButton,
     ])
     row.axis = .horizontal
+    row.alignment = .center
     row.spacing = 8
     return row
   }
 
-  private func letterRow(_ letters: String) -> UIStackView {
-    stack(letters.map { letterButton(String($0)) })
+  private static func barButtonConfiguration(title: String) -> UIButton.Configuration {
+    var configuration = UIButton.Configuration.plain()
+    configuration.title = title
+    configuration.baseForegroundColor = .label
+    configuration.contentInsets = NSDirectionalEdgeInsets(
+      top: 4, leading: 6, bottom: 4, trailing: 6)
+    configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
+      var attributes = $0
+      attributes.font = .preferredFont(forTextStyle: .subheadline)
+      return attributes
+    }
+    return configuration
   }
 
-  private var thirdRow: UIStackView {
-    let shift = keyButton(title: "⇧", identifier: "shift")
-    shift.addTarget(self, action: #selector(toggleCase), for: .touchUpInside)
-    let delete = keyButton(title: "⌫", identifier: "delete")
-    delete.addTarget(self, action: #selector(deleteBackward), for: .touchUpInside)
-    return stack([shift] + "zxcvbnm".map { letterButton(String($0)) } + [delete])
-  }
-
-  private var utilityRow: UIStackView {
-    let globe = keyButton(title: "◉", identifier: "next_keyboard")
-    globe.addTarget(self, action: #selector(nextKeyboard), for: .touchUpInside)
-
-    microphoneButton.setImage(UIImage(systemName: "mic.fill"), for: .normal)
+  private func configureMicrophoneButton() {
     microphoneButton.accessibilityLabel = "Voice capture"
     microphoneButton.accessibilityIdentifier = "voice_microphone"
-    microphoneButton.backgroundColor = .label
-    microphoneButton.tintColor = .systemBackground
-    microphoneButton.layer.cornerRadius = 8
+    microphoneButton.layer.cornerRadius = 20
+    microphoneButton.layer.cornerCurve = .continuous
     microphoneButton.addTarget(self, action: #selector(handleMicrophone), for: .touchUpInside)
-
-    let space = keyButton(title: "space", identifier: "space")
-    space.addTarget(self, action: #selector(insertSpace), for: .touchUpInside)
-    space.widthAnchor.constraint(greaterThanOrEqualToConstant: 130).isActive = true
-
-    let returnKey = keyButton(title: "return", identifier: "return")
-    returnKey.addTarget(self, action: #selector(insertReturn), for: .touchUpInside)
-    return stack([globe, microphoneButton, space, returnKey])
+    microphoneButton.translatesAutoresizingMaskIntoConstraints = false
+    NSLayoutConstraint.activate([
+      microphoneButton.widthAnchor.constraint(equalToConstant: 40),
+      microphoneButton.heightAnchor.constraint(equalToConstant: 40),
+    ])
+    showCapturePhase(nil)
   }
 
-  private func stack(_ views: [UIView]) -> UIStackView {
-    let row = UIStackView(arrangedSubviews: views)
-    row.axis = .horizontal
-    row.spacing = 5
-    row.distribution = .fillEqually
-    return row
-  }
-
-  private func letterButton(_ letter: String) -> UIButton {
-    let button = keyButton(
-      title: isUppercase ? letter.uppercased() : letter,
-      identifier: "key_\(letter)"
+  /// Neutral at rest; amber only while the app records, as in the app.
+  private func showCapturePhase(_ phase: VoiceInputSnapshot.Phase?) {
+    let symbol: String
+    switch phase {
+    case .recording:
+      microphoneButton.backgroundColor = VoiceInputTheme.signal
+      microphoneButton.tintColor = .black
+      symbol = "stop.fill"
+      microphoneButton.accessibilityValue = "Recording"
+    case .transcribing:
+      microphoneButton.backgroundColor = .secondarySystemFill
+      microphoneButton.tintColor = .label
+      symbol = "ellipsis"
+      microphoneButton.accessibilityValue = "Finishing"
+    case .none, .idle, .ready, .interrupted, .failed:
+      microphoneButton.backgroundColor = .label
+      microphoneButton.tintColor = .systemBackground
+      symbol = "mic.fill"
+      microphoneButton.accessibilityValue = nil
+    }
+    microphoneButton.setImage(
+      UIImage(
+        systemName: symbol,
+        withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
+      ),
+      for: .normal
     )
-    button.addTarget(self, action: #selector(insertLetter(_:)), for: .touchUpInside)
-    return button
   }
 
-  private func keyButton(title: String, identifier: String) -> UIButton {
-    let button = UIButton(type: .system)
-    button.setTitle(title, for: .normal)
-    button.setTitleColor(.label, for: .normal)
-    button.titleLabel?.font = .preferredFont(forTextStyle: .body)
-    button.backgroundColor = .systemBackground
-    button.layer.cornerRadius = 6
-    button.accessibilityIdentifier = identifier
-    return button
-  }
-
-  @objc private func insertLetter(_ sender: UIButton) {
-    guard let letter = sender.title(for: .normal) else {
+  private func startIndicator() {
+    guard indicatorTimer == nil else {
       return
     }
-    textDocumentProxy.insertText(letter)
-    if isUppercase {
-      toggleCase()
+    updateIndicator()
+    indicatorTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+      MainActor.assumeIsolated { self?.updateIndicator() }
     }
   }
 
-  @objc private func insertSpace() {
-    textDocumentProxy.insertText(" ")
+  /// Reads only the bounded snapshot; it never starts or stops capture.
+  private func updateIndicator() {
+    let phase = hasFullAccess ? (try? store.readSnapshot())?.phase : nil
+    guard phase != indicatedPhase else {
+      return
+    }
+    indicatedPhase = phase
+    showCapturePhase(phase)
   }
 
-  @objc private func insertReturn() {
-    textDocumentProxy.insertText("\n")
+  private func renderKeys() {
+    keysView.configure(
+      rows: VoiceInputKeyboardLayout.rows(for: layer, showsNextKeyboard: needsInputModeSwitchKey),
+      isUppercase: layer == .letters && (isUppercase || isCapsLocked),
+      isCapsLocked: isCapsLocked
+    )
   }
 
-  @objc private func deleteBackward() {
-    textDocumentProxy.deleteBackward()
-  }
-
-  @objc private func nextKeyboard() {
-    advanceToNextInputMode()
-  }
-
-  @objc private func toggleCase() {
-    isUppercase.toggle()
-    for case let button as UIButton in view.subviewsRecursive {
-      guard
-        let identifier = button.accessibilityIdentifier,
-        identifier.hasPrefix("key_")
-      else {
-        continue
+  private func handle(_ key: VoiceInputKeyboardKey) {
+    switch key {
+    case .character(let character):
+      let uppercase = layer == .letters && (isUppercase || isCapsLocked)
+      textDocumentProxy.insertText(uppercase ? character.uppercased() : character)
+      if !isCapsLocked {
+        isUppercase = false
       }
-      let letter = String(identifier.dropFirst(4))
-      button.setTitle(isUppercase ? letter.uppercased() : letter, for: .normal)
+      if layer != .letters, character == "'" {
+        layer = .letters
+      }
+    case .space:
+      if VoiceInputKeyboardLayout.shouldInsertPeriod(
+        after: textDocumentProxy.documentContextBeforeInput)
+      {
+        textDocumentProxy.deleteBackward()
+        textDocumentProxy.insertText(". ")
+      } else {
+        textDocumentProxy.insertText(" ")
+      }
+      layer = .letters
+      updateAutoCapitalization()
+    case .returnKey:
+      textDocumentProxy.insertText("\n")
+      layer = .letters
+      updateAutoCapitalization()
+    case .delete:
+      textDocumentProxy.deleteBackward()
+      updateAutoCapitalization()
+    case .shift:
+      toggleShift()
+    case .layer(let next):
+      layer = next
+    case .nextKeyboard:
+      advanceToNextInputMode()
     }
+    renderKeys()
+  }
+
+  /// One tap shifts the next letter; a quick second tap locks capitals.
+  private func toggleShift() {
+    let now = Date.now
+    if isCapsLocked {
+      isCapsLocked = false
+      isUppercase = false
+    } else if isUppercase, let lastShiftTap, now.timeIntervalSince(lastShiftTap) < 0.35 {
+      isCapsLocked = true
+    } else {
+      isUppercase.toggle()
+    }
+    lastShiftTap = now
+  }
+
+  private func updateAutoCapitalization() {
+    guard !isCapsLocked else {
+      return
+    }
+    let autocapitalizes = (textDocumentProxy.autocapitalizationType ?? .sentences) != .none
+    isUppercase =
+      autocapitalizes
+      && VoiceInputKeyboardLayout.shouldCapitalize(
+        after: textDocumentProxy.documentContextBeforeInput)
   }
 
   @objc private func handleMicrophone() {
     clearInsertionRecovery()
     guard hasFullAccess else {
       restartButton.isHidden = true
-      showStatus("Typing works. Enable Full Access for local voice handoff.")
+      showStatus("To dictate here, turn on Allow Full Access for Voice Keyboard.")
       return
     }
     guard currentFieldEligibility == .supported else {
       deliveryTarget = nil
       restartButton.isHidden = true
-      showStatus("Typing works. Voice capture is unavailable in this field.")
+      showStatus("Voice is off in this field. Typing still works.")
       return
     }
     guard let snapshot = try? store.readSnapshot() else {
@@ -272,7 +349,7 @@ final class KeyboardViewController: UIInputViewController {
     }
     guard !invalidateDeliveryTargetIfNeeded() else {
       stopPolling()
-      showStatus("The field changed. Recover the completed transcript from Voice Input History.")
+      showStatus("The field changed. The text is in Voice Input History.")
       return
     }
     guard let snapshot = try? store.readSnapshot() else {
@@ -302,15 +379,15 @@ final class KeyboardViewController: UIInputViewController {
     )
     switch decision {
     case .requestStop:
-      showStatus("Stopping local capture…")
+      showStatus("Stopping…")
     case .waitingForResult:
-      showStatus("Finalizing locally…")
+      showStatus("Transcribing…")
     case .serviceStale:
       showStaleService("The app-owned capture stopped responding.")
     case .insert, .alreadyInserted:
       applyDecision(for: snapshot)
     case .manualActivationRequired:
-      showStatus("Capture stopped without a result. Start again in Voice Input.")
+      showStatus("Recording stopped without text. Start again in Voice Input.")
       self.deliveryTarget = nil
       stopPolling()
     case .requiresFullAccess, .unsupportedField:
@@ -339,14 +416,14 @@ final class KeyboardViewController: UIInputViewController {
     case .requiresFullAccess:
       deliveryTarget = nil
       stopPolling()
-      showStatus("Typing works. Enable Full Access for local voice handoff.")
+      showStatus("To dictate here, turn on Allow Full Access for Voice Keyboard.")
     case .unsupportedField:
       deliveryTarget = nil
       stopPolling()
-      showStatus("Typing works. Voice capture is unavailable in this field.")
+      showStatus("Voice is off in this field. Typing still works.")
     case .manualActivationRequired:
       deliveryTarget = nil
-      showStatus("Start capture in Voice Input or its Control Center control, then return here.")
+      showStatus("Start recording in Voice Input or Control Center, then tap the mic.")
     case .requestStop(let sessionID):
       let requestedTarget = VoiceInputDeliveryTarget(
         sessionID: sessionID,
@@ -365,7 +442,7 @@ final class KeyboardViewController: UIInputViewController {
         deliveryTarget = requestedTarget
         restartButton.isHidden = true
         startPolling()
-        showStatus("Stopping local capture…")
+        showStatus("Stopping…")
       } catch VoiceInputStoreError.commandPending {
         if deliveryTarget == requestedTarget {
           showStatus("A local capture command is already pending…")
@@ -378,7 +455,7 @@ final class KeyboardViewController: UIInputViewController {
         showStatus("The stop request could not be written locally.")
       }
     case .waitingForResult:
-      showStatus("Finalizing locally…")
+      showStatus("Transcribing…")
     case .serviceStale:
       showStaleService("The app-owned capture is not responding.")
     case .insert(let sessionID, let sequence, let text):
@@ -394,7 +471,7 @@ final class KeyboardViewController: UIInputViewController {
       else {
         self.deliveryTarget = nil
         stopPolling()
-        showStatus("The field changed. Recover the completed transcript from Voice Input History.")
+        showStatus("The field changed. The text is in Voice Input History.")
         return
       }
       let receipt = VoiceInputInsertionReceipt(
@@ -448,17 +525,17 @@ final class KeyboardViewController: UIInputViewController {
     }
     if !fullAccess {
       restartButton.isHidden = true
-      showStatus("Typing works. Full Access enables only the local keychain handoff.")
+      showStatus("To dictate here, turn on Allow Full Access for Voice Keyboard.")
     } else if fieldEligibility == .unsupported {
       restartButton.isHidden = true
-      showStatus("Typing works. Voice capture is unavailable in this field.")
+      showStatus("Voice is off in this field. Typing still works.")
     } else if deliveryTargetWasInvalidated {
       restartButton.isHidden = true
-      showStatus("The field changed. Recover the completed transcript from Voice Input History.")
+      showStatus("The field changed. The text is in Voice Input History.")
     } else if insertionRecoveryWasInvalidated {
-      showStatus("The field changed. The transcript remains in Voice Input History.")
+      showStatus("The field changed. The text is in Voice Input History.")
     } else if statusLabel.text == nil {
-      showStatus("Tap the mic after starting capture in Voice Input or Control Center.")
+      showStatus("Start recording in Voice Input, then tap the mic to insert.")
     }
   }
 
@@ -638,7 +715,24 @@ final class KeyboardViewController: UIInputViewController {
   }
 
   private func configureStyleMenu() {
-    styleButton.setTitle(selectedStyleKind.displayName, for: .normal)
+    var configuration = UIButton.Configuration.gray()
+    configuration.title = selectedStyleKind.displayName
+    configuration.image = UIImage(
+      systemName: "chevron.down",
+      withConfiguration: UIImage.SymbolConfiguration(pointSize: 10, weight: .semibold)
+    )
+    configuration.imagePlacement = .trailing
+    configuration.imagePadding = 4
+    configuration.cornerStyle = .capsule
+    configuration.baseForegroundColor = .label
+    configuration.contentInsets = NSDirectionalEdgeInsets(
+      top: 6, leading: 12, bottom: 6, trailing: 10)
+    configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
+      var attributes = $0
+      attributes.font = .preferredFont(forTextStyle: .subheadline)
+      return attributes
+    }
+    styleButton.configuration = configuration
     styleButton.menu = UIMenu(
       title: "Style",
       children: VoiceInputStyleKind.allCases.map { styleKind in
@@ -661,8 +755,7 @@ final class KeyboardViewController: UIInputViewController {
 
 }
 
-extension UIView {
-  fileprivate var subviewsRecursive: [UIView] {
-    subviews + subviews.flatMap(\.subviewsRecursive)
-  }
+/// Enables the system's input clicks for this keyboard's keys.
+final class KeyboardInputView: UIInputView, UIInputViewAudioFeedback {
+  var enableInputClicksWhenVisible: Bool { true }
 }

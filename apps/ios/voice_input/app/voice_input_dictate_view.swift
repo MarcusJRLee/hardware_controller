@@ -179,7 +179,8 @@ private struct VoiceInputRecordButton: View {
         .foregroundStyle(presentation.isActive ? Color.black : Color(.systemBackground))
         .frame(width: 88, height: 88)
         .background(
-          Circle().fill(presentation.isActive ? VoiceInputTheme.signal : Color.primary)
+          Circle().fill(
+            presentation.isActive ? Color(uiColor: VoiceInputTheme.signal) : Color.primary)
         )
         .overlay {
           if contrast == .increased {
