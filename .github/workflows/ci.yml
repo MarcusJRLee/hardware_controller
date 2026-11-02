@@ -61,6 +61,9 @@ jobs:
             .build/asr_runtime
             .build/asr_test_assets
           key: asr-assets-${{ hashFiles('scripts/fetch_asr_runtime.sh', 'scripts/fetch_asr_test_assets.sh') }}
+      - name: Provide pinned swift-format
+        if: needs.changes.outputs.macos == 'true'
+        uses: ./.github/actions/swift_format
       - name: Run repository checks
         if: needs.changes.outputs.macos == 'true'
         run: scripts/check.sh
@@ -88,6 +91,8 @@ jobs:
             .build/asr_runtime
             .build/asr_test_assets
           key: asr-assets-${{ hashFiles('scripts/fetch_asr_runtime.sh', 'scripts/fetch_asr_test_assets.sh') }}
+      - name: Provide pinned swift-format
+        uses: ./.github/actions/swift_format
       - name: Install iOS build tools
         run: |
           brew install ripgrep xcodegen

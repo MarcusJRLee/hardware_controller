@@ -12,6 +12,7 @@ for script in scripts/*.sh; do
   zsh -n "$script"
 done
 scripts/classify_changes_test.sh
+scripts/swift_format_test.sh
 scripts/check_workflows_test.sh
 scripts/check_workflows.sh
 scripts/ci_durations_test.sh
