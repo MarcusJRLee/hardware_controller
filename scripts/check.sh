@@ -24,6 +24,7 @@ HC_RUN_SQLITE_CONTENTION=1 swift test "${swift_flags[@]}" \
   --filter finalizationWaitsThroughTransientDatabaseContention
 HC_RUN_HID_PERFORMANCE=1 swift test "${swift_flags[@]}" \
   --filter tenThousandTransitionSoakMeetsDispatchBudget
+HC_RUN_ASR_KERNEL=1 swift test "${swift_flags[@]}" --filter transcribesRealSpeech
 swift build -c release --product HardwareController "${swift_flags[@]}"
 binary_directory="$(swift build -c release "${swift_flags[@]}" --show-bin-path)"
 linked_symbols="$(nm -gU "$binary_directory/HardwareController")"

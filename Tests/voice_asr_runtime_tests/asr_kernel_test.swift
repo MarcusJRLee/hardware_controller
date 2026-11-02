@@ -42,13 +42,19 @@ struct ASRKernelTest {
     #expect(ASRKernelRequest.runtimeLanguage(for: ["1234"]) == "auto")
   }
 
-  /// The real runtime transcribes the pinned clip; `scripts/check.sh` fetches it.
-  @Test(.enabled(if: Assets.available))
+  /// The real runtime transcribes the pinned clip. A CPU decode saturates the
+  /// runner and starves timing-sensitive tests in the same process, so
+  /// `scripts/check.sh` runs it alone with `HC_RUN_ASR_KERNEL=1`.
+  @Test(
+    .enabled(
+      if: Assets.available && ProcessInfo.processInfo.environment["HC_RUN_ASR_KERNEL"] == "1")
+  )
   func transcribesRealSpeech() throws {
     let kernel = try ASRKernel(
       modelURL: Assets.directory.appending(path: "whisper-tiny.en-Q8_0.gguf"),
       speechDetectionURL: Assets.directory.appending(path: "silero-vad-v6.2-F32.gguf"),
-      useGPU: false
+      useGPU: false,
+      threadCount: 2
     )
     #expect(kernel.capabilities.supportsSpeechDetection)
     let transcript = try kernel.transcribe(
