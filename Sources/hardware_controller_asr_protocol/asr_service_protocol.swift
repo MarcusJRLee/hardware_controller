@@ -149,36 +149,28 @@ public enum ASRAudioSamples {
   /// Thirty minutes bounds one request at 115 MB.
   public static let maximumSampleCount = 16_000 * 60 * 30
 
+  // Both ends run on this Mac and every supported Mac is little-endian, so
+  // samples cross as raw bytes; a per-sample loop cost 14 ms for 84 s of audio.
+  private static let hostIsLittleEndian = 1.littleEndian == 1
+
   public static func encode(_ samples: [Float]) -> Data {
-    var data = Data(capacity: samples.count * MemoryLayout<UInt32>.size)
-    for sample in samples {
-      withUnsafeBytes(of: sample.bitPattern.littleEndian) { data.append(contentsOf: $0) }
-    }
-    return data
+    precondition(hostIsLittleEndian, "ASR audio crosses as little-endian float32.")
+    return samples.withUnsafeBytes { Data($0) }
   }
 
   public static func decode(_ data: Data) throws(ASRServiceFailure) -> [Float] {
-    let width = MemoryLayout<UInt32>.size
+    let width = MemoryLayout<Float>.size
     guard
+      hostIsLittleEndian,
       !data.isEmpty,
       data.count.isMultiple(of: width),
       data.count / width <= maximumSampleCount
     else {
       throw .invalidAudio
     }
-    var samples: [Float] = []
-    samples.reserveCapacity(data.count / width)
-    var finite = true
-    data.withUnsafeBytes { bytes in
-      for offset in stride(from: 0, to: bytes.count, by: width) {
-        let bits = UInt32(
-          littleEndian: bytes.loadUnaligned(fromByteOffset: offset, as: UInt32.self))
-        let sample = Float(bitPattern: bits)
-        finite = finite && sample.isFinite
-        samples.append(sample)
-      }
-    }
-    guard finite else {
+    var samples = [Float](repeating: 0, count: data.count / width)
+    _ = samples.withUnsafeMutableBytes { data.copyBytes(to: $0) }
+    guard samples.allSatisfy({ $0.isFinite }) else {
       throw .invalidAudio
     }
     return samples

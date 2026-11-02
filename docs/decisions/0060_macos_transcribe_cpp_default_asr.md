@@ -152,9 +152,9 @@ Slices 1–3 shipped together; live decoding and Moonshine remain next work.
 
 | Gate | Evidence (M5 Max, signed install, `scripts/check_speech_engine.sh`) |
 | --- | --- |
-| IPC | Round trip minus service decode: p50 2.4 ms, p95 3.1 ms, p99 3.1 ms, max 3.1 ms over 10 decodes of the 11 s JFK clip. |
+| IPC | Round trip minus service decode, 10 decodes each: 11 s clip p50 0.5 ms, p99 0.8 ms; 84 s clip p50 1.4 ms, p99 2.2 ms. A per-sample copy first measured 14.4 ms at 84 s; samples now cross as raw bytes. |
 | Recovery | SIGKILL mid-decode returns `interrupted`; the next load and decode return identical text. |
-| Release latency | Whole-recording decode p95 563 ms (table above); unchanged by IPC at this scale. |
+| Release latency | Parakeet v3 Q8_0 through the installed service: 11 s clip p50 53 ms, p95 335 ms; 84 s clip p50 350 ms, p95 408 ms, p99 408 ms, max 408 ms. |
 | Hot path | The HID soak runs in every check; the service shares no thread or memory with it. Soak during a live crash is not yet measured. |
 | Memory | Idle kill after five minutes and on every package change; footprint after exit not yet measured. |
 
