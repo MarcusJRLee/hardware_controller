@@ -49,9 +49,13 @@ starts only the lanes a change needs ([decision](docs/decisions/0059_change_scop
 | iOS | `apps/ios`, shared Core, FFI, Rust, ASR or iOS scripts | macOS | 25 min |
 | CodeQL (macos / ios) | That platform's Swift or shared sources | macOS | 35 min |
 | CodeQL (actions) | Always | Ubuntu | 10 min |
+| Tool cache | `main` changes the formatter pin; weekly | macOS | 20 min |
 
+PRs read caches saved on `main` but not each other's, so **Tool cache** saves
+the pinned swift-format there; without it every PR rebuilds it (~8 min).
 Workflow edits run every lane. `scripts/check_workflows.sh` fails on a job
-without a timeout, over budget, or on macOS without `needs: changes`. The weekly
+without a timeout, over budget, or on macOS without `needs: changes` or push
+`paths:`. The weekly
 **CI health** workflow fails when a job's p50 passes 70% of its budget; run
 `scripts/ci_durations.sh` to see p50, max, and queue time.
 

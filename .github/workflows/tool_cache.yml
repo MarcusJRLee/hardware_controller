@@ -1,0 +1,36 @@
+name: Tool cache
+
+# PR runs can read caches saved on main but not each other's, and CI runs only
+# on pull requests. This saves the pinned formatter on main so no PR rebuilds
+# it; the weekly run keeps the cache inside GitHub's 7-day eviction window.
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools/swift_format/**
+      - scripts/swift_format.sh
+      - .github/actions/swift_format/**
+      - .github/workflows/tool_cache.yml
+  schedule:
+    - cron: "17 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tool-cache
+  cancel-in-progress: true
+
+jobs:
+  swift_format:
+    name: Pinned swift-format
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Provide pinned swift-format
+        uses: ./.github/actions/swift_format
