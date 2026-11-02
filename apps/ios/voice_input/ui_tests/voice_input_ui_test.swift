@@ -50,6 +50,39 @@ final class VoiceInputUITest: XCTestCase {
     attachScreenshot(app, named: "history_detail")
   }
 
+  /// Deleting one dictation and clearing History both reach storage: the
+  /// empty state survives a relaunch.
+  @MainActor
+  func testHistoryDeletesOneDictationThenClearsAll() throws {
+    let app = try launch(reset: true, fixture: true)
+    for _ in 0..<2 {
+      try dictate(in: app)
+    }
+    app.tabBars.buttons["History"].tap()
+    // Each History entry is one list cell; its label and link are not counted.
+    let rows = app.collectionViews.cells
+    wait(for: rows, toCount: 2)
+
+    rows.firstMatch.swipeLeft()
+    app.buttons["history_delete_row"].tap()
+    wait(for: rows, toCount: 1)
+
+    app.buttons["history_menu"].tap()
+    app.buttons["history_clear_all"].tap()
+    // iOS renders the dialog action twice (sheet and accessibility copy).
+    app.buttons["history_confirm_clear_all"].firstMatch.tap()
+    XCTAssertTrue(
+      app.descendants(matching: .any)["history_empty"].waitForExistence(timeout: Self.timeout))
+
+    app.terminate()
+    app.launchArguments.removeAll { $0 == "-voice_input_reset_state" }
+    app.launch()
+    app.tabBars.buttons["History"].tap()
+    XCTAssertTrue(
+      app.descendants(matching: .any)["history_empty"].waitForExistence(timeout: Self.timeout))
+    XCTAssertEqual(rows.count, 0)
+  }
+
   @MainActor
   func testSettingsShowTheVerifiedModelSetupAndStorage() throws {
     let app = try launch(reset: true, fixture: false)
@@ -59,7 +92,9 @@ final class VoiceInputUITest: XCTestCase {
       app.descendants(matching: .any)["active_asr_model"].waitForExistence(timeout: Self.timeout)
     )
     XCTAssertTrue(app.staticTexts["Whisper Tiny English"].exists)
-    XCTAssertTrue(app.buttons["import_model_package"].exists)
+    for packageID in ["whisper_base_en", "whisper_small_en", "parakeet_tdt_v3"] {
+      XCTAssertTrue(app.buttons["download_model_com.longdevity.asr.\(packageID)"].exists, packageID)
+    }
     for label in ["Keep audio for", "Audio up to", "Recordings"] {
       // A Form menu Picker is exposed as a button labeled "<title>, <value>".
       let picker = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", label))
@@ -69,6 +104,11 @@ final class VoiceInputUITest: XCTestCase {
       }
       XCTAssertTrue(picker.isHittable, label)
     }
+    let importButton = app.buttons["import_model_package"]
+    for _ in 0..<6 where !importButton.isHittable {
+      app.swipeUp()
+    }
+    XCTAssertTrue(importButton.isHittable)
     let shortcuts = app.buttons["open_voice_shortcuts"]
     for _ in 0..<6 where !shortcuts.isHittable {
       app.swipeUp()
@@ -127,6 +167,26 @@ final class VoiceInputUITest: XCTestCase {
     }
     app.launch()
     return app
+  }
+
+  @MainActor
+  private func dictate(in app: XCUIApplication) throws {
+    app.tabBars.buttons["Dictate"].tap()
+    let start = app.buttons["start_capture"]
+    XCTAssertTrue(start.waitForExistence(timeout: Self.timeout))
+    wait(for: start, toBe: "isEnabled == true")
+    start.tap()
+    let stop = app.buttons["stop_capture"]
+    XCTAssertTrue(stop.waitForExistence(timeout: Self.timeout))
+    stop.tap()
+    let title = app.staticTexts["dictation_title"]
+    wait(for: title, toBe: "label == 'Done'")
+  }
+
+  @MainActor
+  private func wait(for query: XCUIElementQuery, toCount count: Int) {
+    expectation(for: NSPredicate(format: "count == %d", count), evaluatedWith: query)
+    waitForExpectations(timeout: Self.timeout)
   }
 
   @MainActor

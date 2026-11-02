@@ -56,15 +56,15 @@ for import_line in "${(@f)$(git grep -hE '^(@testable )?import ' -- 'Sources/Har
   [[ "$import_line" == "import Foundation" ]] || failures+=("HardwareControllerCore: forbidden ${import_line}")
 done
 
-# Only the fixed-loopback Ollama adapter and the pinned speech-model downloader
-# (decision 0060) may use a network API on macOS.
+# Only the fixed-loopback Ollama adapter and the pinned speech-model fetcher
+# (decisions 0060, 0062) may use a network API.
 network_files=(
   Sources/HardwareControllerMac/ollama_local_ai_refiner.swift
-  Sources/HardwareControllerMac/asr_model_downloader.swift
+  Sources/hardware_controller_model_download/asr_model_file_fetcher.swift
 )
 for file in "${(@f)$(git grep -lwE '(URLSession|NWConnection|NWListener|CFStream)' -- 'Sources/*.swift' || true)}"; do
   [[ -z "$file" || ${network_files[(Ie)$file]} -gt 0 ]] && continue
-  failures+=("$file: network APIs are confined to the Ollama adapter and model downloader")
+  failures+=("$file: network APIs are confined to the Ollama adapter and model fetcher")
 done
 
 # Xcode's bundled formatter differs per Xcode release; only the pinned one lints.

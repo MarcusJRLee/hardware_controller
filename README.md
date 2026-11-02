@@ -51,9 +51,9 @@ are listed in [CONTRIBUTING.md](CONTRIBUTING.md#opt-in-system-checks).
 Calm, tactile, precise: a studio utility, not a settings form. Neutral
 surfaces, system typography, no decorative borders, and one strong action per
 workflow. Color appears only for active state, required attention, or errors.
-The icon, Signal Bridge, is three generic nodes joined by one amber signal
-path ([source](packaging/app_icon_source.png)); iOS Voice Input crops the same
-art full-bleed and paints amber only while recording. Details:
+The icons, Center Signal, are rounded capsules on graphite with only the
+center lit amber: three pedals for Hardware Controller, a voice waveform for
+Voice Input (`swift tools/app_icons/render_app_icons.swift`). Details:
 [UX specification](docs/ux_spec.md).
 
 ## Documentation

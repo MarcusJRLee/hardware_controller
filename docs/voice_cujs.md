@@ -56,7 +56,7 @@ events.
 | I1 | Onboard locally | A fresh install provisions the pinned starter model; microphone asked on first tap with exact denial recovery; imported packages still admitted. | `voice_input_starter_model_test`, `voice_input_asr_model_registry_test`, `voice_input_dictation_presentation_test`, `voice_input_onboarding_policy_test`, `voice_input_model_package_{stager,validator,installer}_test`, `testSettingsShowTheVerifiedModelSetupAndStorage` |
 | I2 | Dictate from the keyboard | Real local ASR, live pause-cut decoding, History commit before publish, one insertion. | `voice_input_asr_workflow_test`, `voice_input_local_transcriber_test`, `voice_input_live_audio_tap_test`, `voice_input_session_finalizer_test`, `voice_asr_bridge_test.c` |
 | I3 | Start when the app is cold | System surfaces foreground the app honestly. | `voice_input_system_capture_test`, `scripts/check_ios_system_capture_metadata.sh` |
-| I4 | Type without Full Access | QWERTY works; voice explains what it needs. | `voice_input_keyboard_policy_test` |
+| I4 | Type without Full Access | Letters, numbers, symbols, auto-capitals, and double-space period work; voice explains what it needs. | `voice_input_keyboard_policy_test`, `voice_input_keyboard_layout_test` |
 | I5 | Respect unsupported fields | Constrained or sensitive fields disable voice only. | `voice_input_host_field_policy_test`, `voice_input_delivery_target_policy_test` |
 | I6 | Choose a Style | Keyboard Style travels with its exact session. | `voice_input_style_test`, `voice_input_style_mapping_test`, `voice_input_style_preference_test`, `testStyleMenuOffersEveryCanonicalStyle` |
 | I7 | Survive interruptions | Typed lifecycle policy; no auto-resume; partial audio recovered. | `voice_input_lifecycle_policy_test`, `voice_input_lifecycle_notification_mapper_test`, `voice_input_capture_service_test` |
@@ -64,6 +64,8 @@ events.
 | I9 | Recover failed insertion | One retry or a ten-minute local copy, only for the exact result and field. | `voice_input_insertion_recovery_policy_test` |
 | I10 | Stay offline within limits | No network code; age, bytes, count, reserve; Models never evicted implicitly. | `voice_input_history_repository_test`, `voice_input_history_retention_preferences_test`, `scripts/check_ios_local_only.sh`, `testSettingsShowTheVerifiedModelSetupAndStorage` |
 | I11 | Capture without the keyboard | Control Center, Lock Screen, Action button, Siri, Live Activity stop. | `voice_input_system_capture_test`, `testSettingsShowTheVerifiedModelSetupAndStorage` |
+| I12 | Delete History | One dictation or all of it, with its audio; an in-progress capture survives; the empty state survives relaunch. | `voice_input_history_repository_test`, `voice_input_history_model_test`, `testHistoryDeletesOneDictationThenClearsAll` |
+| I13 | Download a better model | One tap fetches a pinned package, verifies every digest, admits it through Rust, and activates it; a corrupt file installs nothing. | `asr_model_catalog_test`, `asr_model_package_assembler_test`, `voice_input_model_library_model_test`, `voice_input_model_choice_test`, `testSettingsShowTheVerifiedModelSetupAndStorage` |
 
 ## Accepted defaults
 

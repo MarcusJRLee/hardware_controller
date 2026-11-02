@@ -24,6 +24,23 @@ final class VoiceInputHistoryModelTest: XCTestCase {
   }
 
   @MainActor
+  func testDeleteAndDeleteAllUpdateVisibleSessions() async throws {
+    let first = try Self.session(text: "First", endedAt: 20)
+    let second = try Self.session(text: "Second", endedAt: 10)
+    let history = RecordingHistoryAccess(recent: [first, second], search: [])
+    let model = VoiceInputHistoryModel(history: history)
+    await model.refresh()
+
+    await model.delete(sessionID: first.id)
+    XCTAssertEqual(model.sessions, [second])
+    await model.deleteAll()
+
+    XCTAssertEqual(model.sessions, [])
+    XCTAssertEqual(history.deletions, [.one(first.id), .all])
+    XCTAssertNil(model.errorMessage)
+  }
+
+  @MainActor
   func testUnavailableHistorySurfacesTheInitializationFailure() async {
     let model = VoiceInputHistoryModel(
       history: nil,
@@ -120,6 +137,12 @@ private final class RecordingHistoryAccess: VoiceInputHistoryAccessing, Sendable
     var queries: [String] = []
     var pinUpdates: [PinUpdate] = []
     var retentionSettings: [VoiceHistoryRetentionSettings] = []
+    var deletions: [Deletion] = []
+  }
+
+  enum Deletion: Equatable, Sendable {
+    case one(UUID)
+    case all
   }
 
   private let recentSessions: [VoiceInputHistorySession]
@@ -136,6 +159,7 @@ private final class RecordingHistoryAccess: VoiceInputHistoryAccessing, Sendable
 
   var queries: [String] { state.withLock { $0.queries } }
   var pinUpdates: [PinUpdate] { state.withLock { $0.pinUpdates } }
+  var deletions: [Deletion] { state.withLock { $0.deletions } }
   var retentionSettings: [VoiceHistoryRetentionSettings] {
     state.withLock { $0.retentionSettings }
   }
@@ -193,6 +217,14 @@ private final class RecordingHistoryAccess: VoiceInputHistoryAccessing, Sendable
 
   func retentionMaintenanceMessage() async -> String? {
     nil
+  }
+
+  func delete(sessionID: UUID) async throws {
+    state.withLock { $0.deletions.append(.one(sessionID)) }
+  }
+
+  func deleteAll() async throws {
+    state.withLock { $0.deletions.append(.all) }
   }
 }
 

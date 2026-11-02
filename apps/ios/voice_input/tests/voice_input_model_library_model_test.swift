@@ -1,4 +1,6 @@
+import CryptoKit
 import Foundation
+import HardwareControllerModelDownload
 import XCTest
 
 @testable import VoiceInput
@@ -141,6 +143,67 @@ final class VoiceInputModelLibraryModelTest: XCTestCase {
     XCTAssertNil(model.activeASRModel)
   }
 
+  @MainActor
+  func testDownloadInstallsVerifiesAndActivatesTheModel() async throws {
+    let library = try await ModelLibraryFixture()
+    let entry = try FixtureCatalog.entry()
+    let model = VoiceInputModelLibraryModel(
+      manager: library.registry,
+      downloader: VoiceInputModelDownloader(
+        stagingRoot: library.root.appendingPathComponent("downloads"),
+        manager: library.registry,
+        fetcher: FixtureCatalog.Fetcher()
+      ),
+      catalog: [entry]
+    )
+
+    model.download(entry)
+    XCTAssertEqual(model.downloads[entry.packageID], 0)
+    try await waitUntil { model.downloads.isEmpty && model.activeASRModel != nil }
+
+    XCTAssertEqual(model.activeASRModel?.package.packageID, entry.packageID)
+    XCTAssertEqual(model.activeASRModel?.publisherVerified, true)
+    XCTAssertNil(model.errorMessage)
+    XCTAssertEqual(model.choices.first?.state, .active)
+  }
+
+  @MainActor
+  func testCorruptedDownloadInstallsNothingAndExplains() async throws {
+    let library = try await ModelLibraryFixture()
+    let entry = try FixtureCatalog.entry()
+    let model = VoiceInputModelLibraryModel(
+      manager: library.registry,
+      downloader: VoiceInputModelDownloader(
+        stagingRoot: library.root.appendingPathComponent("downloads"),
+        manager: library.registry,
+        fetcher: FixtureCatalog.Fetcher(corrupt: true)
+      ),
+      catalog: [entry]
+    )
+
+    model.download(entry)
+    try await waitUntil { model.downloads.isEmpty }
+
+    XCTAssertEqual(
+      model.errorMessage,
+      "model.gguf did not match its pinned checksum, so nothing was installed."
+    )
+    let installed = try await library.registry.installedPackages()
+    XCTAssertEqual(installed, [])
+  }
+
+  @MainActor
+  private func waitUntil(_ condition: @MainActor () -> Bool) async throws {
+    let deadline = ContinuousClock.now + .seconds(10)
+    while !condition() {
+      guard ContinuousClock.now < deadline else {
+        XCTFail("Timed out waiting for the download to settle.")
+        throw CancellationError()
+      }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+  }
+
   private func temporaryDirectory() -> URL {
     FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -167,5 +230,62 @@ private struct FailingPrewarmTranscriber: VoiceInputTranscribing {
     model _: VoiceInputInstalledModelPackage
   ) async throws -> VoiceInputRawTranscript {
     throw VoiceInputTranscriptionError.modelLoadFailed
+  }
+}
+
+/// A one-package catalog served from memory with pinned digests.
+private enum FixtureCatalog {
+  static let contents: [String: Data] = [
+    "model.gguf": Data(repeating: 7, count: 2_048),
+    "vad.gguf": Data(repeating: 3, count: 256),
+    "LICENSE": Data("Apache License 2.0".utf8),
+  ]
+
+  struct Fetcher: ASRModelFileFetching {
+    var corrupt = false
+
+    func fetch(
+      _ url: URL,
+      to destination: URL,
+      progress: @escaping @Sendable (Int64) -> Void
+    ) async throws(ASRModelDownloadError) {
+      var data = FixtureCatalog.contents[url.lastPathComponent] ?? Data()
+      if corrupt, url.lastPathComponent == "model.gguf" {
+        data[0] ^= 0xff
+      }
+      do {
+        try data.write(to: destination)
+      } catch {
+        throw .transferFailed("fixture")
+      }
+      progress(Int64(data.count))
+    }
+  }
+
+  static func entry() throws -> ASRModelCatalogEntry {
+    let base = try XCTUnwrap(URL(string: "https://example.invalid/resolve/abc"))
+    func file(_ name: String, _ role: String?) -> ASRModelCatalogFile {
+      let data = contents[name] ?? Data()
+      return ASRModelCatalogFile(
+        name: name == "LICENSE" ? "model-LICENSE.txt" : name,
+        url: base.appending(path: name),
+        sha256: SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined(),
+        bytes: Int64(data.count),
+        role: role
+      )
+    }
+    return ASRModelCatalogEntry(
+      packageID: "com.longdevity.asr.fixture_download",
+      version: "1",
+      displayName: "Fixture Download",
+      languages: ["en-US"],
+      spdxExpression: "Apache-2.0",
+      sourceURL: base,
+      minimumMemoryBytes: 1,
+      recommendedMemoryBytes: 1,
+      files: [
+        file("model.gguf", "model"), file("vad.gguf", "speech_detection"), file("LICENSE", nil),
+      ]
+    )
   }
 }

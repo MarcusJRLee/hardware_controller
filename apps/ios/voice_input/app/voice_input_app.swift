@@ -126,7 +126,11 @@ struct VoiceInputApp: App {
       wrappedValue: VoiceInputModelLibraryModel(
         manager: registry,
         asrWorkflow: asrWorkflow,
-        starter: VoiceInputStarterModel()
+        starter: VoiceInputStarterModel(),
+        downloader: VoiceInputModelDownloader(
+          stagingRoot: modelRoot.appendingPathComponent("downloads", isDirectory: true),
+          manager: registry
+        )
       )
     )
     _history = StateObject(

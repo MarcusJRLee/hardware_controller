@@ -171,17 +171,22 @@ recovery copy; files from a newer app are left untouched.
 3. To dictate into other apps, enable the **Voice Keyboard** with Full Access
    (**Settings → Setup** shows the steps).
 
-Other models: prepare one on the Mac with
-`scripts/prepare_ios_asr_model_package.sh <dir>`, copy it into Files, then
-**Settings → Speech model → Import Model package…** and tap it to use it.
+Better models: **Settings → Speech model → Download** fetches Whisper Base
+English, Whisper Small English, or Parakeet v3 (the Mac default), checks every
+file against a pinned checksum, and switches to it. Tap any installed model to
+use it; swipe to remove it. **Import from Files…** still accepts a package made
+with `scripts/prepare_ios_asr_model_package.sh`.
+
+History: swipe a dictation to delete it with its audio, or **⋯ → Clear All
+History**.
 
 The app records and transcribes; iOS forbids microphone use inside a keyboard.
 Start from the keyboard, the app, Control Center, the Lock Screen, the Action
 button, or Siri/Shortcuts. The keyboard inserts the result once; if the field
 does not confirm it, **Recover…** offers one retry or a local copy that expires
 in ten minutes. Everything else falls back to **Voice Input → History**, where
-audio cleanup defaults to 90 days, 1 GiB, or 2,000 recordings. The app has no
-network access and never downloads models.
+audio cleanup defaults to 90 days, 1 GiB, or 2,000 recordings. The app goes
+online only when you tap **Download**, and never sends audio or text.
 
 ## Troubleshooting
 

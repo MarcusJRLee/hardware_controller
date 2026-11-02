@@ -1,6 +1,7 @@
 import Foundation
 import HardwareControllerCore
 import HardwareControllerMac
+import HardwareControllerModelDownload
 import Observation
 
 /// Owns the speech engine choice, its Model package, and the download.

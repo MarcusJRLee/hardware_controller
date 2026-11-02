@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
 import HardwareControllerCore
+import HardwareControllerModelDownload
 import Testing
 
 @testable import HardwareControllerApp
