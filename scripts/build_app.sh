@@ -20,7 +20,9 @@ else
 fi
 
 scripts/build_rust_ffi.sh
+runtime="$(scripts/fetch_asr_runtime.sh)/macos-arm64_x86_64"
 swift build -c release --product HardwareController
+swift build -c release --product HardwareControllerASRService
 binary_directory="$(swift build -c release --show-bin-path)"
 
 rm -rf "dist/Hardware Controller.app"
@@ -58,15 +60,35 @@ cp ".build/AppIcon-1024.png" \
 iconutil -c icns "$iconset" \
   -o "$contents/Resources/AppIcon.icns"
 
+# The ASR service is the only code that links transcribe.cpp (decision 0060).
+service="$contents/XPCServices/HardwareControllerASRService.xpc"
+service_binary="$service/Contents/MacOS/HardwareControllerASRService"
+mkdir -p "$service/Contents/MacOS" "$service/Contents/Frameworks"
+cp "$binary_directory/HardwareControllerASRService" "$service_binary"
+ditto "$runtime/CTranscribe.framework" "$service/Contents/Frameworks/CTranscribe.framework"
+cp "packaging/asr_service_info.plist" "$service/Contents/Info.plist"
+for key in CFBundleShortVersionString CFBundleVersion; do
+  value="$(/usr/libexec/PlistBuddy -c "Print :$key" "$contents/Info.plist")"
+  /usr/libexec/PlistBuddy -c "Set :$key $value" "$service/Contents/Info.plist"
+done
+# Build-tree rpaths must not ship; the service loads only its bundled framework.
+for rpath in "${(@f)$(otool -l "$service_binary" | awk '/LC_RPATH/ {getline; getline; print $2}')}"; do
+  [[ "$rpath" == /usr/lib/swift ]] || install_name_tool -delete_rpath "$rpath" "$service_binary"
+done
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$service_binary"
+
+# Sign inside out: framework, service, then app. `--deep` would apply the app's
+# entitlements to the service, which needs none.
+signing_flags=(--force --options runtime --sign "$sign_identity")
+codesign "${signing_flags[@]}" "$service/Contents/Frameworks/CTranscribe.framework"
+codesign "${signing_flags[@]}" "$service"
 codesign \
-  --force \
-  --deep \
-  --options runtime \
-  --sign "$sign_identity" \
+  "${signing_flags[@]}" \
   --entitlements "packaging/HardwareController.entitlements" \
   "$app_bundle"
 
 codesign --verify --deep --strict --verbose=2 "$app_bundle"
 plutil -lint "$contents/Info.plist" >/dev/null
+plutil -lint "$service/Contents/Info.plist" >/dev/null
 
 echo "$app_bundle"

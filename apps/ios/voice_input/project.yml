@@ -134,7 +134,7 @@ targets:
         DEFINES_MODULE: YES
         GENERATE_INFOPLIST_FILE: YES
         HEADER_SEARCH_PATHS: $(inherited) $(SRCROOT)/../../../Sources/voice_asr_bridge/include
-        MODULEMAP_FILE: $(SRCROOT)/../../../Sources/voice_asr_bridge/include/module.modulemap
+        MODULEMAP_FILE: $(SRCROOT)/config/voice_asr_bridge.modulemap
         PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.asrbridge
 
   VoiceInputKeyboard:

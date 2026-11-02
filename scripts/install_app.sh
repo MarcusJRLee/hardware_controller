@@ -85,6 +85,9 @@ main() {
     "$canonical/Contents/MacOS/HardwareController" \
     || release_fail "the installed executable differs from the verified build."
   scripts/smoke_app.sh "$canonical" --installed
+  # The speech service is the default engine; an install that cannot run it
+  # would leave Dictation refusing every session.
+  scripts/check_speech_engine.sh "$canonical"
   print "Installed and launched $canonical ($(plutil -extract CFBundleShortVersionString raw -o - packaging/Info.plist) build $(plutil -extract CFBundleVersion raw -o - packaging/Info.plist))."
 }
 

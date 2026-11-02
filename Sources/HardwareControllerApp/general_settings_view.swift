@@ -5,6 +5,7 @@ import SwiftUI
 struct GeneralSettingsView: View {
   let model: AppModel
   let preferencesModel: ApplicationPreferencesModel
+  let speech: SpeechEngineModel
 
   var body: some View {
     ScrollView {
@@ -35,6 +36,8 @@ struct GeneralSettingsView: View {
         }
 
         Form {
+          SpeechEngineSection(model: model, speech: speech)
+
           Section("Appearance") {
             Picker(
               "Appearance",
@@ -188,7 +191,8 @@ struct GeneralSettingsView: View {
 
           LocalAISettingsSection(
             model: model,
-            preferencesModel: preferencesModel
+            preferencesModel: preferencesModel,
+            speech: speech
           )
         }
         .formStyle(.grouped)

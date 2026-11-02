@@ -23,6 +23,8 @@ final class LiveApplicationProcess:
   private let dictationDispatcher: any DictationCommandDispatching
   private let voiceDictationDispatcher: any DictationCommandDispatching
   private let eventRelay: ApplicationProcessEventRelay
+  private let speechEngineFactory: SpeechEngineSessionFactory
+  private let speechEngineSelection: SpeechEngineSelectionState
   private var profile: Profile
   private var localAISettings: LocalAISettings
   private var voiceTriggerSettings: VoiceTriggerSettings = .default
@@ -37,6 +39,7 @@ final class LiveApplicationProcess:
     showsDemoPressedState: Bool,
     preferredMicrophoneUID: String?,
     localAISettings: LocalAISettings,
+    speechEngine: SpeechEngineConfiguration,
     voiceSessionHistory providedHistory:
       (any VoiceSessionHistoryRecording)?,
     eventRelay: ApplicationProcessEventRelay
@@ -56,7 +59,18 @@ final class LiveApplicationProcess:
       targeter: targeter,
       inserter: AdaptiveFocusedTextInserter()
     )
-    let sessionFactory = AppleSpeechRecognitionSessionFactory()
+    let sessionFactory = SpeechEngineSessionFactory(
+      configuration: speechEngine,
+      onFallback: eventRelay.publishSpeechEngineFallback
+    )
+    speechEngineFactory = sessionFactory
+    let speechEngineSelection = SpeechEngineSelectionState(speechEngine.selection)
+    self.speechEngineSelection = speechEngineSelection
+    // A fallback session still uses Apple, but its permission is requested only
+    // when Apple is the chosen engine; a denied fallback fails visibly.
+    let authorization = SystemTranscriptionAuthorizationProvider {
+      speechEngineSelection.usesAppleSpeech
+    }
     let microphone = AVAudioEngineMicrophoneCapture(
       preferredInputDeviceUID: preferredMicrophoneUID
     )
@@ -65,8 +79,7 @@ final class LiveApplicationProcess:
       microphone: microphone,
       targeter: targeter,
       writer: writer,
-      authorization:
-        SystemTranscriptionAuthorizationProvider(),
+      authorization: authorization,
       snapshotHandler: eventRelay.publishTranscription
     )
     self.transcriptionController = transcriptionController
@@ -93,7 +106,7 @@ final class LiveApplicationProcess:
       microphone: microphone,
       targeter: targeter,
       writer: writer,
-      authorization: SystemTranscriptionAuthorizationProvider(),
+      authorization: authorization,
       settings: localAISettings,
       profileName: profile.name,
       history: history,
@@ -264,6 +277,11 @@ final class LiveApplicationProcess:
     await transcriptionController.selectInputDevice(
       uniqueID: uniqueID
     )
+  }
+
+  func setSpeechEngineConfiguration(_ configuration: SpeechEngineConfiguration) async {
+    speechEngineSelection.update(configuration.selection)
+    await speechEngineFactory.configure(configuration)
   }
 
   /// Applies Local AI settings after canceling any active AI session.

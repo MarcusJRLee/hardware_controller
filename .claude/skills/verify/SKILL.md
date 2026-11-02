@@ -29,7 +29,8 @@ Evidence from a stale bundle is not evidence: rebuild before driving.
 | --- | --- |
 | macOS demo (no pedal, permissions, or signing) | `scripts/build_app.sh --ad-hoc && "dist/Hardware Controller.app/Contents/MacOS/HardwareController" --demo <flags>` |
 | Launch smoke | `scripts/smoke_app.sh "dist/Hardware Controller.app" --demo` |
-| Installed signed app | `scripts/install_app.sh` (verifies, installs, launches, smokes) |
+| Installed signed app | `scripts/install_app.sh` (verifies, installs, launches, smokes, checks speech) |
+| Installed speech service | `scripts/check_speech_engine.sh` (load, decode, IPC, crash, recover) |
 | iOS simulator | `scripts/check_ios.sh`, then the simulator tools for manual paths |
 
 Demo flags (combine freely):

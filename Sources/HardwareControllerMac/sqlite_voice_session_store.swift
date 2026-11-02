@@ -186,6 +186,11 @@ actor SQLiteVoiceSessionStore {
     )
     try Self.addColumnIfNeeded(
       opened,
+      name: "speech_engine_json",
+      definition: "TEXT"
+    )
+    try Self.addColumnIfNeeded(
+      opened,
       table: "voice_results",
       name: "delivery_failure",
       definition: "TEXT"
@@ -289,8 +294,8 @@ actor SQLiteVoiceSessionStore {
         formatted_document_json, spoken_edits_json,
         delivery_failure_reason, audio_duration_ms, is_pinned,
         audio_expired_at, audio_expiration_reason, recovery_kind,
-        recovered_at, input_kind
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        recovered_at, input_kind, speech_engine_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
       """
     var statement: OpaquePointer?
     guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
@@ -334,6 +339,8 @@ actor SQLiteVoiceSessionStore {
     try bind(recoveryKind?.rawValue, to: 19, in: statement)
     bind(recoveredAt, to: 20, in: statement)
     try bind(document.inputKind.rawValue, to: 21, in: statement)
+    try bind(
+      try VoiceHistoryColumnCodec.encodedSpeechEngine(document.speechEngine), to: 22, in: statement)
     guard sqlite3_step(statement) == SQLITE_DONE else {
       throw storageFailure()
     }
@@ -680,7 +687,7 @@ actor SQLiteVoiceSessionStore {
         formatted_document_json, spoken_edits_json,
         delivery_failure_reason, audio_duration_ms, is_pinned,
         audio_expired_at, audio_expiration_reason, recovery_kind,
-        recovered_at, input_kind
+        recovered_at, input_kind, speech_engine_json
       FROM voice_sessions
       \(whereClause)
       ORDER BY ended_at DESC;
@@ -762,7 +769,10 @@ actor SQLiteVoiceSessionStore {
       spokenEdits: try VoiceHistoryColumnCodec.spokenEdits(
         from: optionalText(statement, column: 12)
       ),
-      inputKind: inputKind
+      inputKind: inputKind,
+      speechEngine: try VoiceHistoryColumnCodec.speechEngine(
+        from: optionalText(statement, column: 21)
+      )
     )
     try VoiceHistoryColumnCodec.validateDeliveryEvidence(document)
     let audioFilename = optionalText(statement, column: 10)

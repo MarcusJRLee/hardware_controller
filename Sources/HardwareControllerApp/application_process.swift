@@ -33,6 +33,9 @@ protocol ApplicationProcessControlling: Sendable {
   /// Cancels Dictation and changes this app's preferred microphone.
   func setPreferredMicrophoneUID(_ uniqueID: String?) async
 
+  /// Selects the speech engine and its package for every later session.
+  func setSpeechEngineConfiguration(_ configuration: SpeechEngineConfiguration) async
+
   /// Reconfigures Local AI Dictation and returns provider readiness.
   func setLocalAISettings(
     _ settings: LocalAISettings,
@@ -72,6 +75,7 @@ final class ApplicationProcessEventRelay:
       [KeyboardFallbackRegistrationFailure]
     )
     case voiceShortcutFailure(VoiceShortcutRegistrationFailure?)
+    case speechEngineFallback(SpeechEngineFallbackReason)
   }
 
   typealias Handler = @Sendable (Event) -> Void
@@ -126,6 +130,12 @@ final class ApplicationProcessEventRelay:
       values.0?.actionDidFail(.dictation)
     }
     values.1?(.transcription(snapshot))
+  }
+
+  /// Announces that a session fell back to Apple; never silent (decision 0060).
+  func publishSpeechEngineFallback(_ reason: SpeechEngineFallbackReason) {
+    let handler = lock.withLock { self.handler }
+    handler?(.speechEngineFallback(reason))
   }
 
   /// Publishes Local AI progress and reconciles failed Action ownership.

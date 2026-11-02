@@ -26,6 +26,7 @@ scripts/check.sh      # Everything the Verify CI job runs.
 | Verify the iOS app | `scripts/check_ios.sh` | XcodeGen, simulator, `rustup target add aarch64-apple-ios aarch64-apple-ios-sim` |
 | Install the signed Mac app | `scripts/install_app.sh` | `.env.local` signing values |
 | Smoke-launch a built app | `scripts/smoke_app.sh <bundle> [--demo \| --installed]` | — |
+| Prove the installed speech service | `scripts/check_speech_engine.sh [APP]` (run by every install) | A signed app |
 | Install the iOS app on a phone | `scripts/install_ios.sh` | Unlocked iPhone in Developer Mode, `.env.local` |
 | Prepare the iOS starter model | `scripts/prepare_ios_asr_model_package.sh <dir>` | Network during preparation only |
 | Benchmark ASR models | `scripts/benchmark_asr.sh [--model m.gguf] [--manifest m.tsv]` | — |

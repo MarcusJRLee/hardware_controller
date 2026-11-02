@@ -61,7 +61,8 @@ without a timeout, over budget, or on macOS without `needs: changes`. The weekly
 | `Sources/HardwareControllerAudioBoundary/` | Objective-C exception boundary around AVFAudio. |
 | `Sources/HardwareControllerApp/` | App lifecycle, runtime, SwiftUI presentation. |
 | `Sources/hardware_controller_voice_ffi/`, `Sources/voice_ffi_bridge/` | Typed Swift over the Rust C ABI. |
-| `Sources/voice_asr_bridge/` | C bridge over transcribe.cpp. |
+| `Sources/voice_asr_bridge/`, `Sources/voice_asr_runtime/` | C bridge over transcribe.cpp and its typed Swift owner. |
+| `Sources/hardware_controller_asr_*` | macOS ASR XPC service, its kit, and the app-to-service protocol. |
 | `crates/` | Portable Rust: `voice_core`, `voice_models`, `voice_archive`, `voice_ffi`. |
 | `apps/ios/voice_input/` | iOS app, keyboard, widgets, and their tests. |
 | `schemas/` | Versioned Model-package and archive contracts. |

@@ -15,6 +15,8 @@ public enum TranscriptionFailure: Equatable, Error, Sendable {
   case speechRecognitionPermissionDenied
   case localeUnsupported
   case modelUnavailable
+  /// transcribe.cpp is selected but has no valid Model package installed.
+  case speechEngineSetupRequired
   case noFocusedTextField
   case secureTextField
   case focusChanged

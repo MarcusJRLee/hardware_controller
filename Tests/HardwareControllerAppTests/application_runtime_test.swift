@@ -643,6 +643,23 @@ struct ApplicationRuntimeTest {
     await fixture.runtime.stop()
   }
 
+  /// A fallback is surfaced, and explicitly choosing Apple clears it.
+  @Test
+  func speechEngineFallbackFlowsAndApplyingAppleClearsIt() async throws {
+    let fixture = RuntimeFixture()
+    await fixture.runtime.start(snapshotHandler: fixture.snapshots.append)
+
+    fixture.process.publish(.speechEngineFallback(.serviceFailed))
+    try await waitUntil { fixture.snapshots.values.last?.speechEngineFallback == .serviceFailed }
+
+    let apple = SpeechEngineConfiguration(selection: .apple, package: nil)
+    await fixture.runtime.setSpeechEngineConfiguration(apple)
+    #expect(fixture.process.speechEngineConfigurations == [apple])
+    try await waitUntil { fixture.snapshots.values.last?.speechEngineFallback == nil }
+
+    await fixture.runtime.stop()
+  }
+
   /// Publishes a new active Profile only after the process installs it.
   @Test
   func activationAndActiveDeletionReplaceRuntimeProfile() async throws {
@@ -836,8 +853,10 @@ private final class RuntimeFixture {
       ),
       system: system,
       localAISettings: localAISettings,
+      speechEngine: .unconfigured,
       loadsProfileOnStart: loadsProfileOnStart,
       processFactory: {
+        _,
         _,
         _,
         _,
@@ -905,6 +924,7 @@ private final class FakeApplicationProcess:
 
   private let lock = NSLock()
   private var relay: ApplicationProcessEventRelay?
+  private var recordedSpeechEngineConfigurations: [SpeechEngineConfiguration] = []
   private var starts = 0
   private var stops = 0
   private var warmUps = 0
@@ -1100,6 +1120,11 @@ private final class FakeApplicationProcess:
     }
   }
 
+  /// Records each speech engine configuration.
+  func setSpeechEngineConfiguration(_ configuration: SpeechEngineConfiguration) async {
+    lock.withLock { recordedSpeechEngineConfigurations.append(configuration) }
+  }
+
   /// Accepts Local AI settings and returns deterministic readiness.
   func setLocalAISettings(
     _ settings: LocalAISettings,
@@ -1165,6 +1190,10 @@ private final class FakeApplicationProcess:
     phase: ControlPhase
   ) {}
 
+  var speechEngineConfigurations: [SpeechEngineConfiguration] {
+    lock.withLock { recordedSpeechEngineConfigurations }
+  }
+
   /// Publishes one process event through the production relay.
   func publish(
     _ event: ApplicationProcessEventRelay.Event
@@ -1181,6 +1210,8 @@ private final class FakeApplicationProcess:
       relay?.publishKeyboardFallbackFailures(failures)
     case .voiceShortcutFailure(let failure):
       relay?.publishVoiceShortcutFailure(failure)
+    case .speechEngineFallback(let reason):
+      relay?.publishSpeechEngineFallback(reason)
     }
   }
 }

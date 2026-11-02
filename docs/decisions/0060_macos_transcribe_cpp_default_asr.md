@@ -77,8 +77,9 @@ streaming API and nothing is measured; it is a later comparison.
 - Run the kernel in `HardwareControllerASRService.xpc`, embedded in
   `Contents/XPCServices`, launched on demand by launchd. Same Team signature,
   hardened runtime, and no network entitlement. Only the service links the
-  pinned `CTranscribe.framework`; release binary policy allows it there alone,
-  matched by its pinned digest.
+  pinned `CTranscribe.framework`; release binary policy allows it there alone.
+  The archive digest is verified at fetch; signing then changes the bytes, so
+  the policy checks identity, Team, libraries, and search paths instead.
 - XPC is local Mach IPC with no socket, port, or listener. 0029's rule becomes:
   inference stays on-device, in-process or in an app-embedded XPC service; no
   local REST daemon or network listener.
@@ -144,3 +145,26 @@ Each slice ships with its tests and docs:
   hint support exists; Dictionary replacements still apply.
 - macOS 15–25 gain the same engine as macOS 26.
 - iOS is unchanged; it cannot spawn processes and keeps in-process inference.
+
+## Implementation
+
+Slices 1–3 shipped together; live decoding and Moonshine remain next work.
+
+| Gate | Evidence (M5 Max, signed install, `scripts/check_speech_engine.sh`) |
+| --- | --- |
+| IPC | Round trip minus service decode: p50 2.4 ms, p95 3.1 ms, p99 3.1 ms, max 3.1 ms over 10 decodes of the 11 s JFK clip. |
+| Recovery | SIGKILL mid-decode returns `interrupted`; the next load and decode return identical text. |
+| Release latency | Whole-recording decode p95 563 ms (table above); unchanged by IPC at this scale. |
+| Hot path | The HID soak runs in every check; the service shares no thread or memory with it. Soak during a live crash is not yet measured. |
+| Memory | Idle kill after five minutes and on every package change; footprint after exit not yet measured. |
+
+- Every signed install runs the speech check after its smoke launch, so an
+  install that cannot run the default engine fails.
+- With transcribe.cpp selected, Dictation no longer needs Speech Recognition
+  permission on macOS 15–25.
+- Until pause-cut live decoding lands, transcribe.cpp text arrives on release;
+  Apple keeps live words in fields that support them.
+- Ad-hoc builds cannot load the service (library validation needs one Team),
+  so CI covers it through unit and protocol tests and the installed check
+  covers the process.
+

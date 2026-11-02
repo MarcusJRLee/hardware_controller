@@ -21,6 +21,8 @@ public enum SpeechRecognitionBackendError:
   case conversionFailed(String)
   case recognitionFailed(String)
   case recognitionInterrupted
+  /// transcribe.cpp is selected but its Model package is missing or invalid.
+  case engineSetupRequired
 }
 
 public protocol SpeechRecognitionSession: Sendable {

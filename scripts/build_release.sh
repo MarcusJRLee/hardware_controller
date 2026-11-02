@@ -112,6 +112,57 @@ verify_binary_policy() {
   )"
   [[ -z "$unexpected_libraries" ]] \
     || release_fail "the executable links a non-Apple runtime library."
+
+  verify_asr_service_policy "$app_bundle" "$team_identifier"
+}
+
+# The one non-Apple library the ASR service may load (decision 0060).
+asr_service_runtime_library="@rpath/CTranscribe.framework/Versions/Current/CTranscribe"
+
+# Fails unless the non-Apple libraries are exactly the bundled ASR runtime.
+verify_asr_service_libraries() {
+  local libraries="$1"
+  local non_apple
+  non_apple="$(
+    print -r -- "$libraries" \
+      | grep -Ev '^(/System/Library/|/usr/lib/|$)' \
+      || true
+  )"
+  [[ "$non_apple" == "$asr_service_runtime_library" ]] \
+    || release_fail "the ASR service links an unexpected runtime library."
+}
+
+# Fails unless the service loads code only from Apple paths or its own bundle.
+verify_asr_service_rpaths() {
+  local rpaths="$1"
+  local rpath
+  for rpath in "${(@f)rpaths}"; do
+    [[ -z "$rpath" || "$rpath" == /usr/lib/swift || "$rpath" == "@executable_path/../Frameworks" ]] \
+      || release_fail "the ASR service searches an unexpected path: $rpath"
+  done
+}
+
+# Validates the ASR service's identity, signature, entitlements, and libraries.
+verify_asr_service_policy() {
+  local app_bundle="$1"
+  local team_identifier="$2"
+  local service="$app_bundle/Contents/XPCServices/HardwareControllerASRService.xpc"
+  local binary="$service/Contents/MacOS/HardwareControllerASRService"
+  [[ -x "$binary" ]] || release_fail "the ASR service is missing."
+  local details
+  details="$(codesign -d --verbose=4 "$service" 2>&1)"
+  print -r -- "$details" \
+    | grep -Eq '^Identifier=com\.longdevity\.hardwarecontroller\.asrservice$' \
+    || release_fail "the ASR service identifier is unexpected."
+  print -r -- "$details" \
+    | grep -Eq '^CodeDirectory .*flags=.*\(runtime\)' \
+    || release_fail "the ASR service lacks hardened runtime."
+  [[ "$(print -r -- "$details" | sed -n 's/^TeamIdentifier=//p')" == "$team_identifier" ]] \
+    || release_fail "the ASR service is signed by a different team."
+  [[ -z "$(codesign -d --entitlements - --xml "$service" 2>/dev/null)" ]] \
+    || release_fail "the ASR service must have no entitlements."
+  verify_asr_service_libraries "$(otool -L "$binary" | awk 'NR > 1 {print $1}')"
+  verify_asr_service_rpaths "$(otool -l "$binary" | awk '/LC_RPATH/ {getline; getline; print $2}')"
 }
 
 # Verifies the app copied into the DMG is the signed release app.

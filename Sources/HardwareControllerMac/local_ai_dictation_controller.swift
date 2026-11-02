@@ -996,7 +996,8 @@ public actor LocalAIDictationController {
       deliveryFailure: deliveryFailure,
       deliveryFailureReason: deliveryFailureReason,
       formattedDocument: formattedDocument,
-      spokenEdits: spokenEdits
+      spokenEdits: spokenEdits,
+      speechEngine: await speech.latestEngineUsage ?? .apple
     )
     do {
       try await history.complete(document)

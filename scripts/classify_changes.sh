@@ -37,8 +37,11 @@ for file in "${changed[@]}"; do
   esac
   lane[macos]=true
   case "$file" in
+    # The pinned runtime feeds both apps' builds and both traced builds.
+    scripts/fetch_asr_runtime.sh)
+      lane[ios]=true; lane[codeql_ios]=true; lane[codeql_macos]=true ;;
     # Only inputs to the traced iOS build need the iOS CodeQL lane.
-    apps/ios/*|scripts/build_ios_rust_ffi.sh|scripts/fetch_asr_runtime.sh|scripts/generate_ios_project.sh)
+    apps/ios/*|scripts/build_ios_rust_ffi.sh|scripts/generate_ios_project.sh)
       lane[ios]=true; lane[codeql_ios]=true ;;
     scripts/*ios*|scripts/*asr*)
       lane[ios]=true ;;

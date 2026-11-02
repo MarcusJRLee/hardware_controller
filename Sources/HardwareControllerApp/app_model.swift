@@ -30,6 +30,7 @@ final class AppModel {
     profileStore: (any ProfilePersisting)? = nil,
     preferredMicrophoneUID: String? = nil,
     localAISettings: LocalAISettings = .default,
+    speechEngine: SpeechEngineConfiguration = .unconfigured,
     voiceTriggerSettings: VoiceTriggerSettings = .default,
     voiceSessionHistory: (any VoiceSessionHistoryRecording)? = nil
   ) {
@@ -38,6 +39,7 @@ final class AppModel {
       profileStore: profileStore,
       preferredMicrophoneUID: preferredMicrophoneUID,
       localAISettings: localAISettings,
+      speechEngine: speechEngine,
       voiceTriggerSettings: voiceTriggerSettings,
       voiceSessionHistory: voiceSessionHistory
     )
@@ -462,6 +464,18 @@ final class AppModel {
     enqueueIntent { [runtime] in
       await runtime.setPreferredMicrophoneUID(uniqueID)
     }
+  }
+
+  /// Selects the speech engine for every later Dictation session.
+  func setSpeechEngineConfiguration(_ configuration: SpeechEngineConfiguration) {
+    Task {
+      await runtime.setSpeechEngineConfiguration(configuration)
+    }
+  }
+
+  /// The latest session that fell back to Apple, so the UI can say so.
+  var speechEngineFallback: SpeechEngineFallbackReason? {
+    applicationSnapshot.speechEngineFallback
   }
 
   /// Applies one persisted Local AI configuration.

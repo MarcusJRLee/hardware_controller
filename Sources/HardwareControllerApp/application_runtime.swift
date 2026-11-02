@@ -40,6 +40,7 @@ actor ApplicationRuntime {
     system: any ApplicationSystemControlling,
     preferredMicrophoneUID: String? = nil,
     localAISettings: LocalAISettings = .default,
+    speechEngine: SpeechEngineConfiguration,
     voiceTriggerSettings: VoiceTriggerSettings = .default,
     voiceSessionHistory: (any VoiceSessionHistoryRecording)? = nil,
     loadsProfileOnStart: Bool = false,
@@ -50,6 +51,7 @@ actor ApplicationRuntime {
         Bool,
         String?,
         LocalAISettings,
+        SpeechEngineConfiguration,
         (any VoiceSessionHistoryRecording)?,
         ApplicationProcessEventRelay
       ) -> any ApplicationProcessControlling = {
@@ -58,6 +60,7 @@ actor ApplicationRuntime {
         showsDemoPressedState,
         preferredMicrophoneUID,
         localAISettings,
+        speechEngine,
         voiceSessionHistory,
         eventRelay in
         LiveApplicationProcess(
@@ -66,6 +69,7 @@ actor ApplicationRuntime {
           showsDemoPressedState: showsDemoPressedState,
           preferredMicrophoneUID: preferredMicrophoneUID,
           localAISettings: localAISettings,
+          speechEngine: speechEngine,
           voiceSessionHistory: voiceSessionHistory,
           eventRelay: eventRelay
         )
@@ -80,6 +84,7 @@ actor ApplicationRuntime {
       showsDemoPressedState,
       preferredMicrophoneUID,
       localAISettings,
+      speechEngine,
       voiceSessionHistory,
       eventRelay
     )
@@ -315,6 +320,14 @@ actor ApplicationRuntime {
   }
 
   /// Applies persisted Local AI settings and refreshes provider readiness.
+  func setSpeechEngineConfiguration(_ configuration: SpeechEngineConfiguration) async {
+    if configuration.selection == .apple {
+      snapshot.speechEngineFallback = nil
+      publish()
+    }
+    await process.setSpeechEngineConfiguration(configuration)
+  }
+
   func setLocalAISettings(_ settings: LocalAISettings) async {
     localAIProviderTestGeneration &+= 1
     localAISettings = settings
@@ -438,6 +451,8 @@ actor ApplicationRuntime {
       snapshot.keyboardFallbackFailures = failures
     case .voiceShortcutFailure(let failure):
       snapshot.voiceShortcutFailure = failure
+    case .speechEngineFallback(let reason):
+      snapshot.speechEngineFallback = reason
     }
     publish()
   }

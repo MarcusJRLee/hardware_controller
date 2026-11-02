@@ -6,6 +6,7 @@ import SwiftUI
 struct ControllerView: View {
   @Environment(\.colorScheme) private var colorScheme
   let model: AppModel
+  let speech: SpeechEngineModel
   let manageProfiles: () -> Void
 
   var body: some View {
@@ -32,6 +33,10 @@ struct ControllerView: View {
 
           if model.requiresInstallation {
             InstallationCard(model: model)
+          }
+
+          if speech.requiresSetup {
+            SpeechSetupCard(speech: speech)
           }
 
           if !model.accessibilityTrusted && !model.requiresInstallation {
@@ -1114,6 +1119,8 @@ extension TranscriptionFailure {
       "The current language is not supported by Apple's on-device recognizer."
     case .modelUnavailable:
       "The on-device speech model is not available. Check macOS language resources and try again."
+    case .speechEngineSetupRequired:
+      "Download the Parakeet speech model, or choose Apple in Speech settings."
     case .noFocusedTextField:
       "Select an editable text field before pressing the control."
     case .secureTextField:

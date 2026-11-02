@@ -177,6 +177,26 @@ struct ApplicationPreferencesStoreTests {
     )
   }
 
+  /// Existing users move to transcribe.cpp, which then asks for setup; a later
+  /// explicit choice of Apple persists across launches.
+  @Test
+  func schemaSevenMigratesToTranscribeCppAndAppleChoicePersists() throws {
+    let files = PreferenceFileAccess()
+    let encoded = try JSONEncoder().encode(ApplicationPreferences(schemaVersion: 7))
+    var object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    object.removeValue(forKey: "speechEngine")
+    files.data = try JSONSerialization.data(withJSONObject: object)
+
+    let migrated = makeStore(files: files).load()
+    #expect(migrated.issue == nil)
+    #expect(migrated.preferences.speechEngine == .transcribeCpp)
+
+    var chosen = migrated.preferences
+    chosen.speechEngine = .apple
+    files.data = try JSONEncoder().encode(chosen)
+    #expect(makeStore(files: files).load().preferences.speechEngine == .apple)
+  }
+
   @Test
   func schemaSixDefaultsCasingPolicyAndMigrates() throws {
     let files = PreferenceFileAccess()
@@ -195,7 +215,7 @@ struct ApplicationPreferencesStoreTests {
 
     #expect(result.issue == nil)
     #expect(result.preferences.localAI.casingPolicy == .styleDefault)
-    #expect(result.preferences.schemaVersion == 7)
+    #expect(result.preferences.schemaVersion == ApplicationPreferences.currentSchemaVersion)
   }
 
   @Test
