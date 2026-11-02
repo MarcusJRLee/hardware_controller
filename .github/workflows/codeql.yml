@@ -107,11 +107,17 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Restore pinned ASR assets
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .build/asr_runtime
+            .build/asr_test_assets
+          key: asr-assets-${{ hashFiles('scripts/fetch_asr_runtime.sh', 'scripts/fetch_asr_test_assets.sh') }}
       - name: Prepare untraced build inputs
         run: |
           rustup target add aarch64-apple-ios aarch64-apple-ios-sim
-          scripts/build_ios_rust_ffi.sh
-          scripts/fetch_asr_runtime.sh
+          scripts/prepare_ios_build_inputs.sh
       - name: Initialize CodeQL
         uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
