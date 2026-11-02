@@ -28,7 +28,9 @@ expect "scripts/build_ios_rust_ffi.sh" "macos=true ios=true codeql_macos=false c
 expect "scripts/fetch_asr_runtime.sh" "macos=true ios=true codeql_macos=true codeql_ios=true"
 expect "Sources/hardware_controller_asr_service_kit/asr_service_core.swift" "macos=true ios=false codeql_macos=true codeql_ios=false"
 expect "scripts/check.sh" "macos=true ios=false codeql_macos=false codeql_ios=false"
+expect "tools/swift_format/Package.resolved" "macos=true ios=true codeql_macos=false codeql_ios=false"
 expect ".github/workflows/ci.yml" "$all"
+expect ".github/actions/swift_format/action.yml" "$all"
 expect "docs/user_guide.md
 crates/voice_core/src/lib.rs" "$all"
 [[ "$("$script" | tr '\n' ' ')" == "$all " ]] || { print -u2 "No base must run every lane."; exit 1; }

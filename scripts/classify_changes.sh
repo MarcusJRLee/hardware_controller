@@ -31,7 +31,7 @@ for file in "${changed[@]}"; do
     *.md|docs/*|LICENSE|NOTICE|.github/ISSUE_TEMPLATE/*|.claude/*)
       continue ;;
     # CI itself must prove every lane it defines.
-    .github/workflows/*|scripts/classify_changes.sh)
+    .github/workflows/*|.github/actions/*|scripts/classify_changes.sh)
       for name in "${lanes[@]}"; do lane[$name]=true; done
       continue ;;
   esac
@@ -50,7 +50,7 @@ for file in "${changed[@]}"; do
       lane[ios]=true; lane[codeql_ios]=true; lane[codeql_macos]=true ;;
     Sources/*|Package.swift)
       lane[codeql_macos]=true ;;
-    schemas/*|Tests/cuj/*|.swift-format)
+    schemas/*|Tests/cuj/*|.swift-format|tools/swift_format/*|scripts/swift_format.sh)
       lane[ios]=true ;;
   esac
 done

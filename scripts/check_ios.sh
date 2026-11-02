@@ -33,7 +33,7 @@ scripts/generate_ios_project.sh
 git diff --exit-code -- apps/ios/voice_input/VoiceInput.xcodeproj
 
 scripts/check_ios_local_only.sh
-swift format lint --recursive --strict apps/ios/voice_input
+scripts/swift_format.sh lint --recursive --strict apps/ios/voice_input
 plutil -lint apps/ios/voice_input/config/*.plist >/dev/null
 # CI runs these in the Verify job; standalone runs keep them.
 if [[ "${HC_IOS_SKIP_SHARED_CHECKS:-0}" != "1" ]]; then

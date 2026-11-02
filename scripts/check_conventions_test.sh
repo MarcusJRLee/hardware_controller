@@ -43,4 +43,6 @@ expect fail "an exemption for a deleted file" 'rm Sources/HardwareControllerCore
 expect fail "an exemption citing a missing test" 'perl -pi -e "s/tested_test/ghost_test/" Tests/untested_sources.txt'
 expect fail "a framework import in the domain" 'print "import AppKit" >> Sources/HardwareControllerCore/tested.swift'
 expect fail "a network API outside the Ollama adapter" 'print "URLSession.shared" >> Sources/HardwareControllerCore/tested.swift'
+expect fail "the Xcode-bundled formatter in a script" 'mkdir scripts && print "swift format lint x" > scripts/lint.sh'
+expect pass "the pinned formatter in a script" 'mkdir scripts && print "scripts/swift_format.sh lint x" > scripts/lint.sh'
 print "check_conventions tests passed."

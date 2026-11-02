@@ -21,6 +21,9 @@ opening the package in Xcode, run `scripts/build_rust_ffi.sh` once.
   dashed paths, non-Foundation imports in the domain, and network APIs outside
   the Ollama adapter. `.swift-format` rejects force unwraps, `try!`, and
   implicitly unwrapped optionals.
+- Format with `scripts/swift_format.sh format --in-place --recursive Sources Tests`.
+  It runs the swift-format pinned in `tools/swift_format/`, not Xcode's, so
+  local and CI lint agree; bump it there, never per machine.
 - Update docs and journey proofs ([voice_cujs.md](docs/voice_cujs.md)) in the
   same PR; `scripts/check_docs.sh` fails on broken links or missing tests.
 - Add or supersede a [decision](docs/decisions/) when a durable choice changes.

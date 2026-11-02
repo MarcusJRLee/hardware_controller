@@ -16,6 +16,8 @@ xcuserdata/
 .build/
 .swiftpm/
 Package.resolved
+# The pinned formatter is a tool, so its exact revisions are source.
+!tools/swift_format/Package.resolved
 
 # Rust
 target/
