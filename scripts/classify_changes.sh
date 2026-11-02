@@ -41,7 +41,7 @@ for file in "${changed[@]}"; do
     scripts/fetch_asr_runtime.sh)
       lane[ios]=true; lane[codeql_ios]=true; lane[codeql_macos]=true ;;
     # Only inputs to the traced iOS build need the iOS CodeQL lane.
-    apps/ios/*|scripts/build_ios_rust_ffi.sh|scripts/generate_ios_project.sh)
+    apps/ios/*|scripts/build_ios_rust_ffi.sh|scripts/generate_ios_project.sh|scripts/prepare_ios_build_inputs.sh|scripts/prepare_ios_asr_model_package.sh|scripts/fetch_asr_test_assets.sh)
       lane[ios]=true; lane[codeql_ios]=true ;;
     scripts/*ios*|scripts/*asr*)
       lane[ios]=true ;;

@@ -44,7 +44,7 @@ struct VoiceInputHistorySession: Codable, Equatable, Identifiable, Sendable {
   let timedSegments: [VoiceInputTranscriptSegment]
   let modelPackageID: String
   let modelVersion: String
-  let audioArtifact: VoiceInputHistoryAudioArtifact?
+  private(set) var audioArtifact: VoiceInputHistoryAudioArtifact?
   let audioExpiredAt: Date?
   let audioExpiredReason: VoiceHistoryAudioExpirationReason?
   let recoveryReason: VoiceInputCaptureInterruptionReason?
@@ -220,8 +220,11 @@ struct VoiceInputHistorySession: Codable, Equatable, Identifiable, Sendable {
         .appendingPathComponent("\(id.uuidString.lowercased()).caf")
         .standardizedFileURL
 
+      // iOS may move the app container between installs and updates, so only
+      // the file name is durable; the directory is always the current one.
       guard
-        audioArtifact.url.standardizedFileURL == expectedURL,
+        audioArtifact.url.isFileURL,
+        audioArtifact.url.lastPathComponent == expectedURL.lastPathComponent,
         audioArtifact.byteCount > 0,
         audioArtifact.sha256.utf8.count == 64,
         audioArtifact.sha256.utf8.allSatisfy(Self.isLowercaseHexDigit),
@@ -230,6 +233,13 @@ struct VoiceInputHistorySession: Codable, Equatable, Identifiable, Sendable {
       else {
         throw VoiceInputHistoryError.invalidSession
       }
+      var rebased = self
+      rebased.audioArtifact = VoiceInputHistoryAudioArtifact(
+        url: expectedURL,
+        byteCount: audioArtifact.byteCount,
+        sha256: audioArtifact.sha256
+      )
+      return rebased
     } else {
       guard audioExpiredAt != nil, audioExpiredReason != nil, !isPinned else {
         throw VoiceInputHistoryError.invalidSession

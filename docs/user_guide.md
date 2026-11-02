@@ -164,12 +164,16 @@ recovery copy; files from a newer app are left untouched.
 
 ## iOS: Voice Input
 
-1. Install with `scripts/install_ios.sh` and open **Voice Input**.
-2. Prepare the starter model on the Mac with
-   `scripts/prepare_ios_asr_model_package.sh <dir>`, copy the folder into
-   Files, then **Local models → Import Model package → Use for speech to text**.
-3. Enable the **Voice Input** keyboard (with Full Access for the result
-   handoff).
+1. Install with `scripts/install_ios.sh` and open **Voice Input**. The
+   built-in Whisper Tiny English model installs itself on first launch.
+2. On **Dictate**, tap the button, allow the microphone, speak, tap again. The
+   text appears with **Copy** and **Share** and is saved to **History**.
+3. To dictate into other apps, enable the **Voice Keyboard** with Full Access
+   (**Settings → Setup** shows the steps).
+
+Other models: prepare one on the Mac with
+`scripts/prepare_ios_asr_model_package.sh <dir>`, copy it into Files, then
+**Settings → Speech model → Import Model package…** and tap it to use it.
 
 The app records and transcribes; iOS forbids microphone use inside a keyboard.
 Start from the keyboard, the app, Control Center, the Lock Screen, the Action

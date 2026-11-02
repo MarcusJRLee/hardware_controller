@@ -2,50 +2,42 @@ import HardwareControllerVoiceFFI
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct VoiceInputModelLibraryView: View {
+/// Installed speech models, the active choice, import, and removal.
+struct VoiceInputModelLibrarySection: View {
   @ObservedObject var model: VoiceInputModelLibraryModel
   @State private var isImporterPresented = false
   @State private var pendingRemoval: VoiceInputInstalledModelPackage?
   @State private var pickerErrorMessage: String?
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      VStack(alignment: .leading, spacing: 4) {
-        Text("Local models")
-          .font(.title2.bold())
-          .accessibilityIdentifier("local_model_library")
-        Text("Validated packages stay in this app's private storage.")
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
+    Section {
+      if model.isPreparingStarter {
+        LabeledContent("Installing built-in model") { ProgressView() }
       }
-
-      if model.packages.isEmpty {
-        Text("No Model packages imported.")
-          .foregroundStyle(.secondary)
-      } else {
-        ForEach(model.packages, id: \.rootURL) { installed in
-          packageCard(installed)
-        }
+      ForEach(model.packages, id: \.rootURL) { installed in
+        packageRow(installed)
       }
-
       Button {
         isImporterPresented = true
       } label: {
         Label(
-          model.isImporting ? "Importing package" : "Import Model package",
+          model.isImporting ? "Importing…" : "Import Model package…",
           systemImage: "square.and.arrow.down"
         )
       }
-      .buttonStyle(.bordered)
       .disabled(model.isImporting || model.isRemoving)
       .accessibilityIdentifier("import_model_package")
 
       if let errorMessage = model.errorMessage ?? pickerErrorMessage {
         Text(errorMessage)
-          .font(.footnote)
           .foregroundStyle(.red)
           .accessibilityIdentifier("model_package_error")
       }
+    } header: {
+      Text("Speech model")
+        .accessibilityIdentifier("local_model_library")
+    } footer: {
+      Text("Models are verified and stay in this app's private storage.")
     }
     .fileImporter(
       isPresented: $isImporterPresented,
@@ -54,7 +46,7 @@ struct VoiceInputModelLibraryView: View {
       onCompletion: handleSelection
     )
     .confirmationDialog(
-      "Remove Model package?",
+      "Remove this model?",
       isPresented: removalConfirmationIsPresented,
       titleVisibility: .visible
     ) {
@@ -63,104 +55,61 @@ struct VoiceInputModelLibraryView: View {
           return
         }
         pendingRemoval = nil
-        Task {
-          await model.removePackage(installed)
-        }
+        Task { await model.removePackage(installed) }
       }
-      Button("Cancel", role: .cancel) {
-        pendingRemoval = nil
-      }
+      Button("Cancel", role: .cancel) { pendingRemoval = nil }
     } message: {
       Text("The original imported folder is not changed.")
     }
   }
 
-  private func packageCard(
-    _ installed: VoiceInputInstalledModelPackage
-  ) -> some View {
-    VStack(alignment: .leading, spacing: 6) {
-      HStack(alignment: .firstTextBaseline) {
-        Text(installed.package.displayName)
-          .font(.headline)
+  private func packageRow(_ installed: VoiceInputInstalledModelPackage) -> some View {
+    let isActive = model.isActiveASRModel(installed)
+    let canSelect = VoiceInputASRModelRegistry.isCompatible(installed.package) && !isActive
+    return Button {
+      guard canSelect else {
+        return
+      }
+      Task { await model.selectASRModel(installed) }
+    } label: {
+      HStack {
+        VStack(alignment: .leading, spacing: 2) {
+          Text(installed.package.displayName)
+            .foregroundStyle(.primary)
+          Text(packageSummary(installed))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
         Spacer()
-        if model.isActiveASRModel(installed) {
-          Text("Active")
-            .font(.caption.bold())
+        if isActive {
+          Image(systemName: "checkmark")
+            .accessibilityLabel("Active")
             .accessibilityIdentifier("active_asr_model")
         }
-        Text("v\(installed.package.version)")
-          .font(.caption.monospacedDigit())
-          .foregroundStyle(.secondary)
       }
-      Text(packageSummary(installed.package))
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-      Text(installed.publisherVerified ? "Pinned manifest" : "Manual import")
-        .font(.caption)
-        .foregroundStyle(.secondary)
-      if canSelectForASR(installed.package) && !model.isActiveASRModel(installed) {
-        Button {
-          Task {
-            await model.selectASRModel(installed)
-          }
-        } label: {
-          Label("Use for speech to text", systemImage: "checkmark.circle")
-        }
-        .disabled(model.isImporting || model.isRemoving)
-        .accessibilityIdentifier("select_asr_model")
-      }
-      Button(role: .destructive) {
-        pendingRemoval = installed
-      } label: {
-        Label(
-          model.isRemoving ? "Removing package" : "Remove package",
-          systemImage: "trash"
-        )
-      }
-      .disabled(model.isImporting || model.isRemoving)
-      .accessibilityIdentifier("remove_model_package")
     }
-    .padding(16)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(
-      .quaternary,
-      in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-    )
-    .accessibilityIdentifier("model_package_card")
+    .disabled(model.isImporting || model.isRemoving)
+    .accessibilityHint(canSelect ? "Use for speech to text" : "")
+    .accessibilityIdentifier(canSelect ? "select_asr_model" : "model_package_card")
+    .swipeActions {
+      Button("Remove", role: .destructive) { pendingRemoval = installed }
+        .accessibilityIdentifier("remove_model_package")
+    }
+    .contextMenu {
+      Button("Remove", systemImage: "trash", role: .destructive) { pendingRemoval = installed }
+    }
   }
 
-  private func canSelectForASR(_ package: PortableModelPackage) -> Bool {
-    VoiceInputASRModelRegistry.isCompatible(package)
-  }
-
-  private func packageSummary(_ package: PortableModelPackage) -> String {
+  private func packageSummary(_ installed: VoiceInputInstalledModelPackage) -> String {
+    let package = installed.package
     let languages =
-      package.languages.isEmpty
-      ? "No declared language"
-      : package.languages.joined(separator: ", ")
+      package.languages.isEmpty ? "No declared language" : package.languages.joined(separator: ", ")
     let bytes = ByteCountFormatter.string(
       fromByteCount: Int64(clamping: package.verifiedBytes),
       countStyle: .file
     )
-    return "\(stageName(package.stage)) · \(runtimeName(package.runtime)) · \(languages) · \(bytes)"
-  }
-
-  private func stageName(_ stage: PortableModelStage) -> String {
-    switch stage {
-    case .asr: "Speech to text"
-    case .formatting: "Formatting"
-    case .vad: "Voice activity"
-    }
-  }
-
-  private func runtimeName(_ runtime: PortableModelRuntime) -> String {
-    switch runtime {
-    case .sherpaONNX: "sherpa-onnx"
-    case .whisperCPP: "whisper.cpp"
-    case .mistralRS: "mistral.rs"
-    case .llamaCPP: "llama.cpp"
-    case .transcribeCPP: "transcribe.cpp"
-    }
+    let provenance = installed.publisherVerified ? "Verified" : "Manual import"
+    return "\(languages) · \(bytes) · \(provenance)"
   }
 
   private func handleSelection(_ result: Result<[URL], Error>) {
@@ -171,9 +120,7 @@ struct VoiceInputModelLibraryView: View {
         pickerErrorMessage = "Choose one Model package folder."
         return
       }
-      Task {
-        await model.importPackage(from: source)
-      }
+      Task { await model.importPackage(from: source) }
     case .failure:
       pickerErrorMessage = "The Model package picker did not return a folder."
     }

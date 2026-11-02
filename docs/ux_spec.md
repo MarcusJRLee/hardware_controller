@@ -17,6 +17,8 @@ typography, spacing, and position carry everything else.
 | History | Searchable session list plus evidence detail. Prior results are immutable; reruns and re-delivery are explicit; delete is visually distinct. Expired audio names its rule. |
 | Profiles | Stable list and editor; active state is separate from selection. |
 | General | Native form sections: Speech recognition (first), Appearance, microphone, Local AI, Voice chord, History storage, Launch at Login. Apple stays visibly marked as the less accurate engine while selected. |
+| iOS Dictate | One centered record button: primary-colored at rest, amber only while recording. Status title and one line above it; the timer line is always reserved so nothing moves. Finished text above with quiet **Copy** and **Share**. |
+| iOS History / Settings | Native searchable list with detail; Settings is a Form: Setup, Speech model, History storage, Without the keyboard, notices. |
 | Transcript HUD | Click-through, nonactivating; only while a target cannot show live text and text exists; anchored to the caret or one stable edge, never the pointer. |
 
 ## Behavior

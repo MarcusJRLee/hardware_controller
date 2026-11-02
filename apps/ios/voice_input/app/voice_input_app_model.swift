@@ -234,22 +234,35 @@ final class VoiceInputAppModel: ObservableObject {
       return
     }
     do {
-      snapshot = try await service.snapshot()
-      snapshotErrorMessage = nil
+      publish(\.snapshot, try await service.snapshot())
+      publish(\.snapshotErrorMessage, nil)
     } catch {
-      snapshotErrorMessage = "The local capture state is unavailable."
+      publish(\.snapshotErrorMessage, "The local capture state is unavailable.")
     }
   }
 
   func refreshOnboarding() {
-    microphoneAuthorization = microphoneAuthorizationProvider()
+    publish(\.microphoneAuthorization, microphoneAuthorizationProvider())
     do {
-      keyboardHandoffObserved = try keyboardObservedAtReader() != nil
-      onboardingErrorMessage = nil
+      publish(\.keyboardHandoffObserved, try keyboardObservedAtReader() != nil)
+      publish(\.onboardingErrorMessage, nil)
     } catch {
-      keyboardHandoffObserved = false
-      onboardingErrorMessage =
+      publish(\.keyboardHandoffObserved, false)
+      publish(
+        \.onboardingErrorMessage,
         "The local keyboard handoff is unavailable. Close and reopen the app and keyboard."
+      )
+    }
+  }
+
+  /// The refresh loop runs at 4 Hz. Publishing only real changes keeps SwiftUI
+  /// from redrawing, and the app idle, while nothing happens.
+  private func publish<Value: Equatable>(
+    _ keyPath: ReferenceWritableKeyPath<VoiceInputAppModel, Value>,
+    _ value: Value
+  ) {
+    if self[keyPath: keyPath] != value {
+      self[keyPath: keyPath] = value
     }
   }
 

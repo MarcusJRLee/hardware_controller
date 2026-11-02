@@ -26,6 +26,32 @@ final class VoiceInputASRModelRegistryTest: XCTestCase {
     XCTAssertEqual(selected, installed)
   }
 
+  /// iOS devices reach the container through a symlink (/var → /private/var),
+  /// so enumerated and constructed paths differ in spelling.
+  func testSymlinkedLibraryRootStillSelectsAndRemoves() async throws {
+    let fixture = try transcribeFixture()
+    defer { try? FileManager.default.removeItem(at: fixture.root) }
+    let real = fixture.root.appendingPathComponent("real", isDirectory: true)
+    let link = fixture.root.appendingPathComponent("link", isDirectory: true)
+    try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+    let installer = VoiceInputModelPackageInstaller(
+      rootURL: link.appendingPathComponent("models", isDirectory: true)
+    )
+    let registry = VoiceInputASRModelRegistry(
+      installer: installer,
+      selectionURL: fixture.selectionURL
+    )
+    let installed = try await registry.install(from: fixture.source, expectedManifestSHA256: nil)
+
+    try await registry.selectASRModel(installed)
+    let selected = try await registry.selectedASRModel()
+    XCTAssertEqual(selected, installed)
+    try await registry.remove(selected)
+    let remaining = try await registry.installedPackages()
+    XCTAssertEqual(remaining, [])
+  }
+
   func testWrongRuntimeCannotBecomeActive() async throws {
     let fixture = try fixture()
     defer { try? FileManager.default.removeItem(at: fixture.root) }

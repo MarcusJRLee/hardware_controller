@@ -7,295 +7,182 @@ struct VoiceInputHistoryView: View {
   @ObservedObject var audioPlayer: VoiceInputHistoryAudioPlayerModel
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Text("History")
-        .font(.title2.bold())
-        .accessibilityIdentifier("voice_history")
-      Text("Recordings, recovery audio, and every transcript stage stay on this iPhone.")
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-
-      VoiceInputHistoryStorageView(model: model)
-
-      TextField("Search transcripts", text: $model.query)
-        .textFieldStyle(.roundedBorder)
-        .submitLabel(.search)
-        .onSubmit { Task { await model.search() } }
-        .accessibilityIdentifier("history_search")
-
-      if model.isLoading {
-        ProgressView("Loading local History")
-      } else if model.sessions.isEmpty, model.errorMessage == nil {
-        ContentUnavailableView(
-          "No recordings",
-          systemImage: "waveform",
-          description: Text("Finished captures and recovered audio will appear here.")
-        )
-        .accessibilityIdentifier("history_empty")
-      }
-
-      if let errorMessage = model.errorMessage ?? audioPlayer.errorMessage {
-        Text(errorMessage)
-          .foregroundStyle(.red)
-          .accessibilityIdentifier("history_error")
-      }
-
-      ForEach(model.sessions) { session in
-        VoiceInputHistorySessionView(
-          session: session,
-          isPlaying: audioPlayer.playingSessionID == session.id,
-          togglePlayback: { audioPlayer.toggle(session) },
-          setPinned: { isPinned in
-            Task {
-              await model.setPinned(
-                sessionID: session.id,
-                isPinned: isPinned
-              )
-            }
+    NavigationStack {
+      List {
+        if let errorMessage = model.errorMessage {
+          Text(errorMessage)
+            .foregroundStyle(.red)
+            .accessibilityIdentifier("history_error")
+        }
+        ForEach(model.sessions) { session in
+          NavigationLink {
+            VoiceInputHistoryDetailView(
+              session: session,
+              audioPlayer: audioPlayer,
+              setPinned: { isPinned in
+                Task { await model.setPinned(sessionID: session.id, isPinned: isPinned) }
+              }
+            )
+          } label: {
+            VoiceInputHistoryRow(session: session)
           }
-        )
+        }
       }
+      .listStyle(.plain)
+      .overlay {
+        if model.sessions.isEmpty, model.errorMessage == nil, !model.isLoading {
+          ContentUnavailableView(
+            model.query.isEmpty ? "No dictations yet" : "No matches",
+            systemImage: "waveform",
+            description: Text(
+              model.query.isEmpty
+                ? "Finished dictations and recovered audio appear here."
+                : "Try different words."
+            )
+          )
+          .accessibilityIdentifier("history_empty")
+        }
+      }
+      .navigationTitle("History")
+      .searchable(text: $model.query, prompt: "Search transcripts")
+      .onSubmit(of: .search) { Task { await model.search() } }
+      .onChange(of: model.query) { _, query in
+        if query.isEmpty { Task { await model.refresh() } }
+      }
+      .refreshable { await model.refresh() }
+      .accessibilityIdentifier("voice_history")
     }
   }
 }
 
-private struct VoiceInputHistoryStorageView: View {
-  @ObservedObject var model: VoiceInputHistoryModel
-
-  var body: some View {
-    DisclosureGroup {
-      VStack(alignment: .leading, spacing: 10) {
-        Picker("Audio age", selection: ageBinding) {
-          Text("Don't retain").tag(Int?.some(0))
-          Text("30 days").tag(Int?.some(30))
-          Text("90 days").tag(Int?.some(90))
-          Text("1 year").tag(Int?.some(365))
-          Text("Unlimited").tag(Int?.none)
-        }
-        .accessibilityIdentifier("history_retention_age")
-
-        Picker("Audio size", selection: byteBinding) {
-          Text("Don't retain").tag(Int64?.some(0))
-          Text("512 MiB").tag(Int64?.some(512 * 1_024 * 1_024))
-          Text("1 GiB").tag(Int64?.some(1_024 * 1_024 * 1_024))
-          Text("2 GiB").tag(Int64?.some(2 * 1_024 * 1_024 * 1_024))
-          Text("Unlimited").tag(Int64?.none)
-        }
-        .accessibilityIdentifier("history_retention_size")
-
-        Picker("Recordings", selection: countBinding) {
-          Text("Don't retain").tag(Int?.some(0))
-          Text("500").tag(Int?.some(500))
-          Text("2,000").tag(Int?.some(2_000))
-          Text("5,000").tag(Int?.some(5_000))
-          Text("Unlimited").tag(Int?.none)
-        }
-        .accessibilityIdentifier("history_retention_count")
-
-        Text(
-          "The first limit reached—or less than 1 GiB of free space—expires the oldest unpinned audio. Transcripts remain searchable."
-        )
-        .font(.caption)
-        .foregroundStyle(.secondary)
-
-        if model.isUpdatingRetention {
-          ProgressView("Updating local storage")
-        }
-
-        if let maintenanceMessage = model.maintenanceMessage {
-          Label(maintenanceMessage, systemImage: "exclamationmark.triangle")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .accessibilityIdentifier("history_storage_status")
-        }
-      }
-      .pickerStyle(.menu)
-      .disabled(!model.canUpdateRetention || model.isUpdatingRetention)
-      .padding(.top, 8)
-    } label: {
-      Text("History storage")
-        .accessibilityIdentifier("history_storage")
-    }
-  }
-
-  private var ageBinding: Binding<Int?> {
-    Binding(
-      get: { model.retentionSettings.maximumAgeDays },
-      set: { maximumAgeDays in
-        update(
-          VoiceHistoryRetentionSettings(
-            maximumAgeDays: maximumAgeDays,
-            maximumAudioBytes: model.retentionSettings.maximumAudioBytes,
-            maximumArtifactCount: model.retentionSettings.maximumArtifactCount
-          )
-        )
-      }
-    )
-  }
-
-  private var byteBinding: Binding<Int64?> {
-    Binding(
-      get: { model.retentionSettings.maximumAudioBytes },
-      set: { maximumAudioBytes in
-        update(
-          VoiceHistoryRetentionSettings(
-            maximumAgeDays: model.retentionSettings.maximumAgeDays,
-            maximumAudioBytes: maximumAudioBytes,
-            maximumArtifactCount: model.retentionSettings.maximumArtifactCount
-          )
-        )
-      }
-    )
-  }
-
-  private var countBinding: Binding<Int?> {
-    Binding(
-      get: { model.retentionSettings.maximumArtifactCount },
-      set: { maximumArtifactCount in
-        update(
-          VoiceHistoryRetentionSettings(
-            maximumAgeDays: model.retentionSettings.maximumAgeDays,
-            maximumAudioBytes: model.retentionSettings.maximumAudioBytes,
-            maximumArtifactCount: maximumArtifactCount
-          )
-        )
-      }
-    )
-  }
-
-  private func update(_ settings: VoiceHistoryRetentionSettings) {
-    Task { await model.updateRetentionSettings(settings) }
-  }
-}
-
-private struct VoiceInputHistorySessionView: View {
+private struct VoiceInputHistoryRow: View {
   let session: VoiceInputHistorySession
-  let isPlaying: Bool
-  let togglePlayback: () -> Void
-  let setPinned: (Bool) -> Void
-  private let localClipboard = VoiceInputSystemLocalClipboard()
-  @State private var copyMessage: String?
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      HStack(alignment: .firstTextBaseline) {
-        Text(session.endedAt, style: .date).font(.headline)
-        Text(session.endedAt, style: .time)
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-        Spacer()
-        if session.isRecovery {
-          Text("Recovered audio")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        } else {
+    VStack(alignment: .leading, spacing: 4) {
+      Text(session.isRecovery ? "Recovered recording" : session.formattedText)
+        .lineLimit(3)
+        .foregroundStyle(session.isRecovery ? .secondary : .primary)
+      HStack(spacing: 6) {
+        Text(session.endedAt, format: .relative(presentation: .named))
+        if !session.isRecovery {
+          Text("·")
           Text(session.style.kind.displayName)
-            .font(.caption)
-            .foregroundStyle(.secondary)
         }
         if session.isPinned {
-          Label("Pinned", systemImage: "pin.fill")
-            .font(.caption)
+          Image(systemName: "pin.fill").accessibilityLabel("Pinned")
         }
       }
+      .font(.caption)
+      .foregroundStyle(.secondary)
+    }
+    .padding(.vertical, 4)
+    .accessibilityElement(children: .combine)
+    .accessibilityIdentifier("history_row")
+  }
+}
 
-      if session.isRecovery {
-        Label("Recovered recording", systemImage: "waveform.badge.exclamationmark")
-          .font(.headline)
-        if let recoveryDescription = session.recoveryDescription {
-          Text(recoveryDescription)
+private struct VoiceInputHistoryDetailView: View {
+  let session: VoiceInputHistorySession
+  @ObservedObject var audioPlayer: VoiceInputHistoryAudioPlayerModel
+  let setPinned: (Bool) -> Void
+  @State private var copyMessage: String?
+  private let localClipboard = VoiceInputSystemLocalClipboard()
+
+  var body: some View {
+    List {
+      Section {
+        if session.isRecovery {
+          VStack(alignment: .leading, spacing: 6) {
+            Text(session.recoveryDescription ?? "Recovered recording")
+            Text(
+              session.isPinned
+                ? "Pinned recovery audio stays until you unpin it."
+                : "Play it before its 24-hour recovery window ends."
+            )
+            .font(.subheadline)
             .foregroundStyle(.secondary)
+          }
+        } else {
+          Text(session.formattedText)
+            .textSelection(.enabled)
+            .accessibilityIdentifier("history_text")
         }
-        Text("No transcript was created for this recovery.")
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-        if session.audioArtifact != nil {
-          Text(
-            session.isPinned
-              ? "Pinned recovery audio remains until you unpin it."
-              : "Play this recording before its 24-hour recovery window ends."
-          )
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-        }
-      } else {
-        Text(session.formattedText)
-          .textSelection(.enabled)
-          .frame(maxWidth: .infinity, alignment: .leading)
       }
 
-      HStack {
-        Button(action: togglePlayback) {
-          Label(
-            isPlaying ? "Stop recording" : "Play recording",
-            systemImage: isPlaying ? "stop.fill" : "play.fill"
-          )
+      if !session.isRecovery {
+        Section {
+          Button {
+            copy()
+          } label: {
+            Label(copyMessage ?? "Copy text", systemImage: "doc.on.doc")
+          }
+          .accessibilityIdentifier("history_copy")
+          ShareLink(item: session.formattedText) {
+            Label("Share", systemImage: "square.and.arrow.up")
+          }
+          .accessibilityIdentifier("history_share")
         }
-        .disabled(session.audioArtifact == nil)
+      }
 
+      Section {
         if session.audioArtifact != nil {
+          Button {
+            audioPlayer.toggle(session)
+          } label: {
+            Label(
+              isPlaying ? "Stop playback" : "Play recording",
+              systemImage: isPlaying ? "stop.fill" : "play.fill"
+            )
+          }
           Button {
             setPinned(!session.isPinned)
           } label: {
             Label(
-              session.isPinned ? "Unpin audio" : "Pin audio",
+              session.isPinned ? "Unpin audio" : "Keep audio",
               systemImage: session.isPinned ? "pin.slash" : "pin"
             )
           }
           .accessibilityIdentifier("history_pin")
-        }
-
-        if !session.isRecovery {
-          Button {
-            copyTranscript()
-          } label: {
-            Label("Copy text", systemImage: "doc.on.doc")
-          }
-          .accessibilityIdentifier("history_copy")
-
-          ShareLink(item: session.formattedText) {
-            Label("Share transcript", systemImage: "square.and.arrow.up")
-          }
-          .accessibilityIdentifier("history_share")
-        }
-
-        if session.audioArtifact == nil {
+        } else {
           Text(session.audioExpiredReason?.displayDescription ?? "Audio unavailable")
-            .font(.caption)
             .foregroundStyle(.secondary)
         }
-      }
-
-      if let copyMessage {
-        Text(copyMessage)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .accessibilityIdentifier("history_copy_status")
+        if let errorMessage = audioPlayer.errorMessage {
+          Text(errorMessage).foregroundStyle(.red)
+        }
+      } header: {
+        Text("Audio")
       }
 
       if !session.isRecovery {
-        DisclosureGroup("Raw transcript") {
-          Text(session.rawText)
-            .font(.subheadline)
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        Section {
+          DisclosureGroup("Raw transcript") {
+            Text(session.rawText)
+              .font(.subheadline)
+              .textSelection(.enabled)
+          }
+        } footer: {
+          Text(
+            "\(session.style.kind.displayName) · \(session.modelPackageID) \(session.modelVersion)")
         }
-
-        Text("\(session.modelPackageID) · \(session.modelVersion)")
-          .font(.caption.monospaced())
-          .foregroundStyle(.secondary)
       }
     }
-    .padding(16)
-    .background(.quaternary, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    .navigationTitle(Text(session.endedAt, format: .dateTime.month().day().hour().minute()))
+    .navigationBarTitleDisplayMode(.inline)
+    .onDisappear { audioPlayer.stop() }
   }
 
-  private func copyTranscript() {
+  private var isPlaying: Bool {
+    audioPlayer.playingSessionID == session.id
+  }
+
+  private func copy() {
     do {
       try localClipboard.copy(session.formattedText)
-      copyMessage = "Copied on this device for 10 minutes."
+      copyMessage = "Copied for 10 minutes"
     } catch {
-      copyMessage = "This transcript is too large to copy safely."
+      copyMessage = "Too large to copy safely"
     }
   }
 }
@@ -316,15 +203,15 @@ extension VoiceHistoryAudioExpirationReason {
   fileprivate var displayDescription: String {
     switch self {
     case .ageLimit:
-      "Audio expired at its age limit; transcript retained"
+      "Audio expired at its age limit; transcript kept."
     case .artifactLimit:
-      "Audio expired at the recording-count limit; transcript retained"
+      "Audio expired at the recording-count limit; transcript kept."
     case .byteLimit:
-      "Audio expired at the total-size limit; transcript retained"
+      "Audio expired at the total-size limit; transcript kept."
     case .lowDisk:
-      "Audio expired to protect free space; transcript retained"
+      "Audio expired to protect free space; transcript kept."
     case .recoveryLimit:
-      "Recovered audio expired after 24 hours"
+      "Recovered audio expired after 24 hours."
     }
   }
 }

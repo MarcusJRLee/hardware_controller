@@ -20,10 +20,15 @@ final class VoiceInputModelLibraryModel: ObservableObject {
   @Published private(set) var activeASRModel: VoiceInputInstalledModelPackage?
   @Published private(set) var isImporting = false
   @Published private(set) var isRemoving = false
+  @Published private(set) var isPreparingStarter = false
   @Published private(set) var errorMessage: String?
 
   private let manager: any VoiceInputModelManaging
   private let asrWorkflow: VoiceInputASRWorkflow?
+  private let starter: VoiceInputStarterModel?
+  /// Provisioning runs once per launch, so removing the starter is not undone
+  /// until the next launch finds the library without a speech model.
+  private var starterProvisioningAttempted = false
 
   convenience init() {
     guard
@@ -53,18 +58,39 @@ final class VoiceInputModelLibraryModel: ObservableObject {
 
   init(
     manager: any VoiceInputModelManaging,
-    asrWorkflow: VoiceInputASRWorkflow? = nil
+    asrWorkflow: VoiceInputASRWorkflow? = nil,
+    starter: VoiceInputStarterModel? = nil
   ) {
     self.manager = manager
     self.asrWorkflow = asrWorkflow
+    self.starter = starter
   }
 
   func refresh() async {
+    let starterError = await provisionStarterOnce()
     do {
       packages = try await manager.installedPackages()
       await refreshSelection()
     } catch {
       errorMessage = error.localizedDescription
+    }
+    if let starterError {
+      errorMessage = starterError
+    }
+  }
+
+  private func provisionStarterOnce() async -> String? {
+    guard let starter, !starterProvisioningAttempted else {
+      return nil
+    }
+    starterProvisioningAttempted = true
+    isPreparingStarter = true
+    defer { isPreparingStarter = false }
+    do {
+      _ = try await starter.provisionIfNeeded(manager: manager)
+      return nil
+    } catch {
+      return "The built-in speech model could not be installed. \(error.localizedDescription)"
     }
   }
 

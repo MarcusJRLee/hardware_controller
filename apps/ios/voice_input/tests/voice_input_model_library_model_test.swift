@@ -121,6 +121,26 @@ final class VoiceInputModelLibraryModelTest: XCTestCase {
     )
   }
 
+  @MainActor
+  func testRefreshProvisionsTheStarterOncePerLaunch() async throws {
+    let temporary = temporaryDirectory()
+    let registry = manager(
+      installer: VoiceInputModelPackageInstaller(
+        rootURL: temporary.appendingPathComponent("models")),
+      root: temporary
+    )
+    let model = VoiceInputModelLibraryModel(manager: registry, starter: VoiceInputStarterModel())
+
+    await model.refresh()
+    let starter = try XCTUnwrap(model.activeASRModel)
+    XCTAssertFalse(model.isPreparingStarter)
+    await model.removePackage(starter)
+    await model.refresh()
+
+    XCTAssertEqual(model.packages, [])
+    XCTAssertNil(model.activeASRModel)
+  }
+
   private func temporaryDirectory() -> URL {
     FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
