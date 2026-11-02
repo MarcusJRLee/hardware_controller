@@ -36,8 +36,10 @@ struct VoiceInputStarterModel: Sendable {
     self.packageURL = packageURL
   }
 
-  /// Installs and selects the starter only while the library holds no
-  /// compatible speech model; any model the user installed keeps priority.
+  /// Installs and selects the starter only while no speech model is active and
+  /// the library holds no other compatible model; a model the user installed
+  /// keeps priority. An unselected starter left by an earlier launch is
+  /// selected, since installing it again is idempotent.
   func provisionIfNeeded(
     manager: any VoiceInputModelManaging
   ) async throws -> Outcome {
@@ -48,6 +50,7 @@ struct VoiceInputStarterModel: Sendable {
     guard
       !installed.contains(where: {
         VoiceInputASRModelRegistry.isCompatible($0.package)
+          && $0.package.manifestSHA256 != Self.manifestSHA256
       })
     else {
       return .unchanged

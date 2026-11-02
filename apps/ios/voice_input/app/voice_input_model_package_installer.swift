@@ -241,9 +241,12 @@ actor VoiceInputModelPackageInstaller {
     else {
       throw VoiceInputModelPackageInstallError.identityConflict
     }
+    // Directory enumeration on a device spells the container through
+    // /private/var, while constructed paths use /var. One canonical spelling
+    // keeps install, listing, selection, and removal comparable.
     return VoiceInputInstalledModelPackage(
       package: package,
-      rootURL: url,
+      rootURL: installedURL(for: package),
       publisherVerified: record?.publisherVerified ?? false
     )
   }

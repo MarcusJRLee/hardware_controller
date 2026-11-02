@@ -53,7 +53,7 @@ events.
 | ID | Journey | Contract | Proof |
 | --- | --- | --- | --- |
 | I0 | Dictate in the app | Fresh install to text: capture, ASR, formatting, result with Copy/Share, History search; survives a moved container. | `testFreshInstallDictatesIntoSearchableHistory` (recorded clip replaces only the microphone), `voice_input_history_session_test` |
-| I1 | Onboard locally | A fresh install provisions the pinned starter model; microphone asked on first tap with exact denial recovery; imported packages still admitted. | `voice_input_starter_model_test`, `voice_input_dictation_presentation_test`, `voice_input_onboarding_policy_test`, `voice_input_model_package_{stager,validator,installer}_test`, `testSettingsShowTheVerifiedModelSetupAndStorage` |
+| I1 | Onboard locally | A fresh install provisions the pinned starter model; microphone asked on first tap with exact denial recovery; imported packages still admitted. | `voice_input_starter_model_test`, `voice_input_asr_model_registry_test`, `voice_input_dictation_presentation_test`, `voice_input_onboarding_policy_test`, `voice_input_model_package_{stager,validator,installer}_test`, `testSettingsShowTheVerifiedModelSetupAndStorage` |
 | I2 | Dictate from the keyboard | Real local ASR, live pause-cut decoding, History commit before publish, one insertion. | `voice_input_asr_workflow_test`, `voice_input_local_transcriber_test`, `voice_input_live_audio_tap_test`, `voice_input_session_finalizer_test`, `voice_asr_bridge_test.c` |
 | I3 | Start when the app is cold | System surfaces foreground the app honestly. | `voice_input_system_capture_test`, `scripts/check_ios_system_capture_metadata.sh` |
 | I4 | Type without Full Access | QWERTY works; voice explains what it needs. | `voice_input_keyboard_policy_test` |

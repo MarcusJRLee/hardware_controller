@@ -39,7 +39,13 @@ final class VoiceInputStarterModelTest: XCTestCase {
     let root = temporaryDirectory()
     let registry = makeRegistry(root: root)
     let starter = try XCTUnwrap(VoiceInputStarterModel())
-    _ = try await registry.install(from: starter.packageURL, expectedManifestSHA256: nil)
+    let source = root.appendingPathComponent("user_model")
+    try copyVoiceInputModelFixture(to: source)
+    let manifestURL = source.appendingPathComponent("manifest.json")
+    try String(contentsOf: manifestURL, encoding: .utf8)
+      .replacingOccurrences(of: "\"sherpa_onnx\"", with: "\"transcribe_cpp\"")
+      .write(to: manifestURL, atomically: true, encoding: .utf8)
+    _ = try await registry.install(from: source, expectedManifestSHA256: nil)
 
     let outcome = try await starter.provisionIfNeeded(manager: registry)
 
@@ -48,6 +54,21 @@ final class VoiceInputStarterModelTest: XCTestCase {
       _ = try await registry.selectedASRModel()
       XCTFail("Provisioning must not select a model the user installed.")
     } catch VoiceInputASRModelRegistryError.noSelection {}
+  }
+
+  func testAnUnselectedStarterFromAnEarlierLaunchIsSelected() async throws {
+    let registry = makeRegistry()
+    let starter = try XCTUnwrap(VoiceInputStarterModel())
+    _ = try await registry.install(
+      from: starter.packageURL,
+      expectedManifestSHA256: VoiceInputStarterModel.manifestSHA256
+    )
+
+    let outcome = try await starter.provisionIfNeeded(manager: registry)
+
+    XCTAssertEqual(outcome, .installed)
+    let selected = try await registry.selectedASRModel()
+    XCTAssertTrue(selected.publisherVerified)
   }
 
   func testTamperedBundleFailsAdmission() async throws {

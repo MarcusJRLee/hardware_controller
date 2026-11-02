@@ -41,3 +41,8 @@ Imported Model packages remain supported for larger or other models.
   installer refuses drifted bytes at runtime.
 - History stores audio by file name under the current container, because iOS
   can move the container between installs and updates.
+- Installed packages carry one canonical root path. On devices, directory
+  listing spells the container `/private/var/...` while constructed paths use
+  `/var/...`; the mismatch made every selection, including manual imports,
+  fail with "no longer installed". The simulator has no such link, so a
+  symlinked-root test now covers it.
