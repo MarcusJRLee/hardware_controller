@@ -121,7 +121,7 @@ monotonic sequence numbers ([0040](decisions/0040_ios_keyboard_activation_and_ha
 | macOS History | `voice/` SQLite + CAF | Actor-owned connections with a five-second contention bound; startup reconciliation before retention ([0032](decisions/0032_voice_history_crash_recovery.md)); age/bytes/count/low-disk retention protects active, pinned, and recovery audio ([0031](decisions/0031_bounded_voice_history_audio.md)); one Rust retention policy for both platforms ([0057](decisions/0057_single_rust_retention_policy.md)). |
 | iOS History | SQLite + CAF, Data Protection, excluded from backup | Commit before publish; same retention policy with iOS defaults ([0049](decisions/0049_ios_offline_storage_enforcement.md)). |
 | Portable archive | `.voice_history` V1 directory | Verified in Rust before Swift restore; identical imports are no-ops ([0038](decisions/0038_portable_voice_history_archives.md)). |
-| iOS Model packages | Private, Data Protection, no backup | Rust admission with digests and limits; never implicitly evicted ([0041](decisions/0041_ios_model_package_admission.md)). |
+| iOS Model packages | Private, Data Protection, no backup | Rust admission with digests and limits; never implicitly evicted ([0041](decisions/0041_ios_model_package_admission.md)); a pinned starter is bundled and admitted on first launch ([0061](decisions/0061_ios_bundled_starter_model.md)). |
 | macOS Model package | `Application Support/…/SpeechModels`, one package plus `installed.json` | Pinned size and SHA-256 per file, then Rust admission; the record switches packages in one atomic rename. |
 
 ## Permissions and security

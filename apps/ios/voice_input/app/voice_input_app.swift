@@ -1,5 +1,4 @@
 import AVFAudio
-import AppIntents
 import HardwareControllerCore
 import SwiftUI
 import UIKit
@@ -16,6 +15,11 @@ struct VoiceInputApp: App {
   @MainActor
   init() {
     let store = VoiceInputKeychainStore()
+    #if DEBUG
+      if VoiceInputUITestHooks.shouldReset(arguments: ProcessInfo.processInfo.arguments) {
+        Self.resetForUITest(store: store)
+      }
+    #endif
     guard
       let applicationSupport = FileManager.default.urls(
         for: .applicationSupportDirectory,
@@ -92,6 +96,17 @@ struct VoiceInputApp: App {
       historyRepository = nil
       historyInitializationError = error.localizedDescription
     }
+    var recorderFactory: any VoiceInputAudioRecorderCreating =
+      VoiceInputSystemAudioRecorderFactory()
+    var liveAudioTap: (any VoiceInputLiveAudioTapping)? = VoiceInputSystemLiveAudioTap()
+    #if DEBUG
+      if let fixtureURL = VoiceInputUITestHooks.audioFixtureURL(
+        environment: ProcessInfo.processInfo.environment
+      ) {
+        recorderFactory = VoiceInputFixtureAudioRecorderFactory(fixtureURL: fixtureURL)
+        liveAudioTap = nil
+      }
+    #endif
     let service = VoiceInputCaptureService(
       store: store,
       captureDirectoryURL: historyRoot.appendingPathComponent("audio", isDirectory: true),
@@ -100,7 +115,8 @@ struct VoiceInputApp: App {
         VoiceInputSessionFinalizer(history: $0)
       },
       recoveryStore: historyRepository,
-      liveAudioTap: VoiceInputSystemLiveAudioTap(),
+      recorderFactory: recorderFactory,
+      liveAudioTap: liveAudioTap,
       controlReloader: VoiceInputSystemControlReloader.reload
     )
     _model = StateObject(
@@ -109,7 +125,8 @@ struct VoiceInputApp: App {
     _modelLibrary = StateObject(
       wrappedValue: VoiceInputModelLibraryModel(
         manager: registry,
-        asrWorkflow: asrWorkflow
+        asrWorkflow: asrWorkflow,
+        starter: VoiceInputStarterModel()
       )
     )
     _history = StateObject(
@@ -128,7 +145,7 @@ struct VoiceInputApp: App {
 
   var body: some Scene {
     WindowGroup {
-      VoiceInputView(
+      VoiceInputRootView(
         model: model,
         modelLibrary: modelLibrary,
         history: history,
@@ -196,185 +213,28 @@ struct VoiceInputApp: App {
       }
     }
   }
-}
 
-private struct VoiceInputView: View {
-  @ObservedObject var model: VoiceInputAppModel
-  @ObservedObject var modelLibrary: VoiceInputModelLibraryModel
-  @ObservedObject var history: VoiceInputHistoryModel
-  @ObservedObject var historyAudioPlayer: VoiceInputHistoryAudioPlayerModel
-  @Environment(\.openURL) private var openURL
-
-  var body: some View {
-    NavigationStack {
-      ScrollView {
-        VStack(alignment: .leading, spacing: 28) {
-          VStack(alignment: .leading, spacing: 8) {
-            Text("Voice anywhere. Private by default.")
-              .font(.largeTitle.bold())
-            Text(
-              "Capture long thoughts without sending audio, transcripts, or context off this iPhone."
-            )
-            .foregroundStyle(.secondary)
-          }
-
-          VoiceInputOnboardingView(
-            step: model.onboardingStep,
-            microphoneAuthorization: model.microphoneAuthorization,
-            keyboardHandoffObserved: model.keyboardHandoffObserved,
-            errorMessage: model.onboardingErrorMessage,
-            requestMicrophone: model.requestMicrophone,
-            openSettings: openSettings
+  #if DEBUG
+    /// UI tests start from a fresh install without reinstalling the app.
+    @MainActor
+    private static func resetForUITest(store: VoiceInputKeychainStore) {
+      do {
+        try store.removeAll()
+        if let applicationSupport = FileManager.default.urls(
+          for: .applicationSupportDirectory,
+          in: .userDomainMask
+        ).first {
+          let root = applicationSupport.appendingPathComponent(
+            "com.longdevity.hardwarecontroller.voiceinput",
+            isDirectory: true
           )
-
-          VoiceInputModelLibraryView(model: modelLibrary)
-
-          captureSection
-
-          systemCaptureSection
-
-          VoiceInputHistoryView(
-            model: history,
-            audioPlayer: historyAudioPlayer
-          )
-
-          if let errorMessage = model.errorMessage ?? model.snapshotErrorMessage {
-            Text(errorMessage)
-              .foregroundStyle(.red)
-              .accessibilityIdentifier("capture_error")
+          if FileManager.default.fileExists(atPath: root.path) {
+            try FileManager.default.removeItem(at: root)
           }
         }
-        .padding(24)
-      }
-      .navigationTitle("Voice Input")
-      .task {
-        await modelLibrary.refresh()
-        await history.refresh()
-      }
-      .task(id: model.snapshot.sequence) {
-        if model.snapshot.phase == .ready {
-          await history.refresh()
-        }
+      } catch {
+        fatalError("UI-test reset failed: \(error)")
       }
     }
-  }
-
-  private var captureSection: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      HStack {
-        Text("Capture").font(.title2.bold())
-        Spacer()
-        Picker(
-          "Style",
-          selection: Binding(
-            get: { model.selectedStyleKind },
-            set: { model.selectStyle($0) }
-          )
-        ) {
-          ForEach(VoiceInputStyleKind.allCases, id: \.self) { styleKind in
-            Text(styleKind.displayName).tag(styleKind)
-          }
-        }
-        .pickerStyle(.menu)
-        .accessibilityIdentifier("capture_style")
-      }
-      statusCard
-
-      if let lifecycleMessage = model.lifecycleMessage {
-        Label(lifecycleMessage, systemImage: "info.circle")
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-          .accessibilityIdentifier("capture_lifecycle")
-      }
-
-      Button {
-        if model.isRecording {
-          model.stop()
-        } else {
-          model.start()
-        }
-      } label: {
-        Label(
-          model.isRecording ? "Stop local capture" : "Start local capture",
-          systemImage: model.isRecording ? "stop.fill" : "mic.fill"
-        )
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-      }
-      .buttonStyle(.borderedProminent)
-      .disabled(!model.canCapture)
-      .accessibilityIdentifier(
-        model.isRecording ? "stop_capture" : "start_capture"
-      )
-    }
-  }
-
-  private var systemCaptureSection: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      Label("Capture without the keyboard", systemImage: "rectangle.and.hand.point.up.left")
-        .font(.headline)
-      Text(
-        "Add Voice Capture to Control Center, the Lock Screen, or the Action button. You can also ask Siri to start or stop Voice Input. A visible Live Activity owns background recording, and completed text stays in History."
-      )
-      .font(.subheadline)
-      .foregroundStyle(.secondary)
-      ShortcutsLink()
-        .accessibilityIdentifier("open_voice_shortcuts")
-    }
-    .accessibilityElement(children: .contain)
-    .accessibilityIdentifier("system_capture_guidance")
-  }
-
-  private func openSettings() {
-    guard let url = URL(string: UIApplication.openSettingsURLString) else {
-      return
-    }
-    openURL(url)
-  }
-
-  private var statusCard: some View {
-    HStack(spacing: 12) {
-      Image(systemName: statusSymbol)
-        .font(.title2)
-      VStack(alignment: .leading, spacing: 2) {
-        Text(statusTitle).font(.headline)
-        Text(statusDetail)
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-      }
-    }
-    .padding(16)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(.quaternary, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel("Capture status")
-    .accessibilityValue(statusTitle)
-    .accessibilityIdentifier("capture_status")
-  }
-
-  private var statusSymbol: String {
-    switch model.snapshot.phase {
-    case .idle: "circle"
-    case .recording: "waveform"
-    case .transcribing: "ellipsis"
-    case .ready: "checkmark.circle.fill"
-    case .interrupted: "exclamationmark.triangle"
-    case .failed: "xmark.circle"
-    }
-  }
-
-  private var statusTitle: String {
-    model.snapshot.phase.rawValue.capitalized
-  }
-
-  private var statusDetail: String {
-    switch model.snapshot.phase {
-    case .idle: "Ready for local capture."
-    case .recording: "Recording locally. Stop here, from the Live Activity, or from the keyboard."
-    case .transcribing: "Finalizing locally into History."
-    case .ready: "Saved in History for explicit copy, share, or later keyboard retrieval."
-    case .interrupted: "Capture stopped after an audio interruption. Start again manually."
-    case .failed: "Capture stopped with an explicit failure."
-    }
-  }
+  #endif
 }

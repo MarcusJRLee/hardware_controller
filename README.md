@@ -28,7 +28,7 @@ scripts/check.sh      # Everything the Verify CI job runs.
 | Smoke-launch a built app | `scripts/smoke_app.sh <bundle> [--demo \| --installed]` | — |
 | Prove the installed speech service | `scripts/check_speech_engine.sh [APP]` (run by every install) | A signed app |
 | Install the iOS app on a phone | `scripts/install_ios.sh` | Unlocked iPhone in Developer Mode, `.env.local` |
-| Prepare the iOS starter model | `scripts/prepare_ios_asr_model_package.sh <dir>` | Network during preparation only |
+| Prepare an extra iOS model package | `scripts/prepare_ios_asr_model_package.sh <dir>` | Network during preparation only |
 | Benchmark ASR models | `scripts/benchmark_asr.sh [--model m.gguf] [--manifest m.tsv]` | — |
 
 Signing values live in the ignored `.env.local` (copy `.env.example`).
@@ -52,7 +52,8 @@ Calm, tactile, precise: a studio utility, not a settings form. Neutral
 surfaces, system typography, no decorative borders, and one strong action per
 workflow. Color appears only for active state, required attention, or errors.
 The icon, Signal Bridge, is three generic nodes joined by one amber signal
-path ([source](packaging/app_icon_source.png)). Details:
+path ([source](packaging/app_icon_source.png)); iOS Voice Input crops the same
+art full-bleed and paints amber only while recording. Details:
 [UX specification](docs/ux_spec.md).
 
 ## Documentation

@@ -21,6 +21,25 @@ final class VoiceInputHistorySessionTest: XCTestCase {
     )
   }
 
+  func testAudioFromAMovedAppContainerRebasesOntoTheCurrentDirectory() throws {
+    let sessionID = UUID()
+    let fileName = "\(sessionID.uuidString.lowercased()).caf"
+    let current = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let previous = URL(fileURLWithPath: "/private/var/containers/old/audio", isDirectory: true)
+    let session = try Self.session(
+      id: sessionID,
+      audioURL: previous.appendingPathComponent(fileName)
+    )
+
+    let validated = try session.validated(audioDirectoryURL: current)
+
+    XCTAssertEqual(
+      validated.audioArtifact?.url,
+      current.appendingPathComponent(fileName).standardizedFileURL
+    )
+  }
+
   func testExpiredAudioRetainsAValidSearchableSession() throws {
     let sessionID = UUID()
     let audioDirectory = FileManager.default.temporaryDirectory

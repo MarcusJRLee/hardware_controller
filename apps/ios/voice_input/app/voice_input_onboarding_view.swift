@@ -1,8 +1,8 @@
 import SwiftUI
 import VoiceInputShared
 
-struct VoiceInputOnboardingView: View {
-  let step: VoiceInputOnboardingStep
+/// Setup status: the microphone and the optional Voice Keyboard.
+struct VoiceInputSetupSection: View {
   let microphoneAuthorization: VoiceInputMicrophoneAuthorization
   let keyboardHandoffObserved: Bool
   let errorMessage: String?
@@ -10,104 +10,45 @@ struct VoiceInputOnboardingView: View {
   let openSettings: () -> Void
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      HStack {
-        Text("Set up local voice").font(.title2.bold())
-        Spacer()
-        if step == .ready {
-          Label("Ready", systemImage: "checkmark.circle.fill")
-            .font(.subheadline.weight(.semibold))
-            .accessibilityIdentifier("onboarding_ready")
+    Section {
+      LabeledContent {
+        switch microphoneAuthorization {
+        case .undetermined:
+          Button("Allow", action: requestMicrophone)
+            .accessibilityIdentifier("request_microphone")
+        case .denied:
+          Button("Open Settings", action: openSettings)
+            .accessibilityIdentifier("open_microphone_settings")
+        case .authorized:
+          Text("Allowed")
         }
+      } label: {
+        Label("Microphone", systemImage: "mic")
       }
 
-      setupRow(
-        symbol: "lock.shield",
-        title: "Local processing",
-        detail: "No account, cloud inference, analytics, or remote storage.",
-        complete: true
-      )
-
-      setupRow(
-        symbol: "mic",
-        title: "Microphone",
-        detail: microphoneDetail,
-        complete: microphoneAuthorization == .authorized
-      )
-
-      if step == .requestMicrophone {
-        Button("Allow microphone", action: requestMicrophone)
-          .buttonStyle(.borderedProminent)
-          .accessibilityIdentifier("request_microphone")
-      } else if step == .openMicrophoneSettings {
-        Button("Open microphone settings", action: openSettings)
-          .buttonStyle(.bordered)
-          .accessibilityIdentifier("open_microphone_settings")
+      LabeledContent {
+        if keyboardHandoffObserved {
+          Text("Ready")
+        } else {
+          Button("Open Settings", action: openSettings)
+            .accessibilityIdentifier("open_keyboard_settings")
+        }
+      } label: {
+        Label("Voice Keyboard", systemImage: "keyboard")
       }
-
-      setupRow(
-        symbol: "keyboard",
-        title: "Voice Keyboard",
-        detail: keyboardDetail,
-        complete: keyboardHandoffObserved
-      )
 
       if let errorMessage {
         Text(errorMessage)
-          .font(.footnote)
           .foregroundStyle(.red)
           .accessibilityIdentifier("onboarding_error")
       }
-
-      if microphoneAuthorization == .authorized && !keyboardHandoffObserved {
-        Button("Open Settings", action: openSettings)
-          .buttonStyle(.bordered)
-          .accessibilityIdentifier("open_keyboard_settings")
+    } header: {
+      Text("Setup")
+    } footer: {
+      if !keyboardHandoffObserved {
         Text(
-          "In Settings: General → Keyboard → Keyboards → Add New Keyboard → Voice Keyboard. Then enable Full Access for same-device handoff."
+          "To dictate into any app: Settings → General → Keyboard → Keyboards → Add New Keyboard → Voice Keyboard, then turn on Allow Full Access."
         )
-        .font(.footnote)
-        .foregroundStyle(.secondary)
-      }
-    }
-    .padding(18)
-    .background(.quaternary, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-    .accessibilityIdentifier("onboarding_card")
-  }
-
-  private var microphoneDetail: String {
-    switch microphoneAuthorization {
-    case .undetermined:
-      return "Requested only when you choose Allow microphone."
-    case .denied:
-      return "Denied. Typing still works; enable access in Settings to record."
-    case .authorized:
-      return "Allowed for visibly owned, local capture only."
-    }
-  }
-
-  private var keyboardDetail: String {
-    if keyboardHandoffObserved {
-      return "This keyboard completed a Full Access handoff check on this device."
-    }
-    return "Works as QWERTY without Full Access; voice handoff needs it."
-  }
-
-  private func setupRow(
-    symbol: String,
-    title: String,
-    detail: String,
-    complete: Bool
-  ) -> some View {
-    HStack(alignment: .top, spacing: 12) {
-      Image(systemName: complete ? "checkmark.circle.fill" : symbol)
-        .frame(width: 24)
-        .accessibilityHidden(true)
-      VStack(alignment: .leading, spacing: 2) {
-        Text(title).font(.headline)
-        Text(detail)
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
       }
     }
   }

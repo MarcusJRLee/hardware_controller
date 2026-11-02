@@ -54,7 +54,10 @@ xcodebuild build-for-testing -quiet "${xcode_test_flags[@]}" \
 xcrun simctl bootstatus "$simulator_udid" -b
 xcrun simctl privacy "$simulator_udid" grant microphone \
   com.longdevity.hardwarecontroller.voiceinput
-xcodebuild test-without-building -quiet "${xcode_test_flags[@]}"
+# UI tests drive real capture with this recorded clip in place of the microphone.
+jfk_fixture="$(scripts/fetch_asr_test_assets.sh | grep '/jfk\.wav$')"
+TEST_RUNNER_VOICE_INPUT_AUDIO_FIXTURE="$jfk_fixture" \
+  xcodebuild test-without-building -quiet "${xcode_test_flags[@]}"
 
 scripts/check_ios_system_capture_metadata.sh \
   "$derived_data/Build/Products/Debug-iphonesimulator/VoiceInput.app"
