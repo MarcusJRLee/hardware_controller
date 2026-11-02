@@ -282,7 +282,7 @@ main() {
   [[ -z "$(git ls-remote --tags origin "refs/tags/$release_tag")" ]] \
     || release_fail "$release_tag already exists remotely."
 
-  swift format lint --recursive --strict \
+  scripts/swift_format.sh lint --recursive --strict \
     Package.swift Sources Tests
   xcrun clang-format --dry-run --Werror \
     Sources/HardwareControllerAudioBoundary/audio_engine_exception_boundary.m \

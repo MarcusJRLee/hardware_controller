@@ -5,7 +5,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
-swift format lint --recursive --strict \
+scripts/swift_format.sh lint --recursive --strict \
   Package.swift Sources Tests
 # Every tracked C and Objective-C source is formatted; no hand-kept list.
 c_sources=("${(@f)$(git ls-files '*.c' '*.h' '*.m')}")

@@ -1,8 +1,8 @@
 #!/bin/zsh
 
 # Enforces repository rules mechanically so they never depend on a reader
-# remembering them: path naming, colocated tests, a framework-free domain, and
-# one network-capable macOS source.
+# remembering them: path naming, colocated tests, a framework-free domain,
+# confined network APIs, and the pinned formatter.
 
 set -euo pipefail
 
@@ -65,6 +65,12 @@ network_files=(
 for file in "${(@f)$(git grep -lwE '(URLSession|NWConnection|NWListener|CFStream)' -- 'Sources/*.swift' || true)}"; do
   [[ -z "$file" || ${network_files[(Ie)$file]} -gt 0 ]] && continue
   failures+=("$file: network APIs are confined to the Ollama adapter and model downloader")
+done
+
+# Xcode's bundled formatter differs per Xcode release; only the pinned one lints.
+for file in "${(@f)$(git grep -lE '^[[:space:]]*(- )?(run: )?swift format ' -- 'scripts/*.sh' '.github/*' || true)}"; do
+  [[ -z "$file" ]] && continue
+  failures+=("$file: run scripts/swift_format.sh, not the Xcode-bundled swift format")
 done
 
 if (( ${#failures} )); then
