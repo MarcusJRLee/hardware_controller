@@ -60,7 +60,7 @@ cp ".build/AppIcon-1024.png" \
 iconutil -c icns "$iconset" \
   -o "$contents/Resources/AppIcon.icns"
 
-# The ASR service is the only code that links transcribe.cpp (decision 0060).
+# The ASR service is the only code that links transcribe.cpp (docs/decisions/asr_runtime.md).
 service="$contents/XPCServices/HardwareControllerASRService.xpc"
 service_binary="$service/Contents/MacOS/HardwareControllerASRService"
 mkdir -p "$service/Contents/MacOS" "$service/Contents/Frameworks"

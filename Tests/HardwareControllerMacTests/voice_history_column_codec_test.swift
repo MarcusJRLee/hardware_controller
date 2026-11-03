@@ -46,7 +46,7 @@ struct VoiceHistoryColumnCodecTest {
     #expect(try Codec.timedSpans(from: nil).isEmpty)
   }
 
-  /// Engine evidence round-trips; rows from before decision 0060 read as Apple.
+  /// Engine evidence round-trips; rows from before engine provenance existed read as Apple.
   @Test
   func speechEngineRoundTripsAndLegacyRowsReadAsApple() throws {
     let usage = SpeechEngineUsage(

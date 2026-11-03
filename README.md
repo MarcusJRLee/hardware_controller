@@ -67,7 +67,7 @@ Voice Input (`swift tools/app_icons/render_app_icons.swift`). Details:
 | [Game plan](docs/game_plan.md) | Quality gates, open evidence, risks. |
 | [UX specification](docs/ux_spec.md) | Visual and accessibility contract. |
 | [Contributing](CONTRIBUTING.md) | Workflow, source map, test placement, Drivers. |
-| [Decisions](docs/decisions/) | Durable, append-only decision records. |
+| [Decisions](docs/decisions/) | One current decision record per topic. |
 | [Infinity 3 evidence](docs/hardware/infinity_3.md) | Device protocol evidence. |
 | [Public distribution](docs/public_distribution.md) | Gated Developer ID and notarization runbook. |
 | [Local AI model evaluation](docs/local_ai_model_evaluation.md) | Model measurements behind the recommendation. |

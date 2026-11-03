@@ -314,7 +314,7 @@ enum VoiceHistoryColumnCodec {
     }
   }
 
-  /// Rows written before decision 0060 have no engine column value; they used Apple.
+  /// Rows written before engine provenance existed have no engine column value; they used Apple.
   static func speechEngine(from json: String?) throws -> SpeechEngineUsage {
     guard let json else {
       return .apple

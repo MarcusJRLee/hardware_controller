@@ -4,7 +4,7 @@ set -euo pipefail
 
 # Voice Input's own sources stay free of network code. Its one network path is
 # the shared, pinned speech-model fetcher in
-# Sources/hardware_controller_model_download (decision 0062), which only the
+# Sources/hardware_controller_model_download (docs/decisions/model_packages.md), which only the
 # containing app links; the extensions never do.
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"

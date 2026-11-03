@@ -1,6 +1,6 @@
 #!/bin/zsh
 
-# Proves an installed app's speech service end to end (decision 0060): load a
+# Proves an installed app's speech service end to end (docs/decisions/asr_runtime.md): load a
 # package through XPC, decode real speech, measure IPC overhead, crash the
 # service mid-decode, and recover. launchd resolves the service only inside a
 # signed bundle, so this runs on installs, not in CI.

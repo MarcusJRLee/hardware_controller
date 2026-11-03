@@ -132,7 +132,7 @@ final class ApplicationProcessEventRelay:
     values.1?(.transcription(snapshot))
   }
 
-  /// Announces that a session fell back to Apple; never silent (decision 0060).
+  /// Announces that a session fell back to Apple; never silent (docs/decisions/asr_runtime.md).
   func publishSpeechEngineFallback(_ reason: SpeechEngineFallbackReason) {
     let handler = lock.withLock { self.handler }
     handler?(.speechEngineFallback(reason))

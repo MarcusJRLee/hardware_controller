@@ -57,8 +57,9 @@
 ### Before changing behavior
 
 - Read `docs/architecture.md` and the decisions it links for the area you
-  touch. Update docs, journey proofs in `docs/voice_cujs.md`, and decision
-  records in the same PR; never rewrite a superseded decision.
+  touch. Update docs, journey proofs in `docs/voice_cujs.md`, and the topic's
+  decision record in the same PR. Records state current decisions; edit the
+  topic's record rather than adding one per change, and say what changed.
 - Mark unverified hardware claims as hypotheses until measured on the device.
 
 ### Product boundaries

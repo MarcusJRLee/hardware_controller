@@ -3,7 +3,7 @@
 Current source is an unreleased personal iteration whatever its version
 metadata says. 1.4.0 build 15 is the last accepted private artifact
 ([release validation](release_validation.md)); 1.5.0 build 18 is the approved
-QA candidate ([0051](decisions/0051_unreleased_voice_integration_build.md)).
+QA candidate ([Builds and workflow](decisions/builds_and_workflow.md)).
 Shipped behavior per journey is in [voice_cujs.md](voice_cujs.md).
 
 ## Quality gates
@@ -17,7 +17,7 @@ Shipped behavior per journey is in [voice_cujs.md](voice_cujs.md).
 | Local AI safety | No casing, list, or protected-content violation reaches delivery. | Fixed 19-case corpus passes the typed gate for every provider. |
 | Local AI deadline | Fallback within 3 s after final speech. | Deterministic deadline and late-output tests. |
 | History search | Warm 5,000-session p95 ≤ 250 ms. | p95 2.6 ms. |
-| macOS speech | Release p95 ≤ 1 s; IPC p99 ≤ 10 ms; a service crash yields Apple text from the same audio ([0060](decisions/0060_macos_transcribe_cpp_default_asr.md)). | Parakeet v3 Q8_0 through the installed service: 84 s clip p95 408 ms; 0.0% synthetic WER; IPC p99 2.2 ms at 84 s; crash mid-decode recovers (`scripts/check_speech_engine.sh`, every install). |
+| macOS speech | Release p95 ≤ 1 s; IPC p99 ≤ 10 ms; a service crash yields Apple text from the same audio ([Speech recognition runtime](decisions/asr_runtime.md)). | Parakeet v3 Q8_0 through the installed service: 84 s clip p95 408 ms; 0.0% synthetic WER; IPC p99 2.2 ms at 84 s; crash mid-decode recovers (`scripts/check_speech_engine.sh`, every install). |
 | iOS ASR | File RTF ≤ 0.75 on the pinned corpus; bytes revalidated before load. | Whisper tiny.en Q8_0 RTF 0.004, Parakeet v3 Q8_0 RTF 0.005, WER 0.8% / 0.0% (synthetic corpus, M5 Max; `scripts/benchmark_asr.sh`). |
 | Privacy | No speech logged; no remote-capable provider called; Ollama loopback only; iOS has no network code. | Provider-boundary, transport, and iOS source/capability scan on every check. |
 | Docs | Docs describe current behavior; links resolve. | Reviewed with each PR. |

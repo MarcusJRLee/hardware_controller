@@ -116,7 +116,7 @@ verify_binary_policy() {
   verify_asr_service_policy "$app_bundle" "$team_identifier"
 }
 
-# The one non-Apple library the ASR service may load (decision 0060).
+# The one non-Apple library the ASR service may load (docs/decisions/asr_runtime.md).
 asr_service_runtime_library="@rpath/CTranscribe.framework/Versions/Current/CTranscribe"
 
 # Fails unless the non-Apple libraries are exactly the bundled ASR runtime.

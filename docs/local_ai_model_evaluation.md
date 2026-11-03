@@ -70,7 +70,7 @@ p50 and had one bounded semantic rejection. Qwen 3.5 4B remained within the
 flexible semantic gate but had two semantic rejections and one provider timeout.
 
 This run does not supersede the digest-pinned 4B recommendation in
-[`0021_local_ai_model_selection.md`](decisions/0021_local_ai_model_selection.md).
+[Local AI formatting](decisions/local_ai_formatting.md).
 That decision needs a separate lower-tier and production-controller comparison
 before changing the default. The result reinforces that a model swap alone
 cannot replace deterministic casing, typed list normalization, validation, and

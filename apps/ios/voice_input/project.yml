@@ -127,7 +127,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.longdevity.hardwarecontroller.voiceinput.voiceffi
 
-  # Pinned speech-model downloads: the app's only network code (decision 0062).
+  # Pinned speech-model downloads: the app's only network code (docs/decisions/model_packages.md).
   HardwareControllerModelDownload:
     type: framework.static
     platform: iOS

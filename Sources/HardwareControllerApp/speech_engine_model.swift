@@ -8,7 +8,7 @@ import Observation
 ///
 /// transcribe.cpp is the default. Until its package is installed every
 /// Dictation start is refused, so a skipped setup step can never silently
-/// leave the user on the less accurate Apple recognizer (decision 0060).
+/// leave the user on the less accurate Apple recognizer (docs/decisions/asr_runtime.md).
 @MainActor
 @Observable
 final class SpeechEngineModel {

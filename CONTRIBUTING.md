@@ -26,7 +26,7 @@ opening the package in Xcode, run `scripts/build_rust_ffi.sh` once.
   local and CI lint agree; bump it there, never per machine.
 - Update docs and journey proofs ([voice_cujs.md](docs/voice_cujs.md)) in the
   same PR; `scripts/check_docs.sh` fails on broken links or missing tests.
-- Add or supersede a [decision](docs/decisions/) when a durable choice changes.
+- Update the topic's [decision record](docs/decisions/) when a durable choice changes.
 - Never change version metadata or create release artifacts without explicit
   approval for that exact version.
 
@@ -40,7 +40,7 @@ To prove a change in the running app, follow the
 ## CI lanes
 
 macOS runners are scarce, so `scripts/classify_changes.sh` runs on Ubuntu and
-starts only the lanes a change needs ([decision](docs/decisions/0059_change_scoped_ci_lanes.md)):
+starts only the lanes a change needs ([Builds and workflow](docs/decisions/builds_and_workflow.md)):
 
 | Lane | Runs when | Runner | Budget |
 | --- | --- | --- | --- |
