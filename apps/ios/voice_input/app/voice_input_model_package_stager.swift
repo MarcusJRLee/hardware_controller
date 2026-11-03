@@ -52,7 +52,10 @@ struct VoiceInputModelPackageStager: Sendable {
         let enumerator = fileManager.enumerator(
           at: source,
           includingPropertiesForKeys: Self.resourceKeys,
-          options: []
+          // A device lists its container through /private/var while callers
+          // spell it /var, so paths are taken relative to the source, never
+          // by trimming a prefix.
+          options: [.producesRelativePathURLs]
         )
       else {
         throw VoiceInputModelPackageInstallError.invalidSource
@@ -78,8 +81,11 @@ struct VoiceInputModelPackageStager: Sendable {
           throw VoiceInputModelPackageInstallError.sourceLimitExceeded
         }
         let values = try item.resourceValues(forKeys: Set(Self.resourceKeys))
-        let relativeComponents = item.pathComponents.dropFirst(source.pathComponents.count)
-        guard !relativeComponents.isEmpty else {
+        let relativeComponents = item.relativePath.split(separator: "/").map(String.init)
+        guard
+          !relativeComponents.isEmpty,
+          !relativeComponents.contains(where: { $0 == "." || $0 == ".." })
+        else {
           throw VoiceInputModelPackageInstallError.sourceInventoryInvalid
         }
         let target = relativeComponents.reduce(destination) { partial, component in
