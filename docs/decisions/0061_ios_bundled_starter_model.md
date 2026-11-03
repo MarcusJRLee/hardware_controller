@@ -46,3 +46,7 @@ Imported Model packages remain supported for larger or other models.
   `/var/...`; the mismatch made every selection, including manual imports,
   fail with "no longer installed". The simulator has no such link, so a
   symlinked-root test now covers it.
+- The package stager takes each file's path relative to its source for the
+  same reason. Trimming the source prefix put every downloaded file one folder
+  too deep, so every download failed on a device with "could not be copied";
+  the stager test sources from `/tmp`, which the simulator links the same way.
