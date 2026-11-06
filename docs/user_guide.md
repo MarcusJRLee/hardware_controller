@@ -139,9 +139,10 @@ or right-click to set it to the current spot or clear it.
 | Shortcut (after clicking the panel) | Action |
 | --- | --- |
 | ⌘T / ⌘W | New chat / close chat |
+| ⌘⇧W | Close every chat and the panel |
 | ⌃Tab, ⌘⇧] / ⌃⇧Tab, ⌘⇧[ | Next / previous chat |
 | ⌘1–⌘8, ⌘9 | That chat, or the last |
-| ⌘⇧+ / ⌘⇧- / ⌘⇧0 | Zoom in / out / reset |
+| ⌘⇧+ / ⌘⇧- / ⌘⇧0 | Zoom in / out / reset, remembered per site |
 
 If Gemini changes its page and the question cannot be sent, it is copied to the
 clipboard and the panel title says so.

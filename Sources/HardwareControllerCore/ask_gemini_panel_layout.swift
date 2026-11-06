@@ -89,40 +89,86 @@ public struct AskGeminiPanelSettings: Equatable, Codable, Sendable {
     0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0,
   ]
 
-  public var lockPoint: AskGeminiLockPoint?
-  public var zoom: Double
+  /// The host whose zoom a schema-9 file's single `zoom` value becomes.
+  static let legacyZoomHost = "gemini.google.com"
 
-  public init(lockPoint: AskGeminiLockPoint? = nil, zoom: Double = 1.0) {
+  public var lockPoint: AskGeminiLockPoint?
+  /// Zoom per site, like a browser. Absent hosts are 100%.
+  public private(set) var zoomByHost: [String: Double]
+
+  public init(
+    lockPoint: AskGeminiLockPoint? = nil,
+    zoomByHost: [String: Double] = [:]
+  ) {
     self.lockPoint = lockPoint
-    self.zoom = Self.nearestStep(to: zoom)
+    self.zoomByHost = [:]
+    for (host, zoom) in zoomByHost {
+      setZoom(zoom, for: host)
+    }
   }
 
   public static let `default` = AskGeminiPanelSettings()
 
   private enum CodingKeys: String, CodingKey {
     case lockPoint
+    case zoomByHost
+    /// Schema 9 stored one panel-wide zoom; read only to migrate it.
     case zoom
   }
 
-  /// Drops an unusable lock point and snaps zoom to a supported step, so a
-  /// hand-edited file cannot place the panel off screen or at absurd zoom.
+  /// Drops an unusable lock point, snaps zoom to supported steps, and moves a
+  /// schema-9 panel-wide zoom onto Gemini, so a hand-edited or older file
+  /// cannot place the panel off screen or at absurd zoom.
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     let lockPoint = try container.decodeIfPresent(
       AskGeminiLockPoint.self,
       forKey: .lockPoint
     )
+    var zoomByHost =
+      try container.decodeIfPresent([String: Double].self, forKey: .zoomByHost) ?? [:]
+    if zoomByHost.isEmpty,
+      let legacyZoom = try container.decodeIfPresent(Double.self, forKey: .zoom)
+    {
+      zoomByHost[Self.legacyZoomHost] = legacyZoom
+    }
     self.init(
       lockPoint: lockPoint?.isValid == true ? lockPoint : nil,
-      zoom: try container.decodeIfPresent(Double.self, forKey: .zoom) ?? 1.0
+      zoomByHost: zoomByHost
     )
   }
 
-  /// The next zoom step in one direction, or nil at either end.
-  public func steppedZoom(increasing: Bool) -> Double? {
-    increasing
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encodeIfPresent(lockPoint, forKey: .lockPoint)
+    try container.encode(zoomByHost, forKey: .zoomByHost)
+  }
+
+  /// The saved zoom for a host; pages without a host are 100%.
+  public func zoom(for host: String?) -> Double {
+    host.flatMap { zoomByHost[Self.normalized($0)] } ?? 1.0
+  }
+
+  /// Stores a snapped zoom for a host. 100% removes the entry, as browsers do.
+  public mutating func setZoom(_ zoom: Double, for host: String) {
+    let host = Self.normalized(host)
+    guard !host.isEmpty else {
+      return
+    }
+    let snapped = Self.nearestStep(to: zoom)
+    zoomByHost[host] = snapped == 1.0 ? nil : snapped
+  }
+
+  /// The next zoom step for a host in one direction, or nil at either end.
+  public func steppedZoom(increasing: Bool, for host: String?) -> Double? {
+    let zoom = zoom(for: host)
+    return increasing
       ? Self.zoomSteps.first { $0 > zoom + 0.001 }
       : Self.zoomSteps.last { $0 < zoom - 0.001 }
+  }
+
+  private static func normalized(_ host: String) -> String {
+    host.trimmingCharacters(in: .whitespaces).lowercased()
   }
 
   private static func nearestStep(to zoom: Double) -> Double {
@@ -216,6 +262,8 @@ public enum AskGeminiPanelPlacement {
 public enum AskGeminiPanelCommand: Equatable, Sendable {
   case newChat
   case closeChat
+  /// Closes every chat and hides the panel.
+  case closeWindow
   case nextChat
   case previousChat
   case selectChat(Int)
@@ -239,6 +287,8 @@ public enum AskGeminiPanelCommand: Equatable, Sendable {
       .newChat
     case ([.command], KeyCode.w):
       .closeChat
+    case ([.command, .shift], KeyCode.w):
+      .closeWindow
     case ([.command, .shift], KeyCode.equal):
       .zoomIn
     case ([.command, .shift], KeyCode.minus):

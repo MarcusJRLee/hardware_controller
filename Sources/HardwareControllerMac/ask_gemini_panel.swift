@@ -28,9 +28,24 @@ final class AskGeminiOverlayPanel: NSPanel {
     super.sendEvent(event)
   }
 
-  // An accessory panel has no Edit menu, so standard editing shortcuts would
-  // never reach the web view. Route them down the responder chain.
+  // Command chords reach the app's menu bar before `sendEvent`, where ⌘W would
+  // close the whole panel. Claim panel commands here first; then route
+  // editing chords down the responder chain, since the panel has no Edit menu.
   override func performKeyEquivalent(with event: NSEvent) -> Bool {
+    // AppKit may offer key equivalents to non-key windows; ⌘W meant for the
+    // main window must never close a chat.
+    guard isKeyWindow else {
+      return super.performKeyEquivalent(with: event)
+    }
+    if let onCommand,
+      let command = AskGeminiPanelCommand.command(
+        keyCode: event.keyCode,
+        modifiers: event.modifierFlags.keyModifiers
+      )
+    {
+      onCommand(command)
+      return true
+    }
     guard
       let key = event.charactersIgnoringModifiers?.lowercased(),
       let action = Self.editAction(key: key, modifiers: event.modifierFlags.keyModifiers),
@@ -186,7 +201,8 @@ public final class AskGeminiPanelController: NSObject, AskGeminiPresenting {
 
   @discardableResult
   private func addChat() -> Int {
-    let chat = AskGeminiChat(zoom: settings.zoom) { [weak self] in
+    let chat = AskGeminiChat(zoom: settings.zoom(for: AskGeminiNavigationPolicy.homeURL.host())) {
+      [weak self] in
       self?.renderTabStrip()
     }
     chat.webView.navigationDelegate = self
@@ -218,6 +234,7 @@ public final class AskGeminiPanelController: NSObject, AskGeminiPresenting {
       panel.makeFirstResponder(webView)
     }
     renderTabStrip()
+    renderZoomLabel()
   }
 
   private func close(_ index: Int) {
@@ -242,6 +259,9 @@ public final class AskGeminiPanelController: NSObject, AskGeminiPresenting {
       select(addChat())
     case .closeChat:
       close(selectedIndex)
+    case .closeWindow:
+      closeAllChats()
+      panel.orderOut(nil)
     case .nextChat where !chats.isEmpty:
       select((selectedIndex + 1) % chats.count)
     case .previousChat where !chats.isEmpty:
@@ -251,7 +271,7 @@ public final class AskGeminiPanelController: NSObject, AskGeminiPresenting {
     case .lastChat:
       select(chats.count - 1)
     case .zoomIn, .zoomOut:
-      if let zoom = settings.steppedZoom(increasing: command == .zoomIn) {
+      if let zoom = settings.steppedZoom(increasing: command == .zoomIn, for: selectedHost) {
         setZoom(zoom)
       }
     case .zoomReset:
@@ -314,18 +334,40 @@ public final class AskGeminiPanelController: NSObject, AskGeminiPresenting {
 
   // MARK: Zoom
 
+  /// The selected chat's site; a chat still loading counts as Gemini.
+  private var selectedHost: String? {
+    guard chats.indices.contains(selectedIndex) else {
+      return nil
+    }
+    return chats[selectedIndex].webView.url?.host() ?? AskGeminiNavigationPolicy.homeURL.host()
+  }
+
+  /// Saves zoom for the selected chat's site and applies it to every chat on
+  /// that site, as browsers do.
   private func setZoom(_ zoom: Double) {
+    guard let host = selectedHost else {
+      return
+    }
     var candidate = settings
-    candidate.zoom = zoom
+    candidate.setZoom(zoom, for: host)
     adopt(candidate)
-    for chat in chats {
-      chat.webView.pageZoom = settings.zoom
+    for chat in chats where chat.webView.url?.host() == host {
+      chat.webView.pageZoom = settings.zoom(for: host)
     }
     renderZoomLabel()
   }
 
+  private func closeAllChats() {
+    for chat in chats {
+      chat.webView.removeFromSuperview()
+    }
+    chats.removeAll()
+    selectedIndex = 0
+    renderTabStrip()
+  }
+
   private func renderZoomLabel() {
-    let percent = Int((settings.zoom * 100).rounded())
+    let percent = Int((settings.zoom(for: selectedHost) * 100).rounded())
     // Shown only away from 100%, so the bar stays quiet by default.
     zoomLabel.stringValue = percent == 100 ? "" : "\(percent)%"
     zoomLabel.setAccessibilityLabel("Zoom \(percent) percent")
@@ -519,9 +561,19 @@ public final class AskGeminiPanelController: NSObject, AskGeminiPresenting {
 extension AskGeminiPanelController: NSWindowDelegate {
   public func windowDidMove(_ notification: Notification) { rememberFrame() }
   public func windowDidResize(_ notification: Notification) { rememberFrame() }
+
+  /// The title-bar close button discards chats, like ⌘⇧W.
+  public func windowWillClose(_ notification: Notification) { closeAllChats() }
 }
 
 extension AskGeminiPanelController: WKNavigationDelegate, WKUIDelegate {
+  /// Applies the site's saved zoom as each page commits, so every load and
+  /// every new chat opens at the remembered zoom.
+  public func webView(_ webView: WKWebView, didCommit navigation: WKNavigation?) {
+    webView.pageZoom = settings.zoom(for: webView.url?.host())
+    renderZoomLabel()
+  }
+
   public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation?) {
     guard let chat = chat(for: webView) else {
       return

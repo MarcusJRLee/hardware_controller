@@ -120,7 +120,7 @@ monotonic sequence numbers ([iOS capture](decisions/ios_capture.md),
 | Store | Format | Rules |
 | --- | --- | --- |
 | Profiles | `profiles.json`, schema 6 | Atomic replace; explicit migrations; corrupt files preserved and replaced by a safe default; newer schemas never overwritten. |
-| Preferences | `preferences.json`, schema 9 | Same rules; separate from Profiles. Holds Gemini panel zoom and lock point. |
+| Preferences | `preferences.json`, schema 10 | Same rules; separate from Profiles. Holds Gemini panel per-site zoom and lock point. |
 | macOS History | `voice/` SQLite + CAF | Actor-owned connections with a five-second contention bound; startup reconciliation before retention ([Voice History](decisions/voice_history.md)); age/bytes/count/low-disk retention protects active, pinned, and recovery audio ([Voice History](decisions/voice_history.md)); one Rust retention policy for both platforms ([Portable Voice engine](decisions/portable_voice_engine.md)). |
 | iOS History | SQLite + CAF, Data Protection, excluded from backup | Commit before publish; same retention policy with iOS defaults ([Voice History](decisions/voice_history.md)). |
 | Portable archive | `.voice_history` V1 directory | Verified in Rust before Swift restore; identical imports are no-ops ([Voice History](decisions/voice_history.md)). |

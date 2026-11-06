@@ -42,7 +42,7 @@ struct PreferredMicrophone: Codable, Equatable, Identifiable, Sendable {
 
 /// Stores versioned application presentation preferences.
 struct ApplicationPreferences: Codable, Equatable, Sendable {
-  static let currentSchemaVersion = 9
+  static let currentSchemaVersion = 10
 
   var appearance: ApplicationAppearance
   var sidebarVisibility: SidebarVisibilityPreference
@@ -324,7 +324,7 @@ struct ApplicationPreferencesStore:
     _ preferences: ApplicationPreferences
   ) throws -> ApplicationPreferences {
     switch preferences.schemaVersion {
-    case 1, 2, 3, 4, 5, 6, 7, 8:
+    case 1, 2, 3, 4, 5, 6, 7, 8, 9:
       var migrated = preferences
       migrated.schemaVersion = ApplicationPreferences.currentSchemaVersion
       if preferences.schemaVersion == 1 {
@@ -347,6 +347,8 @@ struct ApplicationPreferencesStore:
       if preferences.schemaVersion < 9 {
         migrated.askGeminiPanel = .default
       }
+      // Schema 10 stores Gemini panel zoom per site; decoding already moved a
+      // schema-9 panel-wide zoom onto gemini.google.com.
       return migrated
     case ApplicationPreferences.currentSchemaVersion:
       return preferences
