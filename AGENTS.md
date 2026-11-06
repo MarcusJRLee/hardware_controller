@@ -61,6 +61,9 @@
   decision record in the same PR. Records state current decisions; edit the
   topic's record rather than adding one per change, and say what changed.
 - Mark unverified hardware claims as hypotheses until measured on the device.
+- Durable project knowledge (workflow, toolchain pitfalls, standing
+  permissions) goes in source-controlled docs, never agent memory;
+  `.claude/settings.json` disables auto memory.
 
 ### Product boundaries
 
@@ -103,6 +106,12 @@
   clock.
 - UI changes are checked in light, dark, increased contrast, reduced motion,
   keyboard navigation, and a large text size.
+
+### Landing PRs
+
+- You may squash-merge PRs you opened once required checks pass. Never merge
+  others' PRs or bypass checks.
+- Land one PR at a time as `CONTRIBUTING.md` "Landing" describes.
 
 ### Personal builds and releases
 

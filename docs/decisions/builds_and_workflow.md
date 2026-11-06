@@ -1,7 +1,7 @@
 # Builds, versions, and workflow
 
 - **Status:** Accepted
-- **Updated:** 2026-11-03
+- **Updated:** 2026-11-06 (added serial landing and toolchain drift policy)
 - **Replaces:** 0019, 0023, 0051, 0052, 0059
 
 ## Context
@@ -17,6 +17,14 @@ made queues of hours.
 | macOS minutes for a docs PR       | 🟢 0.               | 🔴 62.                 | 🟠 19. |
 | Every merged tree verified first  | 🟢 Yes.             | 🔴 No.                 | 🟢 Yes. |
 | Security findings before merge    | 🟢 For changed platforms. | 🟢 Yes.          | 🔴 No. |
+
+CI's Xcode is older than the maintainer's, and on 2026-11-01 three changes
+passed locally and failed only in CI.
+
+| Criterion                  | One local Xcode, documented patterns | Second local Xcode matching CI |
+| -------------------------- | ------------------------------------ | ------------------------------ |
+| Drift caught before push   | 🟠 Known patterns only.              | 🟢 All.                        |
+| Local disk and upkeep      | 🟢 None added.                       | 🔴 A second install to update.  |
 
 ## Decision
 
@@ -50,6 +58,18 @@ made queues of hours.
   never bypass protections.
 - Keep behavior, tests, migrations, and docs together in one PR; split
   unrelated work. Merging is source control only, never release approval.
+- PRs land one at a time, because each merge restarts the next PR's lanes
+  ([Landing](../../CONTRIBUTING.md#landing)). Agents may squash-merge PRs they
+  opened once required checks pass.
+
+**Toolchain**
+
+- CI uses the `macos-26` image's default Xcode; maintainers keep one, newer,
+  local Xcode rather than installing CI's. SDK and compiler drift therefore
+  surfaces one CI run late, so known patterns live in
+  [Toolchain compatibility](../../CONTRIBUTING.md#toolchain-compatibility).
+- `scripts/swift_format.sh` runs the formatter pinned in `tools/swift_format/`
+  locally and on CI, so lint never drifts.
 
 **CI**
 
