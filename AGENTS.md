@@ -28,7 +28,8 @@
   docs, ignore entries, and comments about the old state.
 - Files & dirs: lowercase_with_underscores. Never use dashes for files & dirs,
   except inside skill trees (`skills/<name>/`, whose spec requires dashes) and
-  for names a tool mandates (e.g. `pnpm-lock.yaml`, `.lefthook/pre-push/`).
+  for names a tool mandates (e.g. `pnpm-lock.yaml`, git's hook names in
+  `.lefthook/<hook>/`).
 - Ensure README.md and other docs prioritise human readability. Lead with the
   bash commands a reader needs to get going. Use tables for things like
   path→meaning. Trim every sentence — if removing it doesn't lose signal, delete

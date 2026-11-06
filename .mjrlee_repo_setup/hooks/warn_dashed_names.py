@@ -15,27 +15,10 @@ import git_queries
 from hook_event import context_output, parse_event
 from path_conventions import in_skill_tree
 
-# Git's client hook names (githooks(5)); lefthook runs scripts only from a
-# `.lefthook/<hook>/` directory named after one.
-_GIT_HOOK_NAMES: Final = frozenset(
-    {
-        "applypatch-msg",
-        "commit-msg",
-        "post-applypatch",
-        "post-checkout",
-        "post-commit",
-        "post-merge",
-        "post-rewrite",
-        "pre-applypatch",
-        "pre-auto-gc",
-        "pre-commit",
-        "pre-merge-commit",
-        "pre-push",
-        "pre-rebase",
-        "prepare-commit-msg",
-    }
-)
-_TOOL_MANDATED_NAMES: Final = _GIT_HOOK_NAMES | frozenset(
+# Lefthook runs scripts only from `.lefthook/<git hook name>/`, and git's hook
+# names are dashed, so that one directory level is allowed.
+_LEFTHOOK_DIR: Final = ".lefthook"
+_TOOL_MANDATED_NAMES: Final = frozenset(
     {"pnpm-lock.yaml", "pnpm-workspace.yaml", ".python-version"}
 )
 
@@ -45,10 +28,13 @@ def dashed_parts(rel: PurePath) -> tuple[str, ...]:
 
     if in_skill_tree(rel):
         return ()
+    hook_dir = 1 if rel.parts[:1] == (_LEFTHOOK_DIR,) else None
     return tuple(
         part
-        for part in rel.parts
-        if "-" in part and part not in _TOOL_MANDATED_NAMES
+        for index, part in enumerate(rel.parts)
+        if index != hook_dir
+        and "-" in part
+        and part not in _TOOL_MANDATED_NAMES
     )
 
 
