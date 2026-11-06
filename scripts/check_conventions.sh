@@ -57,7 +57,7 @@ for import_line in "${(@f)$(git grep -hE '^(@testable )?import ' -- 'Sources/Har
 done
 
 # Only the fixed-loopback Ollama adapter and the pinned speech-model fetcher
-# (decisions 0060, 0062) may use a network API.
+# (docs/decisions/asr_runtime.md, model_packages.md) may use a network API.
 network_files=(
   Sources/HardwareControllerMac/ollama_local_ai_refiner.swift
   Sources/hardware_controller_model_download/asr_model_file_fetcher.swift

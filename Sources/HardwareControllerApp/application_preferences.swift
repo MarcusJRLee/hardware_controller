@@ -331,7 +331,7 @@ struct ApplicationPreferencesStore:
         migrated.voiceHistoryRetention = .macOSDefault
       }
       if preferences.schemaVersion < 8 {
-        // Decision 0060: existing users move to transcribe.cpp and are asked
+        // Per docs/decisions/asr_runtime.md, existing users move to transcribe.cpp and are asked
         // to download its model or explicitly keep Apple.
         migrated.speechEngine = .transcribeCpp
       }

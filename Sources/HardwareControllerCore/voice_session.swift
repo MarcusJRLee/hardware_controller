@@ -74,7 +74,7 @@ public struct VoiceSessionDocument: Codable, Equatable, Sendable {
   public let formattedDocument: VoiceFormattedDocument?
   public let spokenEdits: VoiceSpokenEditResult?
   public let inputKind: VoiceSessionInputKind
-  /// The engine and Model package that produced `rawText` (decision 0060).
+  /// The engine and Model package that produced `rawText` (docs/decisions/asr_runtime.md).
   public let speechEngine: SpeechEngineUsage
 
   public init(
@@ -167,7 +167,7 @@ public struct VoiceSessionDocument: Codable, Equatable, Sendable {
         VoiceSessionInputKind.self,
         forKey: .inputKind
       ) ?? .microphoneCapture
-    // Sessions recorded before decision 0060 used Apple's recognizer.
+    // Sessions recorded before engine provenance existed used Apple's recognizer.
     speechEngine =
       try container.decodeIfPresent(
         SpeechEngineUsage.self,

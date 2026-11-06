@@ -69,13 +69,13 @@ bring the same local Voice pipeline to any text field.
 
 | Decision | Approval | Record |
 | --- | --- | --- |
-| Privacy | On-device speech; Apple On-Device or fixed-loopback Ollama refinement; no cloud inference. | [0020](decisions/0020_local_ai_dictation.md), [0033](decisions/0033_local_only_voice_enforcement.md) |
-| Platforms | macOS 15+ on Apple silicon, and iOS. Android, Windows, and Linux stay in line of sight; web is deferred. | [0001](decisions/0001_native_macos_stack.md), [0029](decisions/0029_local_voice_platform_expansion.md) |
-| Profiles | Manual multi-Profile UI with per-Device setups. | [0014](decisions/0014_multi_profile_device_configuration.md) |
-| Model | Digest-pinned Qwen 3.5 4B recommended; other installed models allowed, labeled unvalidated. | [0021](decisions/0021_local_ai_model_selection.md) |
-| Builds | Every change installs as a signed private build; release promotion needs explicit approval. | [0023](decisions/0023_stable_personal_build_metadata.md) |
-| Source | Apache 2.0, Marcus John Rice Lee as copyright holder; contributions welcome, no CLA. | [0028](decisions/0028_apache_open_source_and_contributions.md) |
-| Workflow | Feature branches from `main`, squash-merged PRs. | [0052](decisions/0052_main_feature_branch_workflow.md) |
+| Privacy | On-device speech; Apple On-Device or fixed-loopback Ollama refinement; no cloud inference. | [Local AI formatting](decisions/local_ai_formatting.md), [Local-only boundary](decisions/local_only_boundary.md) |
+| Platforms | macOS 15+ on Apple silicon, and iOS. Android, Windows, and Linux stay in line of sight; web is deferred. | [Platform and scope](decisions/platform_and_scope.md) |
+| Profiles | Manual multi-Profile UI with per-Device setups. | [Inputs, Profiles, and Actions](decisions/inputs_and_actions.md) |
+| Model | Digest-pinned Qwen 3.5 4B recommended; other installed models allowed, labeled unvalidated. | [Local AI formatting](decisions/local_ai_formatting.md) |
+| Builds | Every change installs as a signed private build; release promotion needs explicit approval. | [Builds and workflow](decisions/builds_and_workflow.md) |
+| Source | Apache 2.0, Marcus John Rice Lee as copyright holder; contributions welcome, no CLA. | [Identity and licensing](decisions/identity_and_licensing.md) |
+| Workflow | Feature branches from `main`, squash-merged PRs. | [Builds and workflow](decisions/builds_and_workflow.md) |
 
 ## Out of scope
 

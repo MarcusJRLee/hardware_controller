@@ -71,4 +71,4 @@ events.
 
 macOS audio retention defaults to 90 days, 2 GiB, or 5,000 recordings; iOS to
 90 days, 1 GiB, or 2,000. Recoverable partial audio is kept 24 hours. Both
-were accepted with [0029](decisions/0029_local_voice_platform_expansion.md).
+were accepted with [Platform and scope](decisions/platform_and_scope.md).

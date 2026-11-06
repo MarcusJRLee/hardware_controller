@@ -1,7 +1,7 @@
 # UX specification
 
 Direction: a calm, device-centered studio utility
-([0003](decisions/0003_visual_direction.md)). Opened, the app answers three
+([Visual design](decisions/visual_design.md)). Opened, the app answers three
 questions at once: is my Device ready, what does each Control do, and is an
 Action active? Color marks only active state, attention, and errors;
 typography, spacing, and position carry everything else.
