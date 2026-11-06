@@ -30,6 +30,27 @@ struct VoiceCasingPolicyTest {
   }
 
   @Test
+  func strictLowercaseKeepsRenderedDictionarySlots() {
+    let dictionary = PersonalDictionary(
+      replacements: [
+        PersonalDictionaryReplacement(
+          spokenForm: "PR {number}",
+          replacement: "PR {number}"
+        )
+      ]
+    )
+
+    let result = VoiceCasingTransformer().apply(
+      .strictLowercase,
+      to: "Review PR 44 Today.",
+      preserving: "Review PR 44 today.",
+      dictionary: dictionary
+    )
+
+    #expect(result == "review PR 44 today.")
+  }
+
+  @Test
   func strictLowercaseRestoresIntentionalTokenCasingFromSource() {
     let result = VoiceCasingTransformer().apply(
       .strictLowercase,

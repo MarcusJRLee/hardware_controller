@@ -180,82 +180,6 @@ public struct VersionedLocalAIPromptBuilder: Sendable {
     """
 }
 
-public struct PersonalDictionaryReplacementApplier: Sendable {
-  public init() {}
-
-  public func apply(
-    _ dictionary: PersonalDictionary,
-    to source: String
-  ) -> String {
-    dictionary.replacements.enumerated()
-      .sorted {
-        if $0.element.spokenForm.count != $1.element.spokenForm.count {
-          return $0.element.spokenForm.count > $1.element.spokenForm.count
-        }
-        return $0.offset < $1.offset
-      }
-      .map(\.element)
-      .reduce(source) { text, replacement in
-        replacing(
-          replacement.spokenForm,
-          with: replacement.replacement,
-          in: text
-        )
-      }
-  }
-
-  private func replacing(
-    _ spokenForm: String,
-    with replacement: String,
-    in source: String
-  ) -> String {
-    guard !spokenForm.isEmpty else {
-      return source
-    }
-    var result = source
-    var searchStart = result.startIndex
-    while searchStart < result.endIndex,
-      let range = result.range(
-        of: spokenForm,
-        options: [.caseInsensitive, .diacriticInsensitive],
-        range: searchStart..<result.endIndex
-      )
-    {
-      guard hasWordBoundaries(range, in: result) else {
-        searchStart = range.upperBound
-        continue
-      }
-      result.replaceSubrange(range, with: replacement)
-      searchStart =
-        result.index(
-          range.lowerBound,
-          offsetBy: replacement.count,
-          limitedBy: result.endIndex
-        ) ?? result.endIndex
-    }
-    return result
-  }
-
-  private func hasWordBoundaries(
-    _ range: Range<String.Index>,
-    in text: String
-  ) -> Bool {
-    let hasLeadingBoundary =
-      range.lowerBound == text.startIndex
-      || !isWordCharacter(text[text.index(before: range.lowerBound)])
-    let hasTrailingBoundary =
-      range.upperBound == text.endIndex
-      || !isWordCharacter(text[range.upperBound])
-    return hasLeadingBoundary && hasTrailingBoundary
-  }
-
-  private func isWordCharacter(_ character: Character) -> Bool {
-    character.unicodeScalars.allSatisfy {
-      CharacterSet.alphanumerics.contains($0) || $0 == "_"
-    }
-  }
-}
-
 public struct RefinedTranscriptValidator: Sendable {
   public init() {}
 
@@ -330,7 +254,7 @@ public struct RefinedTranscriptValidator: Sendable {
     )
     allowed.formUnion(
       wordTokens(
-        in: dictionary.replacements.map(\.replacement)
+        in: dictionary.replacements.map(\.replacementTerm)
           .joined(separator: " ")
       )
     )
@@ -376,7 +300,7 @@ public struct RefinedTranscriptValidator: Sendable {
     var retainedTokens = meaningfulSource.intersection(responseTokens)
     let dictionaryTerms =
       dictionary.vocabulary
-      + dictionary.replacements.map(\.replacement)
+      + dictionary.replacementOutputs(in: source)
     for term in dictionaryTerms {
       retainedTokens.formUnion(
         sourceTokensCoveredByDictionaryTerm(
@@ -454,7 +378,7 @@ public struct RefinedTranscriptValidator: Sendable {
       patterns.flatMap { matches(pattern: $0, in: source) }
     )
     tokens.formUnion(
-      dictionary.replacements.map(\.replacement).filter {
+      dictionary.replacementOutputs(in: source).filter {
         source.localizedCaseInsensitiveContains($0)
       }
     )

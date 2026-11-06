@@ -74,7 +74,7 @@ Finalization has a five-second watchdog.
 
 **Local AI Dictation.** Recognition is final-only. Model preparation starts at
 begin, off the hot path. Raw text → exact spoken edits → Dictionary
-replacements → typed paragraph/list blocks from the provider → casing and list
+replacements, including `{number}` slots → typed paragraph/list blocks from the provider → casing and list
 normalization → validation of protected tokens and meaning → one rendering for
 the captured target. Preparation plus generation share a three-second deadline;
 on any failure the Edited text is delivered once if the target is still valid.

@@ -37,6 +37,7 @@
 		39B5ED77194467F901FBD4FA /* voice_input_style.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F5730264B057CBE4C0B33BB /* voice_input_style.swift */; };
 		3C7CDCE4B8DE54F0CCB400E4 /* voice_input_model_choice_test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C7D30D754D18735AC99FCB3 /* voice_input_model_choice_test.swift */; };
 		403192A59E0FC2748AC21CFF /* voice_input_lifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A8344AF8ACDAB066D7290B6 /* voice_input_lifecycle.swift */; };
+		43B8AA071859E11A58F12C48 /* spoken_number_parser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 125C3AB18A7CE48A49111A00 /* spoken_number_parser.swift */; };
 		453F44F50EEAF923A612DC44 /* voice_input_live_audio_tap_test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E80C3A99EB8CBD76D72CA99 /* voice_input_live_audio_tap_test.swift */; };
 		46449AD40F4C280C255AD9CC /* assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6698685ACF5BAECC5D940D0E /* assets.xcassets */; };
 		4A1D19C1F59B97D2B32A516F /* voice_input_app_model.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA699775DF46AC81E02D6271 /* voice_input_app_model.swift */; };
@@ -98,6 +99,7 @@
 		B5DAF11C777DBBB15C26A056 /* voice_input_model_package_installer_test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0289EFF8A21EF431945174AF /* voice_input_model_package_installer_test.swift */; };
 		B62E671FD839ECD7F343A1BC /* voice_asr_bridge.c in Sources */ = {isa = PBXBuildFile; fileRef = BC8E456D0C0E3557DFDD75B7 /* voice_asr_bridge.c */; };
 		B6FAC327B196D0065BAC7D24 /* portable_voice_validator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06A0D2B7F18E14C7DC3280DF /* portable_voice_validator.swift */; };
+		B80DAA66B873B6F0B2ACEDA5 /* dictionary_replacement_pattern.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8F951973D3F6908D488B01 /* dictionary_replacement_pattern.swift */; };
 		B965FC2CE8984CF53DAB7E2A /* voice_input_starter_model_test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50091BF1A07BAF46B4583FE6 /* voice_input_starter_model_test.swift */; };
 		BAFB5F8313ED06A20812FC98 /* voice_input_system_capture_intents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40E06E252FCFBB5CBDEDA1BD /* voice_input_system_capture_intents.swift */; };
 		BD1D8F99CD1C7F8D6E6818F4 /* voice_history_retention.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D025266467687E8B7FC7E78 /* voice_history_retention.swift */; };
@@ -314,6 +316,7 @@
 		11013B8B033E9437866234F1 /* voice_input_keychain_store_test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_keychain_store_test.swift; sourceTree = "<group>"; };
 		11E594DE72AD43B775B93413 /* voice_input_local_copy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_local_copy.swift; sourceTree = "<group>"; };
 		11E9AB745A5A0B0A29495FB7 /* voice_input_app_shortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_app_shortcuts.swift; sourceTree = "<group>"; };
+		125C3AB18A7CE48A49111A00 /* spoken_number_parser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = spoken_number_parser.swift; path = ../../../Sources/HardwareControllerCore/spoken_number_parser.swift; sourceTree = "<group>"; };
 		12CE8032228EE5BB97E4FCE0 /* voice_input_capture_service_test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_capture_service_test.swift; sourceTree = "<group>"; };
 		1315D4A6CFC9791286BDB555 /* voice_input_theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_theme.swift; sourceTree = "<group>"; };
 		1598CF1B78A01FAFA125DFA5 /* voice_input_keyboard_layout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_keyboard_layout.swift; sourceTree = "<group>"; };
@@ -346,6 +349,7 @@
 		55CC42AC07A3DC0E467CB0B5 /* voice_input_model_package_installer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_model_package_installer.swift; sourceTree = "<group>"; };
 		55F48C9449F2D5147FE806AF /* voice_input_model_choice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_model_choice.swift; sourceTree = "<group>"; };
 		5606DA40395C7E4F69D32F4E /* voice_asr_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = voice_asr_bridge.h; path = ../../../Sources/voice_asr_bridge/include/voice_asr_bridge.h; sourceTree = "<group>"; };
+		5B8F951973D3F6908D488B01 /* dictionary_replacement_pattern.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = dictionary_replacement_pattern.swift; path = ../../../Sources/HardwareControllerCore/dictionary_replacement_pattern.swift; sourceTree = "<group>"; };
 		5D74E1DEDF0ABA766350BF40 /* voice_input_keychain_store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_keychain_store.swift; sourceTree = "<group>"; };
 		659DA20B14ABA097FDD7322B /* voice_input_lifecycle_notification_mapper_test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = voice_input_lifecycle_notification_mapper_test.swift; sourceTree = "<group>"; };
 		661DBA058E96E22130B681B0 /* local_ai_provider_kind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = local_ai_provider_kind.swift; path = ../../../Sources/HardwareControllerCore/local_ai_provider_kind.swift; sourceTree = "<group>"; };
@@ -691,8 +695,10 @@
 		DAC190110174095D0BAF2536 /* portable_voice_core */ = {
 			isa = PBXGroup;
 			children = (
+				5B8F951973D3F6908D488B01 /* dictionary_replacement_pattern.swift */,
 				661DBA058E96E22130B681B0 /* local_ai_provider_kind.swift */,
 				725F5BB88E6E3AC39D387DB6 /* personal_dictionary.swift */,
+				125C3AB18A7CE48A49111A00 /* spoken_number_parser.swift */,
 				86752435C202AF492298C9A4 /* voice_casing.swift */,
 				7FC7415074EA515761E3F82D /* voice_formatted_document_builder.swift */,
 				8E74E0CA5543420625918CB3 /* voice_formatted_text_renderer.swift */,
@@ -1147,8 +1153,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B80DAA66B873B6F0B2ACEDA5 /* dictionary_replacement_pattern.swift in Sources */,
 				9B55E33ABB5247EE809E96CD /* local_ai_provider_kind.swift in Sources */,
 				9C90EE04F11C6A3A34CB6C23 /* personal_dictionary.swift in Sources */,
+				43B8AA071859E11A58F12C48 /* spoken_number_parser.swift in Sources */,
 				F3D2A8D85C4CD7421F02E700 /* voice_casing.swift in Sources */,
 				3765B4DC9A8E0AE682C5D795 /* voice_formatted_document_builder.swift in Sources */,
 				647E4437DA0895BC893E0108 /* voice_formatted_text_renderer.swift in Sources */,

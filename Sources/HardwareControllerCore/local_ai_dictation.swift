@@ -138,6 +138,7 @@ public enum LocalAISettingsValidationError: Error, Equatable, Sendable {
   case duplicateVocabularyEntry
   case tooManyReplacements
   case invalidReplacement
+  case invalidReplacementPattern(DictionaryReplacementPatternError)
   case duplicateSpokenForm
   case instructionsTooLong
   case unsupportedStyleRevision(Int)
@@ -202,6 +203,11 @@ extension LocalAISettings {
         output.count <= 100
       else {
         throw LocalAISettingsValidationError.invalidReplacement
+      }
+      do {
+        try replacement.validatePattern()
+      } catch {
+        throw LocalAISettingsValidationError.invalidReplacementPattern(error)
       }
       guard spokenForms.insert(spokenForm.lowercased()).inserted else {
         throw LocalAISettingsValidationError.duplicateSpokenForm

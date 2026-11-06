@@ -1,7 +1,7 @@
 # Local AI Dictation and formatting
 
 - **Status:** Accepted
-- **Updated:** 2026-11-03
+- **Updated:** 2026-11-06
 - **Replaces:** 0020, 0021, 0053, 0054, 0058
 
 ## Context
@@ -23,6 +23,15 @@ cannot live in a prompt.
 | Qwen 3.5 4B     | 9/17          | 0                    | 0.935 s  | 5.74 GB |
 | Qwen 3.5 9B     | 11/17         | 1                    | 1.294 s  | 8.52 GB |
 | Apple On-Device | 8/17          | 2                    | 1.600 s  | OS-managed |
+
+Recognizers return "P R forty-four" for "PR 44". Five fixes were compared:
+
+| Criterion | Literal entry per number | Recognition hint | Prompt rule | Convert every number | `{number}` slot |
+| --- | --- | --- | --- | --- | --- |
+| Any number, not just one | 🔴 One entry each. | 🔴 | 🟡 Model-dependent. | 🟢 | 🟢 |
+| Engines and Verbatim | 🟢 | 🟠 Parakeet ignores hints. | 🔴 Skipped by Verbatim. | 🟢 | 🟢 |
+| Deterministic and testable | 🟢 | 🔴 | 🔴 | 🟢 | 🟢 |
+| Leaves other prose alone | 🟢 | 🟢 | 🟠 | 🔴 "two kids" → "2 kids". | 🟢 Only beside its words. |
 
 ## Decision
 
@@ -90,8 +99,19 @@ cannot live in a prompt.
 
 **Dictionary**
 
-- Recognition hints and exact spoken-form replacements are stored separately.
+- Recognition hints and spoken-form replacements are stored separately.
   Hints reach Apple speech and transcribe.cpp models that support them.
+- Replacements run in Core (`PersonalDictionaryReplacementApplier`) before the
+  model, case- and word-boundary-aware, longest spoken form first. An all-caps
+  word or a run of single letters also matches spaced or dotted letters, so
+  `PR` matches "P R" and "P.R.".
+- A spoken form may hold one `{number}` slot beside at least one word. English
+  cardinals, digit-by-digit runs, and numerals become digits in every
+  `{number}` of the replacement; trailing non-number words stay. Spelled
+  numbers elsewhere are never converted, because bare digits change prose
+  ("two kids"). Invalid slot patterns are refused on save and never applied.
+  Casing and validation protect the rendered text (`PR 44`), not the template.
+  Number words are English only; other locales need their own grammar.
 - After **Save Correction**, suggest up to three entries from word-level
   substitutions of one to four words that look like a name or term. A rewrite
   (over three spans or 40% of words) suggests nothing. Offer a replacement only

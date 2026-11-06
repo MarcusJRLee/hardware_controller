@@ -84,6 +84,16 @@ Set it up under **General → Local AI Dictation**:
    phrase; no microphone or field access).
 5. Optionally add **Personal dictionary** terms or replacements, nearby-text
    context (off by default), or extra instructions.
+
+   | Spoken form → Replacement | Says | Inserts |
+   | --- | --- | --- |
+   | `whisper flow` → `Wispr Flow` | "whisper flow" | Wispr Flow |
+   | `PR {number}` → `PR {number}` | "P R forty-four" | PR 44 |
+   | `{number} percent` → `{number}%` | "twenty five percent" | 25% |
+
+   Capitals or spaced letters (`PR`, `P R`) also match "P.R." and "PR".
+   `{number}` reads English number words or digits and needs a word beside it,
+   so other numbers stay as spoken.
 6. Assign **Local AI Dictation** to a pedal.
 
 On release the app finalizes speech, applies spoken edits and Dictionary
