@@ -50,6 +50,15 @@ final class AppModel {
     installationLocation = runtime.installationLocation
   }
 
+  /// Routes spoken questions from the process to the Gemini panel.
+  func setAskGeminiPresenter(_ presenter: any AskGeminiPresenting) {
+    Task { [runtime] in
+      await runtime.setAskGeminiQuestionHandler { question in
+        Task { await presenter.present(question: question) }
+      }
+    }
+  }
+
   var envelope: ProfileEnvelope {
     applicationSnapshot.envelope
   }
@@ -216,6 +225,13 @@ final class AppModel {
       && speechRecognitionPermission == .authorized
   }
 
+  /// Ask Gemini never touches the focused app, so it skips Accessibility.
+  var canExecuteAskGemini: Bool {
+    !requiresInstallation
+      && microphonePermission == .authorized
+      && speechRecognitionPermission == .authorized
+  }
+
   var canExecuteKeyboardShortcuts: Bool {
     !requiresInstallation && accessibilityTrusted
   }
@@ -244,6 +260,8 @@ final class AppModel {
       canExecuteLocalAIDictation
     case .keyboardShortcut:
       canExecuteKeyboardShortcuts
+    case .askGemini:
+      canExecuteAskGemini
     }
   }
 

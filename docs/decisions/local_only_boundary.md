@@ -1,7 +1,7 @@
 # Local-only boundary
 
 - **Status:** Accepted
-- **Updated:** 2026-11-03
+- **Updated:** 2026-11-06 (adds the Ask Gemini web panel exception)
 - **Replaces:** 0033, and the offline-check part of 0049
 
 ## Context
@@ -43,7 +43,36 @@ downloads the owner asked for.
   anything but the containing app links the download module.
   `scripts/build_ios_device.sh` fails if an extension contains the fetcher.
 
+**Ask Gemini web panel**
+
+The owner approved one deliberate exception: the **Ask Gemini** Action sends a
+spoken question to Google Gemini so the answer can be read without leaving a
+game or other full-screen app.
+
+| Criterion | Own panel (WebKit) | Brave + own extension | Chromium fork | Panel + Gemini API |
+| --- | --- | --- | --- | --- |
+| Focused app keeps focus | 🟢 Non-activating panel. | 🟢 Background tab. | 🟡 Custom window code. | 🟢 Non-activating panel. |
+| Visible over a full-screen app | 🟢 Joins full-screen Spaces. | 🔴 Stays in Brave's Space. | 🟡 Possible with patches. | 🟢 Same as WebKit panel. |
+| Owner's Gemini account and history | 🟢 Measured: sign-in works after Google's challenge. | 🟢 Brave profile. | 🟢 Full browser. | 🔴 API key, no history. |
+| Browser security patches | 🟢 WebKit ships with macOS. | 🟢 Brave updates. | 🔴 We own Chromium patching. | 🟢 No browser. |
+| Third-party code | 🟢 None. | 🟢 Owner's own extension. | 🔴 Chromium. | 🟢 None. |
+
+- Only `ask_gemini_chat.swift` and `ask_gemini_panel.swift` may use WebKit;
+  `scripts/check_conventions.sh` enforces it.
+- Main-frame loads are HTTPS on an allow-list (`gemini.google.com` and Google
+  sign-in hosts); every other link opens in the default browser.
+- The app never calls a Gemini API, holds no key or token, and adds no
+  entitlement. Cookies live in WebKit's default store for this app.
+- Only the final question text leaves the Mac, typed into Gemini's page by a
+  script in an isolated content world. No audio, History, context, or
+  identifiers are sent, and questions are never logged.
+- The exception is opt-in per Binding; no default Profile uses it.
+
 ## Consequences
+
+- The submit script depends on Gemini's current composer and English
+  "Send message" label. A redesign fails the submission; the question is put on
+  the clipboard and the panel title says so, never a wrong click.
 
 - An API-backed provider needs its own product decision and mode; implementing
   the protocol cannot enable content transfer.

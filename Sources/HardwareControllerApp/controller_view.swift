@@ -50,7 +50,7 @@ struct ControllerView: View {
             TranscriptionPermissionCard(
               title: "Allow microphone access",
               detail:
-                "Hardware Controller needs the microphone only while a Local Dictation control is active.",
+                "Hardware Controller needs the microphone only while a Dictation or Ask Gemini control is active.",
               systemImage: "mic.fill",
               status: model.microphonePermission,
               request: model.requestMicrophone,

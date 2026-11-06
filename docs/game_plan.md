@@ -34,6 +34,7 @@ Reference-Mac results do not establish lower-tier support.
 | Lower-tier Macs | Apple and Ollama quality, latency, and memory on the lowest supported Mac. |
 | macOS 15–25 | Permissions, legacy recognition, insertion, lifecycle; Local AI via Ollama only. |
 | Accessibility | Keyboard, VoiceOver, contrast, reduced motion, large text. |
+| Ask Gemini in games | Panel over exclusive full-screen games; game keeps input; Gemini page changes caught by the fallback. |
 | Device lifecycle | Long holds, simultaneous Controls, hub reconnect, logout/login. |
 | iOS physical | Kill/suspend/upgrade, system surfaces, host rejection, interruption, live-decoding thermals and energy, Parakeet memory. |
 | Clean account | Install, permissions, Ollama setup, update, removal. |

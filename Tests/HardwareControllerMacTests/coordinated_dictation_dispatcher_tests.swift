@@ -12,23 +12,33 @@ struct CoordinatedDictationDispatcherTests {
       },
       localAIHandler: { command in
         await recorder.append(.localAI, command)
+      },
+      askGeminiHandler: { command in
+        await recorder.append(.askGemini, command)
       }
     )
 
     #expect(dispatchers.local.submit(.begin))
     #expect(dispatchers.localAI.submit(.begin))
     #expect(dispatchers.localAI.submit(.finish))
+    #expect(dispatchers.askGemini.submit(.begin))
     await dispatchers.local.shutdownAndWait()
 
     #expect(
       await recorder.events == [
         .init(workflow: .localAI, command: .cancel),
+        .init(workflow: .askGemini, command: .cancel),
         .init(workflow: .local, command: .begin),
         .init(workflow: .local, command: .cancel),
+        .init(workflow: .askGemini, command: .cancel),
         .init(workflow: .localAI, command: .begin),
         .init(workflow: .localAI, command: .finish),
         .init(workflow: .local, command: .cancel),
         .init(workflow: .localAI, command: .cancel),
+        .init(workflow: .askGemini, command: .begin),
+        .init(workflow: .local, command: .cancel),
+        .init(workflow: .localAI, command: .cancel),
+        .init(workflow: .askGemini, command: .cancel),
       ]
     )
     #expect(!dispatchers.localAI.submit(.begin))

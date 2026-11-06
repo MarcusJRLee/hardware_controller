@@ -12,6 +12,7 @@ flowchart LR
   EVENTS --> ENGINE[Binding engine] --> ACTIONS[Action executors]
   ACTIONS --> TARGET[Focused app]
   ACTIONS --> DICTATION[Dictation coordinator]
+  DICTATION --> GEMINI[Gemini panel]
   DICTATION --> SPEECH[On-device speech]
   DICTATION --> REFINE[Local AI refinement]
   DICTATION --> HISTORY[(Voice History)]
@@ -34,6 +35,7 @@ observe it and never block it.
 | macOS speech | transcribe.cpp 0.4.1 with Parakeet TDT 0.6B v3 in an app-embedded XPC service (default); Apple `SpeechAnalyzer` (26+) or `SFSpeechRecognizer` (15–25) when chosen or as a fallback ([Speech recognition runtime](decisions/asr_runtime.md)). |
 | iOS speech | transcribe.cpp 0.4.1 with Silero VAD ([Speech recognition runtime](decisions/asr_runtime.md)). |
 | Refinement | `SystemLanguageModel` (macOS 26+) or fixed-loopback Ollama ([Local AI formatting](decisions/local_ai_formatting.md)). |
+| Web content | WebKit in the Gemini panel only ([Local-only boundary](decisions/local_only_boundary.md)). |
 | Persistence | Versioned Codable JSON for configuration; system SQLite plus atomic CAF files for History. |
 | Dependencies | Apple frameworks only in apps. Rust validators use serde and RustCrypto SHA-2, statically linked. |
 | Tests | Swift Testing, XCTest, Rust tests, and real C consumers. |
@@ -55,6 +57,7 @@ observe it and never block it.
 | Model downloads | `Sources/hardware_controller_model_download` | Pinned catalog, HTTPS-only fetcher, verifying package assembler for both apps. | The only network code besides the Ollama adapter; on explicit tap only ([Model packages](decisions/model_packages.md)). |
 | macOS ASR service | `Sources/hardware_controller_asr_service*`, `Contents/XPCServices/HardwareControllerASRService.xpc` | The only macOS code that links transcribe.cpp; revalidates the package digest, then decodes. | A ggml abort, Metal fault, or hang kills only this process; no entitlements. |
 | Speech engine | `SpeechEngineSessionFactory`, `TranscribeCppSpeechEngine`, `TranscribeCppSpeechRecognitionSession` | Engine selection, supervision (deadline, CPU retry, disable after two crashes, idle kill), Apple fallback from the buffered recording. | A missing package refuses the session; it never silently uses Apple. Every fallback is announced and recorded. |
+| Ask Gemini | `AskGeminiController`, `ask_gemini_panel*.swift`, `ask_gemini_chat.swift` | Spoken question to final text; floating panel with chats, zoom, and a lock point. | Never captures or writes the focused app; the panel never activates the app; WebKit loads only allow-listed Google hosts ([Inputs, Profiles, and Actions](decisions/inputs_and_actions.md)). |
 | Presentation | `HardwareControllerApp` views and models | Main-actor rendering of snapshots; forwards intents. | Owns no hardware, transactions, or transcription lifecycle. |
 | iOS app | `apps/ios/voice_input/app` | Microphone, audio, ASR, formatting, History, Live Activity. | The only process that links transcribe.cpp or touches audio. |
 | iOS keyboard | `apps/ios/voice_input/keyboard` | QWERTY, voice status, one insertion attempt, bounded recovery. | Cannot record or launch the app; reads only the bounded handoff. |
@@ -116,8 +119,8 @@ monotonic sequence numbers ([iOS capture](decisions/ios_capture.md),
 
 | Store | Format | Rules |
 | --- | --- | --- |
-| Profiles | `profiles.json`, schema 5 | Atomic replace; explicit migrations; corrupt files preserved and replaced by a safe default; newer schemas never overwritten. |
-| Preferences | `preferences.json`, schema 7 | Same rules; separate from Profiles. |
+| Profiles | `profiles.json`, schema 6 | Atomic replace; explicit migrations; corrupt files preserved and replaced by a safe default; newer schemas never overwritten. |
+| Preferences | `preferences.json`, schema 9 | Same rules; separate from Profiles. Holds Gemini panel zoom and lock point. |
 | macOS History | `voice/` SQLite + CAF | Actor-owned connections with a five-second contention bound; startup reconciliation before retention ([Voice History](decisions/voice_history.md)); age/bytes/count/low-disk retention protects active, pinned, and recovery audio ([Voice History](decisions/voice_history.md)); one Rust retention policy for both platforms ([Portable Voice engine](decisions/portable_voice_engine.md)). |
 | iOS History | SQLite + CAF, Data Protection, excluded from backup | Commit before publish; same retention policy with iOS defaults ([Voice History](decisions/voice_history.md)). |
 | Portable archive | `.voice_history` V1 directory | Verified in Rust before Swift restore; identical imports are no-ops ([Voice History](decisions/voice_history.md)). |
@@ -133,6 +136,7 @@ monotonic sequence numbers ([iOS capture](decisions/ios_capture.md),
 | Microphone | Capture during an owned Dictation session. | Both Dictation Actions disabled. |
 | Speech Recognition | macOS 15–25 legacy recognizer, only when Apple is the chosen engine. | Apple Dictation disabled on those releases. |
 | Loopback HTTP | Ollama at `127.0.0.1:11434` only. | Apple On-Device and non-AI Actions unaffected. |
+| HTTPS (Gemini panel) | Gemini and Google sign-in pages, only while Ask Gemini is bound and used. | Other Actions unaffected. |
 | HTTPS download | One explicit, pinned speech-model download from Hugging Face; no Voice content. | Dictation stays off until the model is installed or Apple is chosen. |
 
 - The direct build uses hardened runtime with only the audio-input entitlement;
@@ -161,3 +165,4 @@ monotonic sequence numbers ([iOS capture](decisions/ios_capture.md),
 | Corrupt or newer configuration | Preserve the file; safe default or refuse to overwrite. |
 | Device removal | Synthesize releases, clean up, then publish removal. |
 | Fallback chord conflict | Keep the Binding; disable only that registration. |
+| Gemini page changed | Question copied to the clipboard; the panel title says so. |

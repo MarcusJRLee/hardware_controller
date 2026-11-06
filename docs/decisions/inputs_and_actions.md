@@ -1,7 +1,7 @@
 # Inputs, Profiles, and Actions
 
 - **Status:** Accepted
-- **Updated:** 2026-11-03
+- **Updated:** 2026-11-06 (adds the Ask Gemini Action and its panel)
 - **Replaces:** 0004, 0014, 0016, 0018, 0034
 
 ## Context
@@ -75,6 +75,26 @@ several ways to start Voice without each growing its own workflow.
 - Triggers interpret only Hold, Toggle, and double-press. None may specialize
   ASR, spoken edits, formatting, History, retention, target validation, or
   delivery.
+
+**Ask Gemini**
+
+- **Ask Gemini** is an Action beside the Dictation Actions, with Hold, Toggle,
+  and keyboard fallback. It is the third `DictationWorkflow`; beginning any
+  workflow first cancels the other two, so one owns the microphone.
+- `AskGeminiController` reuses `OwnedTranscriptionController` with a detached,
+  final-only target. It never captures, reads, or writes the focused app, so it
+  needs microphone and speech permissions but not Accessibility.
+- On release the final text goes through the process event relay to
+  `AskGeminiPanelController`: a non-activating floating panel that never takes
+  focus until clicked. Each question opens a new chat tab, reusing an unused one.
+- The panel opens at the saved lock point when its display is connected,
+  otherwise on a display other than the one holding the focused window. The
+  lock button sets, shows, and returns to the lock point.
+- Shortcuts while the panel has focus: ⌘T, ⌘W, ⌃Tab/⌃⇧Tab, ⌘⇧]/⌘⇧[, ⌘1–⌘9,
+  ⌘⇧+/⌘⇧-/⌘⇧0 for zoom, plus standard editing chords. Zoom and the lock point
+  persist in `preferences.json` (schema 9). Profiles moved to schema 6 so
+  older builds never overwrite a Profile with this Action.
+- Network and privacy limits: [Local-only boundary](local_only_boundary.md).
 
 **Failure presentation**
 

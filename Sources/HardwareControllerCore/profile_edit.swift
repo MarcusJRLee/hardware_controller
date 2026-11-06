@@ -151,6 +151,8 @@ extension ProfileEnvelope {
       binding.action = .dictation()
     case .action(.localAIDictation):
       binding.action = .localAIDictation()
+    case .action(.askGemini):
+      binding.action = .askGemini()
     case .action(.keyboardShortcut):
       binding.action = .keyboardShortcut(binding.action.shortcut ?? defaultKeyboardShortcut)
     case .interactionMode(let mode):

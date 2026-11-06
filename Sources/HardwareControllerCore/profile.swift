@@ -309,7 +309,7 @@ public struct ProfileBindingResolver: Sendable {
 
 /// Stores all Profiles and the authoritative active work mode.
 public struct ProfileEnvelope: Equatable, Codable, Sendable {
-  public static let currentSchemaVersion = 5
+  public static let currentSchemaVersion = 6
 
   public var schemaVersion: Int
   public var activeProfileID: UUID

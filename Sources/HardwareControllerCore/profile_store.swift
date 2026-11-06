@@ -371,6 +371,12 @@ public struct ProfileStore: Sendable {
         envelope: try decoder.decode(ProfileEnvelope.self, from: data),
         issue: nil
       )
+    case 5:
+      // Schema 6 adds the Ask Gemini Action; the shape is unchanged, and the
+      // bump keeps older builds from overwriting Profiles they cannot decode.
+      var envelope = try decoder.decode(ProfileEnvelope.self, from: data)
+      envelope.schemaVersion = ProfileEnvelope.currentSchemaVersion
+      return ProfileMigrationResult(envelope: envelope, issue: nil)
     case 4:
       var envelope = try decoder.decode(ProfileEnvelope.self, from: data)
       envelope.schemaVersion = ProfileEnvelope.currentSchemaVersion
@@ -498,7 +504,7 @@ private struct LegacyProfile: Decodable {
 extension ActionConfiguration {
   fileprivate var hasValidConfiguration: Bool {
     switch kind {
-    case .noAction, .dictation, .localAIDictation:
+    case .noAction, .dictation, .localAIDictation, .askGemini:
       shortcut == nil
     case .keyboardShortcut:
       shortcut != nil

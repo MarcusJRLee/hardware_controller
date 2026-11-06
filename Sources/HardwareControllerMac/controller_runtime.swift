@@ -55,14 +55,17 @@ public struct ActionExecutionAvailability:
   public var dictationAllowed: Bool
   public var localAIDictationAllowed: Bool
   public var keyboardShortcutsAllowed: Bool
+  public var askGeminiAllowed: Bool
 
   public init(
     dictationAllowed: Bool,
     localAIDictationAllowed: Bool = false,
-    keyboardShortcutsAllowed: Bool
+    keyboardShortcutsAllowed: Bool,
+    askGeminiAllowed: Bool = false
   ) {
     self.dictationAllowed = dictationAllowed
     self.localAIDictationAllowed = localAIDictationAllowed
+    self.askGeminiAllowed = askGeminiAllowed
     self.keyboardShortcutsAllowed =
       keyboardShortcutsAllowed
   }
@@ -86,6 +89,8 @@ public struct ActionExecutionAvailability:
       localAIDictationAllowed
     case .keyboardShortcut:
       keyboardShortcutsAllowed
+    case .askGemini:
+      askGeminiAllowed
     }
   }
 }
@@ -129,7 +134,8 @@ public final class ControllerRuntime<Executor: ActionExecuting>:
       ActionExecutionAvailability(
         dictationAllowed: allowed,
         localAIDictationAllowed: allowed,
-        keyboardShortcutsAllowed: allowed
+        keyboardShortcutsAllowed: allowed,
+        askGeminiAllowed: allowed
       )
     )
   }

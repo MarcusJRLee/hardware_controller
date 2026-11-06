@@ -97,6 +97,23 @@ struct ProfileStoreTests {
     }
   }
 
+  /// Adds the Ask Gemini Action case; Bindings and the file shape are unchanged.
+  @Test
+  func migratesSchemaFiveWithoutChangingActions() throws {
+    try withStore { store, directory in
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+      var envelope = ProfileEnvelope.defaultEnvelope()
+      envelope.schemaVersion = 5
+      try JSONEncoder().encode(envelope).write(to: store.fileURL)
+
+      let result = store.load()
+
+      #expect(result.issue == nil)
+      #expect(result.envelope.schemaVersion == ProfileEnvelope.currentSchemaVersion)
+      #expect(result.envelope.profiles == envelope.profiles)
+    }
+  }
+
   /// Migrates schema-2 global Bindings into one model setup.
   @Test
   func migratesSchemaTwoBindingsIntoInfinityDeviceSetup() throws {

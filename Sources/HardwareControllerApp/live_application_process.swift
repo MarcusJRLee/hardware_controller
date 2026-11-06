@@ -20,6 +20,7 @@ final class LiveApplicationProcess:
   private let inputSource: any HardwareInputSource
   private let transcriptionController: OwnedTranscriptionController
   private let localAIDictationController: LocalAIDictationController
+  private let askGeminiController: AskGeminiController
   private let dictationDispatcher: any DictationCommandDispatching
   private let voiceDictationDispatcher: any DictationCommandDispatching
   private let eventRelay: ApplicationProcessEventRelay
@@ -114,11 +115,22 @@ final class LiveApplicationProcess:
     )
     self.localAIDictationController = localAIDictationController
 
+    let askGeminiController = AskGeminiController(
+      factory: sessionFactory,
+      microphone: microphone,
+      authorization: authorization,
+      presenter: RelayAskGeminiPresenter(relay: eventRelay),
+      snapshotHandler: eventRelay.publishAskGemini
+    )
+    self.askGeminiController = askGeminiController
+
     let localDispatcher: any DictationCommandDispatching
     let localAIDispatcher: any DictationCommandDispatching
+    let askGeminiDispatcher: any DictationCommandDispatching
     if isDemoMode {
       localDispatcher = PreviewDictationCommandDispatcher()
       localAIDispatcher = PreviewDictationCommandDispatcher()
+      askGeminiDispatcher = PreviewDictationCommandDispatcher()
     } else {
       let dispatchers = CoordinatedDictationDispatchers(
         localHandler: { [transcriptionController] command in
@@ -127,13 +139,18 @@ final class LiveApplicationProcess:
         localAIHandler: { [localAIDictationController] command in
           await localAIDictationController.handle(command)
         },
+        askGeminiHandler: { [askGeminiController] command in
+          await askGeminiController.handle(command)
+        },
         onShutdown: {
           await transcriptionController.shutdown()
           await localAIDictationController.shutdown()
+          await askGeminiController.shutdown()
         }
       )
       localDispatcher = dispatchers.local
       localAIDispatcher = dispatchers.localAI
+      askGeminiDispatcher = dispatchers.askGemini
     }
     dictationDispatcher = localDispatcher
     voiceDictationDispatcher = localAIDispatcher
@@ -144,7 +161,8 @@ final class LiveApplicationProcess:
       executor: LiveActionExecutor(
         poster: CoreGraphicsKeyboardEventPoster(),
         dictation: localDispatcher,
-        localAIDictation: localAIDispatcher
+        localAIDictation: localAIDispatcher,
+        askGemini: askGeminiDispatcher
       ),
       onSnapshot: eventRelay.publishRuntime
     )
@@ -207,6 +225,7 @@ final class LiveApplicationProcess:
     if isDemoMode {
       await transcriptionController.shutdown()
       await localAIDictationController.shutdown()
+      await askGeminiController.shutdown()
     }
   }
 
@@ -218,6 +237,7 @@ final class LiveApplicationProcess:
     runtime.suspend()
     await transcriptionController.handle(.cancel)
     await localAIDictationController.handle(.cancel)
+    await askGeminiController.handle(.cancel)
   }
 
   /// Restarts hardware input after wake.
@@ -273,7 +293,9 @@ final class LiveApplicationProcess:
     }
     runtime.actionDidFail(.dictation)
     runtime.actionDidFail(.localAIDictation)
+    runtime.actionDidFail(.askGemini)
     await localAIDictationController.handle(.cancel)
+    await askGeminiController.handle(.cancel)
     await transcriptionController.selectInputDevice(
       uniqueID: uniqueID
     )
@@ -460,4 +482,14 @@ struct PreviewDictationCommandDispatcher:
 
   /// Has no process resources to release.
   func shutdown() {}
+}
+
+/// Sends spoken questions to the Gemini panel through the process event relay,
+/// so the process never holds a reference to presentation.
+private struct RelayAskGeminiPresenter: AskGeminiPresenting {
+  let relay: ApplicationProcessEventRelay
+
+  func present(question: String) async {
+    relay.publishAskGeminiQuestion(question)
+  }
 }

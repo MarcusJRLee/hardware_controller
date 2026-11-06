@@ -133,10 +133,49 @@ struct ApplicationRuntimeTest {
       fixture.process.availabilities.last
         == ActionExecutionAvailability(
           dictationAllowed: true,
-          keyboardShortcutsAllowed: true
+          keyboardShortcutsAllowed: true,
+          askGeminiAllowed: true
         )
     )
     #expect(fixture.process.warmUpCount == 1)
+    await fixture.runtime.stop()
+  }
+
+  /// Ask Gemini never touches the focused app, so it runs without Accessibility.
+  @Test
+  func askGeminiNeedsSpeechPermissionsButNotAccessibility() async {
+    let fixture = RuntimeFixture(
+      systemState: ApplicationSystemState(
+        accessibilityTrusted: false,
+        microphonePermission: .authorized,
+        speechRecognitionPermission: .authorized,
+        launchAtLogin: false
+      )
+    )
+    await fixture.runtime.start(snapshotHandler: fixture.snapshots.append)
+
+    #expect(
+      fixture.process.availabilities.last
+        == ActionExecutionAvailability(
+          dictationAllowed: false,
+          keyboardShortcutsAllowed: false,
+          askGeminiAllowed: true
+        )
+    )
+    await fixture.runtime.stop()
+  }
+
+  /// Spoken questions go to the panel handler, never into the snapshot.
+  @Test
+  func askGeminiQuestionsReachThePanelHandler() async throws {
+    let fixture = RuntimeFixture()
+    let questions = QuestionRecorder()
+    await fixture.runtime.setAskGeminiQuestionHandler(questions.append)
+    await fixture.runtime.start(snapshotHandler: fixture.snapshots.append)
+
+    fixture.process.publish(.askGeminiQuestion("what is a roguelike"))
+
+    try await waitUntil { questions.values == ["what is a roguelike"] }
     await fixture.runtime.stop()
   }
 
@@ -164,7 +203,8 @@ struct ApplicationRuntimeTest {
         == ActionExecutionAvailability(
           dictationAllowed: true,
           localAIDictationAllowed: true,
-          keyboardShortcutsAllowed: true
+          keyboardShortcutsAllowed: true,
+          askGeminiAllowed: true
         )
     )
     await fixture.runtime.stop()
@@ -340,7 +380,8 @@ struct ApplicationRuntimeTest {
       fixture.process.availabilities.last
         == ActionExecutionAvailability(
           dictationAllowed: true,
-          keyboardShortcutsAllowed: true
+          keyboardShortcutsAllowed: true,
+          askGeminiAllowed: true
         )
     )
     #expect(
@@ -1212,7 +1253,21 @@ private final class FakeApplicationProcess:
       relay?.publishVoiceShortcutFailure(failure)
     case .speechEngineFallback(let reason):
       relay?.publishSpeechEngineFallback(reason)
+    case .askGeminiQuestion(let question):
+      relay?.publishAskGeminiQuestion(question)
     }
+  }
+}
+
+/// Records spoken questions handed to the Gemini panel.
+private final class QuestionRecorder: @unchecked Sendable {
+  private let lock = NSLock()
+  private var stored: [String] = []
+
+  var values: [String] { lock.withLock { stored } }
+
+  func append(_ question: String) {
+    lock.withLock { stored.append(question) }
   }
 }
 

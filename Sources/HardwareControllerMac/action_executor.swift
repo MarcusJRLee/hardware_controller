@@ -127,17 +127,21 @@ public struct MacActionExecutor<Poster: KeyboardEventPosting>:
   private let poster: Poster
   private let dictation: any DictationCommandDispatching
   private let localAIDictation: any DictationCommandDispatching
+  private let askGemini: any DictationCommandDispatching
 
   public init(
     poster: Poster,
     dictation: any DictationCommandDispatching =
       UnavailableDictationCommandDispatcher(),
     localAIDictation: any DictationCommandDispatching =
+      UnavailableDictationCommandDispatcher(),
+    askGemini: any DictationCommandDispatching =
       UnavailableDictationCommandDispatcher()
   ) {
     self.poster = poster
     self.dictation = dictation
     self.localAIDictation = localAIDictation
+    self.askGemini = askGemini
   }
 
   public func execute(_ invocation: ActionInvocation) -> Bool {
@@ -150,6 +154,9 @@ public struct MacActionExecutor<Poster: KeyboardEventPosting>:
 
     case .localAIDictation:
       return dispatch(invocation.phase, to: localAIDictation)
+
+    case .askGemini:
+      return dispatch(invocation.phase, to: askGemini)
 
     case .keyboardShortcut:
       guard
@@ -165,6 +172,7 @@ public struct MacActionExecutor<Poster: KeyboardEventPosting>:
   public func shutdown() {
     dictation.shutdown()
     localAIDictation.shutdown()
+    askGemini.shutdown()
   }
 
   private func dispatch(

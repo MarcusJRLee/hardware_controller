@@ -67,6 +67,17 @@ for file in "${(@f)$(git grep -lwE '(URLSession|NWConnection|NWListener|CFStream
   failures+=("$file: network APIs are confined to the Ollama adapter and model fetcher")
 done
 
+# Only the Gemini panel (docs/decisions/local_only_boundary.md) may host web
+# content; it loads an allow-listed set of Google hosts.
+webkit_files=(
+  Sources/HardwareControllerMac/ask_gemini_chat.swift
+  Sources/HardwareControllerMac/ask_gemini_panel.swift
+)
+for file in "${(@f)$(git grep -lwE '(import WebKit|WKWebView)' -- 'Sources/*.swift' || true)}"; do
+  [[ -z "$file" || ${webkit_files[(Ie)$file]} -gt 0 ]] && continue
+  failures+=("$file: web content is confined to the Gemini panel")
+done
+
 # Xcode's bundled formatter differs per Xcode release; only the pinned one lints.
 for file in "${(@f)$(git grep -lE '^[[:space:]]*(- )?(run: )?swift format ' -- 'scripts/*.sh' '.github/*' || true)}"; do
   [[ -z "$file" ]] && continue

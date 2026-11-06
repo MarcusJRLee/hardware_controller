@@ -47,6 +47,7 @@ events.
 | M15 | Set up speech | transcribe.cpp is the default; Dictation is refused until its pinned package is downloaded and Rust-admitted, or Apple is explicitly confirmed. | `speech_engine_model_test`, `speech_engine_session_factory_test`, `asr_model_downloader_test`, `application_preferences_test` |
 | M16 | Survive a speech crash | Decode in the XPC service; a crash, hang, or repeat crash falls back to Apple on the same audio and is announced. | `transcribe_cpp_speech_engine_test`, `transcribe_cpp_speech_recognition_session_test`, `asr_service_core_test`, `scripts/check_speech_engine.sh` |
 | M17 | Know which engine ran | History records engine, package, and fallback; sessions from before 0060 read as Apple. | `voice_history_column_codec_test`, `speech_engine_test` |
+| M19 | Ask Gemini without leaving the app | One final question; never touches the focused app; needs no Accessibility; opens a new chat; placement prefers the lock point, then another display; Gemini changes fail to the clipboard. | `ask_gemini_controller_test`, `ask_gemini_panel_layout_test`, `ask_gemini_chat_test`, `coordinated_dictation_dispatcher_tests`, `action_executor_tests`, `application_runtime_test`, `profile_store_tests`, `application_preferences_test` |
 | M18 | Say a numbered term | "P R forty-four" becomes `PR 44` through a `{number}` Dictionary slot; numbers without its words stay spoken; casing and validation keep it. | `personal_dictionary_replacement_applier_test`, `spoken_number_parser_test`, `voice_casing_policy_test`, `local_ai_dictation_tests` |
 
 ## iOS
