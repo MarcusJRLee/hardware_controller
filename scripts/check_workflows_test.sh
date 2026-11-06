@@ -47,6 +47,10 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 20'
 expect pass "a macOS job gated by push paths" "$path_gated"
+expect pass "a macOS job gated by push paths-ignore" "${path_gated/paths:/paths-ignore:}"
+expect fail "an ungated macOS job without push paths" "${path_gated/    paths:
+      - tools\/\*\*
+/}"
 expect fail "an Ubuntu job over budget" "${valid/timeout-minutes: 5/timeout-minutes: 30}"
 expect fail "no superseded-run cancellation" "${valid/cancel-in-progress: true/cancel-in-progress: false}"
 print "check_workflows tests passed."

@@ -1,12 +1,19 @@
 name: CodeQL
 
 on:
-  pull_request:
-    branches:
-      - main
+  # Analysis runs after merge so pull requests wait only on Verify. Prose
+  # cannot change a build; keep this list in step with the prose patterns in
+  # scripts/classify_changes.sh. The weekly run bounds any drift.
   push:
     branches:
       - main
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - LICENSE
+      - NOTICE
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".claude/**"
   schedule:
     - cron: "23 7 * * 1"
 
@@ -14,38 +21,15 @@ permissions:
   contents: read
   security-events: write
 
+# Every run analyzes every category of a tree that contains all earlier
+# commits, so a newer push supersedes an older one without losing coverage.
 concurrency:
   group: codeql-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# The required CodeQL check aggregates every uploaded category. A pull request
-# that skips a Swift category reports it as not found (neutral), which passes;
-# its sources match main's analysis, so no finding can be missed. Pushes to
-# main and the weekly schedule always analyze every category.
 jobs:
-  changes:
-    name: Classify changes
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      codeql_macos: ${{ steps.classify.outputs.codeql_macos }}
-      codeql_ios: ${{ steps.classify.outputs.codeql_ios }}
-    steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Install zsh
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh >/dev/null
-      - name: Classify
-        id: classify
-        run: scripts/classify_changes.sh "${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
-
-  # Always runs, so every pull request produces the required CodeQL check.
   actions:
     name: CodeQL (actions)
-    needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -66,8 +50,6 @@ jobs:
 
   macos:
     name: CodeQL (macos)
-    needs: changes
-    if: needs.changes.outputs.codeql_macos == 'true'
     runs-on: macos-26
     timeout-minutes: 35
     steps:
@@ -98,8 +80,6 @@ jobs:
 
   ios:
     name: CodeQL (ios)
-    needs: changes
-    if: needs.changes.outputs.codeql_ios == 'true'
     runs-on: macos-26
     timeout-minutes: 35
     steps:

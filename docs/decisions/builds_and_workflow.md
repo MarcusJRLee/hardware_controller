@@ -1,7 +1,7 @@
 # Builds, versions, and workflow
 
 - **Status:** Accepted
-- **Updated:** 2026-11-03
+- **Updated:** 2026-11-06
 - **Replaces:** 0019, 0023, 0051, 0052, 0059
 
 ## Context
@@ -12,11 +12,20 @@ older binary once misread a newer Profile schema as damaged. CI runs on few
 macOS runners with strict up-to-date merges, so running every job on every PR
 made queues of hours.
 
-| Criterion                         | Change-scoped lanes | Drop strict up-to-date | CodeQL after merge only |
-| --------------------------------- | ------------------- | ---------------------- | ----------------------- |
-| macOS minutes for a docs PR       | 🟢 0.               | 🔴 62.                 | 🟠 19. |
-| Every merged tree verified first  | 🟢 Yes.             | 🔴 No.                 | 🟢 Yes. |
-| Security findings before merge    | 🟢 For changed platforms. | 🟢 Yes.          | 🔴 No. |
+| Criterion                         | Change-scoped lanes | Drop strict up-to-date |
+| --------------------------------- | ------------------- | ---------------------- |
+| macOS minutes for a docs PR       | 🟢 0.               | 🔴 62.                 |
+| Every merged tree verified first  | 🟢 Yes.             | 🔴 No.                 |
+
+A required CodeQL check made every Swift PR wait ~21 minutes, of which ~19 is
+the traced Swift build; `Verify` takes ~7. The 2026-11-06 change moved CodeQL
+after merge.
+
+| Criterion                        | CodeQL on PRs (was) | CodeQL after merge | Larger CodeQL runners |
+| -------------------------------- | ------------------- | ------------------ | --------------------- |
+| Wait before a Swift PR can merge | 🔴 ~21 min.         | 🟢 ~7 min.         | 🟠 ~12–15 min, unmeasured. |
+| Security findings before merge   | 🟢 Yes.             | 🔴 No; on `main` within ~25 min. | 🟢 Yes. |
+| Runner cost                      | 🟢 Standard.        | 🟢 Standard.       | 🔴 Paid minutes. |
 
 ## Decision
 
@@ -58,18 +67,21 @@ made queues of hours.
 - `Verify` always reports: prose-only changes run `scripts/check_fast.sh` on
   Ubuntu, anything else `scripts/check.sh` on macOS. `iOS` runs for iOS, shared
   Core, FFI, Rust, and ASR inputs.
-- CodeQL analyzes a Swift platform only when its sources change; an always-on
-  `actions` analysis keeps the required check reporting. Pushes to `main` and a
-  weekly schedule analyze everything. CI does not re-run on push to `main`,
-  because a strict up-to-date squash merge equals the verified PR.
+- CodeQL is not a PR check. Each push to `main` that changes more than prose,
+  and a weekly schedule, analyze every category (actions, macOS Swift, iOS
+  Swift). Fix a finding with a follow-up PR. CI does not re-run on push to
+  `main`, because a strict up-to-date squash merge equals the verified PR.
 - `scripts/check_workflows.sh` fails a job without a timeout, a macOS job over
-  35 minutes or not gated by `changes`, an Ubuntu job over 15 minutes, or a
-  workflow that does not cancel superseded runs. A weekly health workflow fails
-  when a job's p50 passes 70% of its timeout (`scripts/ci_durations.sh`).
+  35 minutes or not gated by `changes` or push paths, an Ubuntu job over 15
+  minutes, or a workflow that does not cancel superseded runs. A weekly health
+  workflow fails when a job's p50 passes 70% of its timeout
+  (`scripts/ci_durations.sh`).
 
 ## Consequences
 
 - Several personal iterations share one version and build number.
-- A misclassified path could skip a lane; the classifier has tests, and the
-  weekly full CodeQL run bounds the exposure. A new source directory may need a
-  classifier rule.
+- A misclassified path could skip a lane; the classifier has tests. A new
+  source directory may need a classifier rule.
+- A PR can merge with a new CodeQL finding; it surfaces on `main` minutes
+  later. CodeQL's prose `paths-ignore` duplicates the classifier's prose
+  patterns; drift costs at most one week, bounded by the scheduled run.

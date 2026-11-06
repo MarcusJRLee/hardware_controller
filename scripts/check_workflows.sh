@@ -16,9 +16,10 @@ for workflow in "$workflow_dir"/*.yml; do
   grep -q '^  cancel-in-progress: true$' "$workflow" \
     || failures+=("$name: add concurrency with cancel-in-progress: true")
 
-  # A push `paths:` filter gates a whole workflow as the classifier gates CI.
+  # A push `paths:` or `paths-ignore:` filter gates a whole workflow as the
+  # classifier gates CI.
   path_gated=0
-  grep -q '^    paths:$' "$workflow" && path_gated=1
+  grep -qE '^    paths(-ignore)?:$' "$workflow" && path_gated=1
 
   # Jobs are two-space keys under `jobs:`; their settings are four-space keys.
   job="" timeout="" runner="" gated=0

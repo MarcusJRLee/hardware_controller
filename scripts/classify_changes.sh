@@ -9,7 +9,7 @@
 set -euo pipefail
 
 base="${1:-}"
-lanes=(macos ios codeql_macos codeql_ios)
+lanes=(macos ios)
 typeset -A lane
 for name in "${lanes[@]}"; do lane[$name]=false; done
 
@@ -37,20 +37,10 @@ for file in "${changed[@]}"; do
   esac
   lane[macos]=true
   case "$file" in
-    # The pinned runtime feeds both apps' builds and both traced builds.
-    scripts/fetch_asr_runtime.sh)
-      lane[ios]=true; lane[codeql_ios]=true; lane[codeql_macos]=true ;;
-    # Only inputs to the traced iOS build need the iOS CodeQL lane.
-    apps/ios/*|scripts/build_ios_rust_ffi.sh|scripts/generate_ios_project.sh|scripts/prepare_ios_build_inputs.sh|scripts/prepare_ios_asr_model_package.sh|scripts/fetch_asr_test_assets.sh)
-      lane[ios]=true; lane[codeql_ios]=true ;;
-    scripts/*ios*|scripts/*asr*)
+    apps/ios/*|scripts/*ios*|scripts/*asr*|schemas/*|Tests/cuj/*|.swift-format|tools/swift_format/*|scripts/swift_format.sh)
       lane[ios]=true ;;
+    # Shared by both apps.
     Sources/HardwareControllerCore/*|Sources/hardware_controller_voice_ffi/*|Sources/voice_*|crates/*|Cargo.*|rust-toolchain.toml|scripts/build_rust_ffi.sh)
-      # Shared by both apps.
-      lane[ios]=true; lane[codeql_ios]=true; lane[codeql_macos]=true ;;
-    Sources/*|Package.swift)
-      lane[codeql_macos]=true ;;
-    schemas/*|Tests/cuj/*|.swift-format|tools/swift_format/*|scripts/swift_format.sh)
       lane[ios]=true ;;
   esac
 done

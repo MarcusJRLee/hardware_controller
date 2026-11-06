@@ -30,9 +30,10 @@ opening the package in Xcode, run `scripts/build_rust_ffi.sh` once.
 - Never change version metadata or create release artifacts without explicit
   approval for that exact version.
 
-Required checks: `Verify` (`scripts/check.sh`, then an ad-hoc packaged build
-smoke-launched by `scripts/smoke_app.sh`) and `CodeQL`. The `iOS` job runs
-`scripts/check_ios.sh`.
+Required check: `Verify` (`scripts/check.sh`, then an ad-hoc packaged build
+smoke-launched by `scripts/smoke_app.sh`). The `iOS` job runs
+`scripts/check_ios.sh`. CodeQL runs after merge on `main` and weekly; fix its
+findings in a follow-up PR.
 
 To prove a change in the running app, follow the
 [verify skill](.claude/skills/verify/SKILL.md).
@@ -47,15 +48,15 @@ starts only the lanes a change needs ([Builds and workflow](docs/decisions/build
 | Verify, fast | Only prose changed (`*.md`, `docs/`, `.claude/`) | Ubuntu | 15 min |
 | Verify, full | Anything else changed | macOS | 15 min |
 | iOS | `apps/ios`, shared Core, FFI, Rust, ASR or iOS scripts | macOS | 25 min |
-| CodeQL (macos / ios) | That platform's Swift or shared sources | macOS | 35 min |
-| CodeQL (actions) | Always | Ubuntu | 10 min |
+| CodeQL (macos / ios) | `main` changes more than prose; weekly | macOS | 35 min |
+| CodeQL (actions) | `main` changes more than prose; weekly | Ubuntu | 10 min |
 | Tool cache | `main` changes the formatter pin; weekly | macOS | 20 min |
 
 PRs read caches saved on `main` but not each other's, so **Tool cache** saves
 the pinned swift-format there; without it every PR rebuilds it (~8 min).
 Workflow edits run every lane. `scripts/check_workflows.sh` fails on a job
-without a timeout, over budget, or on macOS without `needs: changes` or push
-`paths:`. The weekly
+without a timeout, over budget, or on macOS without `needs: changes` or a push
+`paths:` or `paths-ignore:` filter. The weekly
 **CI health** workflow fails when a job's p50 passes 70% of its budget; run
 `scripts/ci_durations.sh` to see p50, max, and queue time.
 
