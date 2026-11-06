@@ -40,6 +40,8 @@ bring the same local Voice pipeline to any text field.
 | Provider locality | Furthest boundary a model adapter can reach: in-process, fixed loopback, or remote-capable. |
 | Voice trigger | Any input that begins, finishes, or cancels the same Voice session. |
 | Voice chord | The optional machine-wide shortcut for Voice capture; not a Binding fallback. |
+| Gemini panel | The floating, non-activating window where Ask Gemini questions open as chats. |
+| Lock point | The saved display and frame where the Gemini panel always opens. |
 | Retained audio | The optional app-owned CAF of one Voice session. |
 | Recovery session | A History session rebuilt from interrupted audio, with no invented text. |
 
@@ -48,8 +50,8 @@ bring the same local Voice pipeline to any text field.
 - **Devices:** one or more VEC Infinity 3 pedals, all three Controls,
   simultaneous presses, reconnect and sleep safety.
 - **Actions:** No Action, Local Dictation, Local AI Dictation, Keyboard
-  Shortcut, each with Hold and Toggle. One Dictation Action owns the
-  microphone at a time.
+  Shortcut, and Ask Gemini, each with Hold and Toggle. One voice Action owns
+  the microphone at a time.
 - **Local AI:** spoken edits, Dictionary, Styles and casing, typed
   paragraph/list output, validation of protected content, and a deterministic
   Edited fallback within three seconds.
@@ -69,7 +71,7 @@ bring the same local Voice pipeline to any text field.
 
 | Decision | Approval | Record |
 | --- | --- | --- |
-| Privacy | On-device speech; Apple On-Device or fixed-loopback Ollama refinement; no cloud inference. | [Local AI formatting](decisions/local_ai_formatting.md), [Local-only boundary](decisions/local_only_boundary.md) |
+| Privacy | On-device speech; Apple On-Device or fixed-loopback Ollama refinement; no cloud inference, except the opt-in Ask Gemini panel, which sends only the final question to Google Gemini. | [Local AI formatting](decisions/local_ai_formatting.md), [Local-only boundary](decisions/local_only_boundary.md) |
 | Platforms | macOS 15+ on Apple silicon, and iOS. Android, Windows, and Linux stay in line of sight; web is deferred. | [Platform and scope](decisions/platform_and_scope.md) |
 | Profiles | Manual multi-Profile UI with per-Device setups. | [Inputs, Profiles, and Actions](decisions/inputs_and_actions.md) |
 | Model | Digest-pinned Qwen 3.5 4B recommended; other installed models allowed, labeled unvalidated. | [Local AI formatting](decisions/local_ai_formatting.md) |
@@ -80,7 +82,7 @@ bring the same local Voice pipeline to any text field.
 ## Out of scope
 
 - Accounts, sync, analytics, telemetry, remote control, or remote models
-  (including Private Cloud Compute).
+  (including Private Cloud Compute), other than the approved Ask Gemini panel.
 - Downloaded Driver code, plug-ins, shell commands, or AppleScript.
 - Automatic per-app Profile switching.
 - App Store submission, payments, licensing, or update infrastructure.

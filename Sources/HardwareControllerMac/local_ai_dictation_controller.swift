@@ -38,7 +38,7 @@ public actor LocalAIDictationController {
     @Sendable (LocalAIDictationSnapshot) -> Void
 
   private let speech: OwnedTranscriptionController
-  private let preparedTargeter: PreparedLocalAITargeter
+  private let preparedTargeter: PreparedFocusedTextTargeter
   private let targeter: any FocusedTextTargeting
   private let writer: any TranscriptWriting
   private let contextCapturer: any LocalAIContextCapturing
@@ -54,7 +54,7 @@ public actor LocalAIDictationController {
   private let locale: Locale
   private let refinementTimeout: Duration
   private let snapshotHandler: SnapshotHandler
-  private let speechMailbox: LocalAISpeechSnapshotMailbox
+  private let speechMailbox: TranscriptionSnapshotMailbox
   private let history: any VoiceSessionHistoryRecording
   private let now: @Sendable () -> Date
   private let logger = Logger(
@@ -96,10 +96,10 @@ public actor LocalAIDictationController {
     now: @escaping @Sendable () -> Date = { Date() },
     snapshotHandler: @escaping SnapshotHandler = { _ in }
   ) {
-    let preparedTargeter = PreparedLocalAITargeter(
+    let preparedTargeter = PreparedFocusedTextTargeter(
       underlying: targeter
     )
-    let mailbox = LocalAISpeechSnapshotMailbox()
+    let mailbox = TranscriptionSnapshotMailbox()
     speech = OwnedTranscriptionController(
       factory: factory,
       microphone: microphone,
@@ -1057,78 +1057,5 @@ public actor LocalAIDictationController {
     return text.split(
       whereSeparator: { $0 == "\n" || $0 == "\r" || $0 == "\t" }
     ).joined(separator: " ")
-  }
-}
-
-private final class PreparedLocalAITargeter:
-  FocusedTextTargeting,
-  @unchecked Sendable
-{
-  private let underlying: any FocusedTextTargeting
-  private let lock = NSLock()
-  private var preparedTarget: FocusedTextTarget?
-
-  init(underlying: any FocusedTextTargeting) {
-    self.underlying = underlying
-  }
-
-  func prepare(_ target: FocusedTextTarget) {
-    lock.withLock {
-      preparedTarget = target
-    }
-  }
-
-  func clear() {
-    lock.withLock {
-      preparedTarget = nil
-    }
-  }
-
-  func capture() throws -> FocusedTextTarget {
-    try lock.withLock {
-      guard let target = preparedTarget else {
-        throw TranscriptionFailure.noFocusedTextField
-      }
-      preparedTarget = nil
-      return target
-    }
-  }
-
-  func isStillFocused(_ target: FocusedTextTarget) -> Bool {
-    underlying.isStillFocused(target)
-  }
-
-  func ownershipFailure(
-    for target: FocusedTextTarget
-  ) -> FocusedTextTargetOwnershipFailure? {
-    underlying.ownershipFailure(for: target)
-  }
-}
-
-private struct DiscardingTranscriptWriter: TranscriptWriting {
-  func insert(
-    _ text: String,
-    into target: FocusedTextTarget
-  ) throws {}
-}
-
-private final class LocalAISpeechSnapshotMailbox:
-  @unchecked Sendable
-{
-  let stream: AsyncStream<TranscriptionSnapshot>
-  private let continuation: AsyncStream<TranscriptionSnapshot>.Continuation
-
-  init() {
-    (stream, continuation) = AsyncStream.makeStream(
-      bufferingPolicy: .bufferingNewest(32)
-    )
-  }
-
-  func publish(_ snapshot: TranscriptionSnapshot) {
-    continuation.yield(snapshot)
-  }
-
-  func finish() {
-    continuation.finish()
   }
 }

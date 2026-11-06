@@ -42,7 +42,7 @@ struct PreferredMicrophone: Codable, Equatable, Identifiable, Sendable {
 
 /// Stores versioned application presentation preferences.
 struct ApplicationPreferences: Codable, Equatable, Sendable {
-  static let currentSchemaVersion = 8
+  static let currentSchemaVersion = 9
 
   var appearance: ApplicationAppearance
   var sidebarVisibility: SidebarVisibilityPreference
@@ -51,6 +51,7 @@ struct ApplicationPreferences: Codable, Equatable, Sendable {
   var voiceTrigger: VoiceTriggerSettings
   var voiceHistoryRetention: VoiceHistoryRetentionSettings
   var speechEngine: SpeechEngine
+  var askGeminiPanel: AskGeminiPanelSettings
   var schemaVersion: Int
 
   /// Creates one complete preference value.
@@ -62,6 +63,7 @@ struct ApplicationPreferences: Codable, Equatable, Sendable {
     voiceTrigger: VoiceTriggerSettings = .default,
     voiceHistoryRetention: VoiceHistoryRetentionSettings = .macOSDefault,
     speechEngine: SpeechEngine = .transcribeCpp,
+    askGeminiPanel: AskGeminiPanelSettings = .default,
     schemaVersion: Int = currentSchemaVersion
   ) {
     self.appearance = appearance
@@ -71,6 +73,7 @@ struct ApplicationPreferences: Codable, Equatable, Sendable {
     self.voiceTrigger = voiceTrigger
     self.voiceHistoryRetention = voiceHistoryRetention
     self.speechEngine = speechEngine
+    self.askGeminiPanel = askGeminiPanel
     self.schemaVersion = schemaVersion
   }
 
@@ -82,6 +85,7 @@ struct ApplicationPreferences: Codable, Equatable, Sendable {
     case voiceTrigger
     case voiceHistoryRetention
     case speechEngine
+    case askGeminiPanel
     case schemaVersion
   }
 
@@ -120,6 +124,11 @@ struct ApplicationPreferences: Codable, Equatable, Sendable {
         SpeechEngine.self,
         forKey: .speechEngine
       ) ?? .transcribeCpp
+    askGeminiPanel =
+      try container.decodeIfPresent(
+        AskGeminiPanelSettings.self,
+        forKey: .askGeminiPanel
+      ) ?? .default
     schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
   }
 
@@ -315,7 +324,7 @@ struct ApplicationPreferencesStore:
     _ preferences: ApplicationPreferences
   ) throws -> ApplicationPreferences {
     switch preferences.schemaVersion {
-    case 1, 2, 3, 4, 5, 6, 7:
+    case 1, 2, 3, 4, 5, 6, 7, 8:
       var migrated = preferences
       migrated.schemaVersion = ApplicationPreferences.currentSchemaVersion
       if preferences.schemaVersion == 1 {
@@ -334,6 +343,9 @@ struct ApplicationPreferencesStore:
         // Per docs/decisions/asr_runtime.md, existing users move to transcribe.cpp and are asked
         // to download its model or explicitly keep Apple.
         migrated.speechEngine = .transcribeCpp
+      }
+      if preferences.schemaVersion < 9 {
+        migrated.askGeminiPanel = .default
       }
       return migrated
     case ApplicationPreferences.currentSchemaVersion:
@@ -613,6 +625,21 @@ final class ApplicationPreferencesModel {
     return persist(candidate) { [weak self] in
       self?.speechEngineHandler?(engine)
     }
+  }
+
+  var askGeminiPanel: AskGeminiPanelSettings {
+    preferences.askGeminiPanel
+  }
+
+  /// Persists Gemini panel zoom and lock point; false leaves them unchanged.
+  @discardableResult
+  func setAskGeminiPanel(_ settings: AskGeminiPanelSettings) -> Bool {
+    guard settings != preferences.askGeminiPanel else {
+      return true
+    }
+    var candidate = preferences
+    candidate.askGeminiPanel = settings
+    return persist(candidate) {}
   }
 
   /// Installs the process callback after application composition completes.

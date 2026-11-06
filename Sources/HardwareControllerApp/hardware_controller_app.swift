@@ -133,6 +133,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var applicationWindowController: NSWindowController?
   private let appearanceAdapter: AppKitApplicationAppearanceAdapter
   private let historyReformatter: LocalAIVoiceHistoryReformatter
+  private var askGeminiPanel: AskGeminiPanelController?
   private let terminationCoordinator =
     AppTerminationCoordinator()
   private lazy var workspaceLifecycle =
@@ -199,6 +200,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       [weak model] settings in
       model?.setVoiceTriggerSettings(settings)
     }
+    let askGeminiPanel = AskGeminiPanelController(
+      settings: preferencesModel.askGeminiPanel,
+      persist: { [weak preferencesModel] settings in
+        preferencesModel?.setAskGeminiPanel(settings) ?? false
+      }
+    )
+    self.askGeminiPanel = askGeminiPanel
+    model.setAskGeminiPresenter(askGeminiPanel)
     preferencesModel.setVoiceHistoryRetentionHandler {
       [weak historyModel] settings in
       Task { @MainActor in

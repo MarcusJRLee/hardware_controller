@@ -27,6 +27,8 @@ apps/ios/voice_input/keyboard/keyboard_keys_view.swift | UIKit key rendering; ro
 apps/ios/voice_input/widgets/voice_input_widgets.swift | WidgetKit declarations.
 
 # Composition roots and system boundaries, exercised through their seams.
+Sources/HardwareControllerMac/ask_gemini_panel.swift | AppKit panel; placement, lock point, zoom, and shortcuts in `ask_gemini_panel_layout_test`, navigation in `ask_gemini_chat_test`.
+Sources/HardwareControllerMac/final_transcript_capture.swift | Shared final-text helpers; exercised by `ask_gemini_controller_test`, `local_ai_dictation_controller_test`.
 Sources/HardwareControllerApp/application_process.swift | Process seam; relay in `application_runtime_test`.
 Sources/HardwareControllerApp/application_profile_persistence.swift | Persistence protocol and preview stores; real store in `profile_store_tests`.
 Sources/HardwareControllerApp/application_runtime_factory.swift | Composition root; launch proven by `scripts/smoke_app_test.sh` and CI smoke.

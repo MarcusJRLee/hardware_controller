@@ -180,6 +180,22 @@ struct ActionExecutorTests {
   }
 
   @Test
+  func askGeminiUsesOnlyItsDedicatedDispatcher() {
+    let poster = RecordingPoster()
+    let local = RecordingDictationDispatcher()
+    let askGemini = RecordingDictationDispatcher()
+    let executor = MacActionExecutor(poster: poster, dictation: local, askGemini: askGemini)
+
+    #expect(executor.execute(invocation(action: .askGemini(), phase: .begin)))
+    #expect(executor.execute(invocation(action: .askGemini(), phase: .end)))
+    #expect(!executor.execute(invocation(action: .askGemini(), phase: .perform)))
+
+    #expect(local.commands.isEmpty)
+    #expect(askGemini.commands == [.begin, .finish])
+    #expect(poster.events.isEmpty)
+  }
+
+  @Test
   func failedPostStillAttemptsModifierRelease() {
     let poster = SelectivelyFailingPoster(failingAt: 1)
     let executor = MacActionExecutor(poster: poster)

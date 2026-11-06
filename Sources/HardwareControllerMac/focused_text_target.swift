@@ -192,6 +192,17 @@ public final class FocusedTextTarget:
     self.guardsCapturedCaret = guardsCapturedCaret
   }
 
+  /// A final-only target for text bound for this app's own UI rather than the
+  /// focused app. Its element is never read or written.
+  static func detachedFinalOnly(applicationName: String) -> FocusedTextTarget {
+    let processIdentifier = ProcessInfo.processInfo.processIdentifier
+    return FocusedTextTarget(
+      element: AXUIElementCreateApplication(processIdentifier),
+      processIdentifier: processIdentifier,
+      applicationName: applicationName
+    )
+  }
+
   /// Keeps recognition final-only without changing the delivery target lease.
   func finalOnlyCopy() -> FocusedTextTarget {
     FocusedTextTarget(

@@ -151,10 +151,12 @@ public enum ActionKind: String, CaseIterable, Codable, Sendable {
   case dictation
   case localAIDictation
   case keyboardShortcut
+  /// Speaks a question into the Gemini panel without changing the focused app.
+  case askGemini
 
   /// Identifies Actions that own the shared microphone lifecycle.
   public var ownsDictationSession: Bool {
-    self == .dictation || self == .localAIDictation
+    self == .dictation || self == .localAIDictation || self == .askGemini
   }
 }
 
@@ -175,6 +177,10 @@ public struct ActionConfiguration: Equatable, Codable, Sendable {
 
   public static func localAIDictation() -> ActionConfiguration {
     ActionConfiguration(kind: .localAIDictation)
+  }
+
+  public static func askGemini() -> ActionConfiguration {
+    ActionConfiguration(kind: .askGemini)
   }
 
   public static func keyboardShortcut(

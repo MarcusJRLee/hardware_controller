@@ -217,7 +217,7 @@ struct ControlEditorView: View {
           Text("Test with the control below")
             .font(.caption2)
             .foregroundStyle(
-              model.canExecuteDictation
+              model.canExecute(binding.action.kind)
                 ? StudioDesign.accent
                 : StudioDesign.warning
             )
@@ -277,6 +277,8 @@ extension ActionKind {
       "Local AI Dictation"
     case .keyboardShortcut:
       "Keyboard Shortcut"
+    case .askGemini:
+      "Ask Gemini"
     }
   }
 
@@ -290,6 +292,8 @@ extension ActionKind {
       "wand.and.stars"
     case .keyboardShortcut:
       "command"
+    case .askGemini:
+      "bubble.left.and.text.bubble.right"
     }
   }
 }

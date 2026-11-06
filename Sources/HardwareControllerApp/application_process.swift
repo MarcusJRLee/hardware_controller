@@ -76,6 +76,8 @@ final class ApplicationProcessEventRelay:
     )
     case voiceShortcutFailure(VoiceShortcutRegistrationFailure?)
     case speechEngineFallback(SpeechEngineFallbackReason)
+    /// A spoken question for the Gemini panel; a command, not state.
+    case askGeminiQuestion(String)
   }
 
   typealias Handler = @Sendable (Event) -> Void
@@ -130,6 +132,23 @@ final class ApplicationProcessEventRelay:
       values.0?.actionDidFail(.dictation)
     }
     values.1?(.transcription(snapshot))
+  }
+
+  /// Publishes Ask Gemini capture progress and reconciles failed ownership.
+  func publishAskGemini(_ snapshot: TranscriptionSnapshot) {
+    let values = lock.withLock {
+      (runtime, handler)
+    }
+    if snapshot.phase == .failed {
+      values.0?.actionDidFail(.askGemini)
+    }
+    values.1?(.transcription(snapshot))
+  }
+
+  /// Hands one spoken question to the Gemini panel.
+  func publishAskGeminiQuestion(_ question: String) {
+    let handler = lock.withLock { self.handler }
+    handler?(.askGeminiQuestion(question))
   }
 
   /// Announces that a session fell back to Apple; never silent (docs/decisions/asr_runtime.md).

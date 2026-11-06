@@ -1,22 +1,32 @@
 import Foundation
 
-public enum DictationWorkflow: Equatable, Sendable {
+/// Every workflow that owns the shared microphone. Order fixes cancellation order.
+public enum DictationWorkflow: CaseIterable, Equatable, Sendable {
   case local
   case localAI
+  case askGemini
 }
+
+public typealias DictationCommandHandler =
+  @Sendable (DictationCommand) async -> Void
 
 public struct CoordinatedDictationDispatchers: Sendable {
   public let local: any DictationCommandDispatching
   public let localAI: any DictationCommandDispatching
+  public let askGemini: any DictationCommandDispatching
 
   public init(
-    localHandler: @escaping @Sendable (DictationCommand) async -> Void,
-    localAIHandler: @escaping @Sendable (DictationCommand) async -> Void,
+    localHandler: @escaping DictationCommandHandler,
+    localAIHandler: @escaping DictationCommandHandler,
+    askGeminiHandler: @escaping DictationCommandHandler = { _ in },
     onShutdown: @escaping @Sendable () async -> Void = {}
   ) {
     let coordinator = DictationWorkflowCoordinator(
-      localHandler: localHandler,
-      localAIHandler: localAIHandler,
+      handlers: [
+        .local: localHandler,
+        .localAI: localAIHandler,
+        .askGemini: askGeminiHandler,
+      ],
       onShutdown: onShutdown
     )
     local = CoordinatedDictationCommandDispatcher(
@@ -25,6 +35,10 @@ public struct CoordinatedDictationDispatchers: Sendable {
     )
     localAI = CoordinatedDictationCommandDispatcher(
       workflow: .localAI,
+      coordinator: coordinator
+    )
+    askGemini = CoordinatedDictationCommandDispatcher(
+      workflow: .askGemini,
       coordinator: coordinator
     )
   }
@@ -71,38 +85,32 @@ private final class DictationWorkflowCoordinator:
   private let lock = NSLock()
   private var stopped = false
 
+  /// One handler per workflow; beginning any workflow first cancels the
+  /// others, so exactly one owns the microphone.
   init(
-    localHandler: @escaping @Sendable (DictationCommand) async -> Void,
-    localAIHandler: @escaping @Sendable (DictationCommand) async -> Void,
+    handlers: [DictationWorkflow: DictationCommandHandler],
     onShutdown: @escaping @Sendable () async -> Void
   ) {
+    let handler: @Sendable (DictationWorkflow, DictationCommand) async -> Void = {
+      workflow, command in
+      await handlers[workflow]?(command)
+    }
     let (stream, continuation) = AsyncStream<Submission>.makeStream(
       bufferingPolicy: .unbounded
     )
     self.continuation = continuation
     consumer = Task {
       for await submission in stream {
-        switch submission.command {
-        case .begin:
-          switch submission.workflow {
-          case .local:
-            await localAIHandler(.cancel)
-            await localHandler(.begin)
-          case .localAI:
-            await localHandler(.cancel)
-            await localAIHandler(.begin)
-          }
-        case .finish, .cancel:
-          switch submission.workflow {
-          case .local:
-            await localHandler(submission.command)
-          case .localAI:
-            await localAIHandler(submission.command)
+        if submission.command == .begin {
+          for other in DictationWorkflow.allCases where other != submission.workflow {
+            await handler(other, .cancel)
           }
         }
+        await handler(submission.workflow, submission.command)
       }
-      await localHandler(.cancel)
-      await localAIHandler(.cancel)
+      for workflow in DictationWorkflow.allCases {
+        await handler(workflow, .cancel)
+      }
       await onShutdown()
     }
   }

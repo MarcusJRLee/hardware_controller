@@ -43,6 +43,7 @@ default to No Action.
 | Local Dictation | On-device speech. With Parakeet, text arrives on release. With Apple, fields that support it show words as you speak. |
 | Local AI Dictation | One corrected, formatted result after release, refined by Apple On-Device or local Ollama. |
 | Keyboard Shortcut | Sends one recorded chord per press. Needs Accessibility only. |
+| Ask Gemini | Speak a question; on release it opens as a new chat in the floating Gemini panel. The app you are in keeps focus. Needs the microphone, not Accessibility. Sends the question to Google. |
 
 **Hold** runs while the pedal is down. **Toggle** starts on one press and
 finishes on the next. Choose both per pedal under **Controller** or a Profile.
@@ -118,6 +119,32 @@ Spoken commands are exact; near misses stay as text:
 Ollama is reached only at `http://127.0.0.1:11434`; redirects, proxies, cloud
 models, and changed digests are rejected. Apple On-Device never uses Private
 Cloud Compute.
+
+## Ask Gemini
+
+Bind a pedal to **Ask Gemini**, hold it, ask, and release. The Gemini panel
+opens without taking focus, so a game keeps your controls until you click the
+panel. Sign in to Google once inside the panel; Google may ask for an extra
+verification step.
+
+| Placement | Behavior |
+| --- | --- |
+| Lock point set | Always opens there while that display is connected. |
+| No lock point | Opens on a display other than the one you are using. |
+
+The lock button at the right of the tab bar shows a solid lock at the lock
+point. Click it to set the lock point (first time) or return to it; Option-click
+or right-click to set it to the current spot or clear it.
+
+| Shortcut (after clicking the panel) | Action |
+| --- | --- |
+| ⌘T / ⌘W | New chat / close chat |
+| ⌃Tab, ⌘⇧] / ⌃⇧Tab, ⌘⇧[ | Next / previous chat |
+| ⌘1–⌘8, ⌘9 | That chat, or the last |
+| ⌘⇧+ / ⌘⇧- / ⌘⇧0 | Zoom in / out / reset |
+
+If Gemini changes its page and the question cannot be sent, it is copied to the
+clipboard and the panel title says so.
 
 ## Voice chord and keyboard fallbacks
 
@@ -214,12 +241,14 @@ online only when you tap **Download**, and never sends audio or text.
 | Locale or model unavailable | Let macOS finish installing speech assets; the app never falls back to server recognition. |
 | Apple On-Device unavailable | Needs macOS 26, Apple Intelligence on, and its assets installed; otherwise use Ollama. |
 | Ollama unavailable | Start Ollama, check `ollama list`, pull the model, then **Refresh Status**. Reselect a changed digest only if you trust it. |
+| Gemini panel says **Couldn't send** | Paste the question (it is on the clipboard) and send it yourself. |
 | Inserted the Edited transcript | The card explains the provider, timeout, or validation reason; **Copy Raw** stays available. |
 
 ## Privacy
 
 No account, analytics, telemetry, or cloud service. Speech recognition and
-models run on-device. Local Dictation keeps audio and text in memory only.
+models run on-device. The one exception is **Ask Gemini**: its final question
+text goes to Google Gemini in the panel, under your Google account. Local Dictation keeps audio and text in memory only.
 Local AI Dictation and iOS store recordings and transcripts locally in History
 until cleanup or deletion. Speech content is never logged. Nearby-text context
 reads at most a small window around the caret in a nonsecure multiline field,

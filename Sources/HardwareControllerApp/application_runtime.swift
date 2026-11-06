@@ -28,6 +28,7 @@ actor ApplicationRuntime {
   private var isSuspended = false
   private var localAISettings: LocalAISettings
   private var voiceTriggerSettings: VoiceTriggerSettings
+  private var askGeminiQuestionHandler: (@Sendable (String) -> Void)?
   private var localAIProviderTestGeneration: UInt64 = 0
 
   /// Creates a runtime around injected adapters for focused tests.
@@ -436,11 +437,22 @@ actor ApplicationRuntime {
     publish()
   }
 
+  /// Installs the Gemini panel's question sink.
+  func setAskGeminiQuestionHandler(
+    _ handler: @escaping @Sendable (String) -> Void
+  ) {
+    askGeminiQuestionHandler = handler
+  }
+
   /// Receives process snapshots without joining the input hot path.
   private func receive(
     _ event: ApplicationProcessEventRelay.Event
   ) {
     switch event {
+    case .askGeminiQuestion(let question):
+      // A command for presentation, not state: nothing to publish.
+      askGeminiQuestionHandler?(question)
+      return
     case .runtime(let runtimeSnapshot):
       snapshot.runtime = runtimeSnapshot
     case .transcription(let transcriptionSnapshot):
@@ -498,7 +510,8 @@ actor ApplicationRuntime {
       dictationAllowed: canExecuteDictation,
       localAIDictationAllowed: canExecuteLocalAIDictation,
       keyboardShortcutsAllowed:
-        canExecuteKeyboardShortcuts
+        canExecuteKeyboardShortcuts,
+      askGeminiAllowed: canExecuteAskGemini
     )
     process.setAvailability(availability)
     warmUpTask?.cancel()
@@ -590,6 +603,14 @@ actor ApplicationRuntime {
         || snapshot.localAIReadiness.readiness(
           for: localAISettings.provider
         ).state.canRun)
+  }
+
+  /// Ask Gemini needs the microphone and recognizer but never Accessibility,
+  /// because it does not read or write the focused app.
+  private var canExecuteAskGemini: Bool {
+    !installationLocation.requiresInstallation
+      && snapshot.microphonePermission == .authorized
+      && snapshot.speechRecognitionPermission == .authorized
   }
 
   /// Reports whether synthetic shortcuts can currently execute.

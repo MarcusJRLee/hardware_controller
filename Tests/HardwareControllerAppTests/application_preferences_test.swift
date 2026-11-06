@@ -219,6 +219,27 @@ struct ApplicationPreferencesStoreTests {
   }
 
   @Test
+  func schemaEightGainsDefaultGeminiPanelAndPanelChangesPersist() throws {
+    let files = PreferenceFileAccess()
+    let encoded = try JSONEncoder().encode(ApplicationPreferences(schemaVersion: 8))
+    var object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    object.removeValue(forKey: "askGeminiPanel")
+    files.data = try JSONSerialization.data(withJSONObject: object)
+
+    let migrated = makeStore(files: files).load()
+    var panel = migrated.preferences
+    panel.askGeminiPanel = AskGeminiPanelSettings(zoom: 0.9)
+    try makeStore(files: files).save(panel)
+
+    #expect(migrated.issue == nil)
+    #expect(migrated.preferences.askGeminiPanel == .default)
+    #expect(migrated.preferences.schemaVersion == ApplicationPreferences.currentSchemaVersion)
+    let written = try JSONDecoder().decode(
+      ApplicationPreferences.self, from: try #require(files.writes.last))
+    #expect(written.askGeminiPanel.zoom == 0.9)
+  }
+
+  @Test
   func invalidVoiceHistoryRetentionIsPreservedForRecovery() throws {
     let files = PreferenceFileAccess()
     let encoded = try JSONEncoder().encode(ApplicationPreferences.default)
