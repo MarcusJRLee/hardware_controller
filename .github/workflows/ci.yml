@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 # macOS runners are the scarce resource. A cheap Ubuntu job decides which lanes
-# a change needs; see CONTRIBUTING.md for the lanes and their time budgets.
+# a change needs; see docs/CONTRIBUTING.md for the lanes and their time budgets.
 jobs:
   changes:
     name: Classify changes
@@ -46,6 +46,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Runs the repo-kit gates in scripts/check_fast.sh on both lanes.
+      - name: Provide uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.12.13"
+          enable-cache: false
       - name: Run fast checks
         if: needs.changes.outputs.macos != 'true'
         run: |

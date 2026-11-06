@@ -19,6 +19,10 @@ all="macos=true ios=true codeql_macos=true codeql_ios=true"
 expect "README.md
 docs/architecture.md
 .claude/skills/verify/SKILL.md" "$none"
+expect ".mjrlee_repo_setup/hooks/guard_git.py
+.codex/hooks.json
+.lefthook/pre-push/mjrlee_push_rules.sh
+lefthook.yml" "$none"
 expect "Sources/HardwareControllerMac/action_executor.swift" "macos=true ios=false codeql_macos=true codeql_ios=false"
 expect "Sources/HardwareControllerCore/profile.swift" "$all"
 expect "apps/ios/voice_input/app/voice_input_app.swift" "macos=true ios=true codeql_macos=false codeql_ios=true"

@@ -2,7 +2,7 @@
 
 # Keeps CI from silently growing: every job has a time budget, macOS jobs (the
 # scarce runners) are gated by the change classifier or a push paths filter,
-# and every workflow cancels superseded runs. Budgets are in CONTRIBUTING.md.
+# and every workflow cancels superseded runs. Budgets are in docs/CONTRIBUTING.md.
 
 set -euo pipefail
 

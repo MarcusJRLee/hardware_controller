@@ -4,6 +4,7 @@ Issues and pull requests are welcome. For a substantial behavior or
 architecture change, open an issue first so scope and evidence are agreed.
 
 ```bash
+brew install lefthook uv && lefthook install   # Once per clone: repo-kit git hooks.
 scripts/run_demo.sh   # Explore without a pedal, signing, or permissions.
 scripts/check.sh      # Required before every PR; same as the Verify CI job.
 scripts/check_ios.sh  # When touching apps/ios or shared Voice code.
@@ -24,9 +25,9 @@ opening the package in Xcode, run `scripts/build_rust_ffi.sh` once.
 - Format with `scripts/swift_format.sh format --in-place --recursive Sources Tests`.
   It runs the swift-format pinned in `tools/swift_format/`, not Xcode's, so
   local and CI lint agree; bump it there, never per machine.
-- Update docs and journey proofs ([voice_cujs.md](docs/voice_cujs.md)) in the
+- Update docs and journey proofs ([voice_cujs.md](voice_cujs.md)) in the
   same PR; `scripts/check_docs.sh` fails on broken links or missing tests.
-- Update the topic's [decision record](docs/decisions/) when a durable choice changes.
+- Update the topic's [decision record](decisions/) when a durable choice changes.
 - Never change version metadata or create release artifacts without explicit
   approval for that exact version.
 
@@ -35,16 +36,16 @@ smoke-launched by `scripts/smoke_app.sh`) and `CodeQL`. The `iOS` job runs
 `scripts/check_ios.sh`.
 
 To prove a change in the running app, follow the
-[verify skill](.claude/skills/verify/SKILL.md).
+[verify skill](../.claude/skills/verify/SKILL.md).
 
 ## CI lanes
 
 macOS runners are scarce, so `scripts/classify_changes.sh` runs on Ubuntu and
-starts only the lanes a change needs ([Builds and workflow](docs/decisions/builds_and_workflow.md)):
+starts only the lanes a change needs ([Builds and workflow](decisions/builds_and_workflow.md)):
 
 | Lane | Runs when | Runner | Budget |
 | --- | --- | --- | --- |
-| Verify, fast | Only prose changed (`*.md`, `docs/`, `.claude/`) | Ubuntu | 15 min |
+| Verify, fast | Only prose or repo-kit files changed (`*.md`, `docs/`, `.claude/`, `.mjrlee_repo_setup/`, `.lefthook/`, `.codex/`, `lefthook.yml`) | Ubuntu | 15 min |
 | Verify, full | Anything else changed | macOS | 15 min |
 | iOS | `apps/ios`, shared Core, FFI, Rust, ASR or iOS scripts | macOS | 25 min |
 | CodeQL (macos / ios) | That platform's Swift or shared sources | macOS | 35 min |
@@ -98,6 +99,7 @@ in CI:
 | `schemas/` | Versioned Model-package and archive contracts. |
 | `Tests/cuj/` | Fixtures shared by Rust, Swift, and C. |
 | `packaging/` | Info.plist, entitlements, icon source. |
+| `.mjrlee_repo_setup/`, `.lefthook/`, `.codex/` | Shared repo kit: agent and git hooks, gates, roadmap tool; edit the kit, not these copies. |
 
 ## Tests
 
@@ -143,5 +145,5 @@ vulnerabilities through [SECURITY.md](SECURITY.md).
 
 ## License
 
-Contributions are licensed under [Apache 2.0](LICENSE) (Section 5). You keep
+Contributions are licensed under [Apache 2.0](../LICENSE) (Section 5). You keep
 your copyright; no CLA is required.

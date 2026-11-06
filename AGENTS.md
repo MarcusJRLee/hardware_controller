@@ -1,5 +1,10 @@
+<!-- mjrlee-repo-kit:rules:begin (managed; edit the kit) -->
+
 - Be extremely concise (unless I ask you to explain something), technical,
   accurate.
+- Optimizing user experience, agent developer experience, and human developer
+  experience is very important. All three should improve continuously; no change
+  may degrade any of them.
 - Favor modularity, reuse over duplication, iteration.
 - Design for maintainability, clarity, forward-compatibility.
 - Prefer to make the most technically correct decisions despite upfront cost.
@@ -18,7 +23,12 @@
   constraints. Do not comment trivial functions or restate readable code.
 - Comments should always be sentences and end with punctuation.
 - Handle edge cases explicitly.
-- Files & dirs: lowercase_with_underscores. Never use dashes for files & dirs.
+- Leave no vestiges. Once a one-time migration, compatibility shim, or
+  transition step has run everywhere it must, delete it along with its tests,
+  docs, ignore entries, and comments about the old state.
+- Files & dirs: lowercase_with_underscores. Never use dashes for files & dirs,
+  except inside skill trees (`skills/<name>/`, whose spec requires dashes) and
+  for names a tool mandates (e.g. `pnpm-lock.yaml`, `.lefthook/pre-push/`).
 - Ensure README.md and other docs prioritise human readability. Lead with the
   bash commands a reader needs to get going. Use tables for things like
   path→meaning. Trim every sentence — if removing it doesn't lose signal, delete
@@ -31,26 +41,75 @@
 - Update source-controlled documentation in the same change as behavior. Work is
   incomplete while architecture, runbooks, state, or acceptance docs describe
   obsolete behavior.
+- Keep durable knowledge (runbooks, gotchas, decisions, project state) in the
+  repo, where any agent or human finds it: the owning module's README, or
+  AGENTS.md for repo-wide rules. Never in provider-specific agent memory.
+- Markdown lives under `docs/` or as a directory's `README.md`, one place per
+  kind of information; skill trees and `.github/` (layouts a tool fixes) are
+  allowed too. Any other location is listed with its reason in
+  `.mjrlee_repo_setup/markdown_paths.toml`, and the entry is deleted with the
+  file.
+- Anything an agent starts or creates on the machine (containers, images,
+  volumes, servers, background processes, caches, worktrees, temp files) must be
+  torn down or bounded before finishing, so repeated work does not exhaust disk,
+  memory, or CPU over time.
+- [Docker] Label every container, image, volume, and network a repo creates with
+  `mjrlee.owner` (`repo/module`), `mjrlee.purpose` (one sentence), and
+  `mjrlee.lifetime`: `ephemeral` (delete once unused), `cache` (rebuildable;
+  delete to reclaim space), or `persistent` (holds state; delete only with the
+  owner's approval). Compose files set `labels` on each service and its `build`;
+  label a named volume only when first adding it, since Compose offers to delete
+  an existing volume whose labels change. Audit or clean up with
+  `uv run --no-project python .mjrlee_repo_setup/hooks/docker_resources.py`
+  (`--help` for commands).
 - [UI] UIs should be simple, clean, and beautiful - not cluttered or hectic.
   There should be an intentional and pronounced style that is documented in the
   root README.md of the repo - if not present ask for one and place it there.
   There should be prosidy - all choices should be intentional and directed
   toward the central purpose and style. Default to no colors and no borders then
   add borders and colors in minimally only where necessary.
+- [Roadmap] Committed work lives in `docs/roadmap/<slug>.md`, one file per
+  outcome; ideas without a commitment go in `docs/roadmap/README.md` with the
+  event that would trigger them. Run
+  `uv run --no-project python .mjrlee_repo_setup/tools/roadmap.py` (`--help` for
+  commands); it renders the gitignored `docs/roadmap/index.md`. With no task
+  named, run `roadmap.py claim`: it pushes branch `roadmap/<slug>` (the claim)
+  and sets up `.worktrees/<slug>` to work in. The PR that finishes an item
+  deletes its file and its slug from every `depends_on`. Record an external
+  blocker as an `executor: human` item that others depend on.
 - [Git] Make all repository changes on a dedicated branch and deliver them
   through a pull request; modify the default branch or use any non-PR workflow
   only when the user explicitly requests and approves that exception.
-- [GitHub] Use the operating system credential store for GitHub authentication.
-  Never copy tokens into environment files or plaintext GitHub configuration.
-- [Testing] Every module with behavioral logic needs a concise colocated
-  `FILENAME_test.EXT`. Thin route wrappers, re-exports, constants, styles,
-  declarations, generated infrastructure, and modules without logic are exempt.
+- [Git] A PR that needs an unmerged PR's work may stack on its branch. Once the
+  base squash-merges, run `git rebase --onto origin/main <old base tip>` and
+  `git push --force-with-lease`; the pre-push hook allows force pushes only to
+  unprotected branches whose remote tip the branch already held.
+- [Git] Create worktrees only as `.worktrees/<name>` in the main checkout (a
+  hook blocks other paths, except Claude desktop's fixed `.claude/worktrees/`,
+  and routes Claude Code's own worktrees to `.worktrees/`), and remove each one
+  with its local branch once its PR merges. The main checkout stays on the
+  default branch; a hook switches it back.
+- [GitHub] GitHub CLI credentials live in the macOS Keychain. Sandboxed `gh`
+  commands cannot read them and may falsely report an invalid token. Run `gh`
+  with scoped Keychain access and verify there before asking the user to
+  reauthenticate. Never copy the token into an environment file or plaintext
+  GitHub config.
+- [Testing] Modules with behavioral logic deserve a concise colocated
+  `FILENAME_test.EXT`. Files without logic usually don't: thin wrappers,
+  re-exports, declarations, styles, generated code, and config or data files.
+  Use judgment; a config's invariants are usually better enforced by validation
+  in the module that owns the rule (run by lint or at load) than by testing the
+  config itself.
 - [Testing] Test logic should be as concise as possible while still getting full
   test coverage. This means using shared logic sensibly to keep actual test
   functions scanable.
 - [Testing] Always run tests and type checks on any lines of code you change
   before finishing.
+- [Testing] Put verification pages and screenshots in the gitignored `tmp/`.
+  After the user reviews them, delete the files the thread created.
 - Begin every reply by addressing me as "Ser".
+
+<!-- mjrlee-repo-kit:rules:end -->
 
 ## Project rules
 
@@ -61,9 +120,6 @@
   decision record in the same PR. Records state current decisions; edit the
   topic's record rather than adding one per change, and say what changed.
 - Mark unverified hardware claims as hypotheses until measured on the device.
-- Durable project knowledge (workflow, toolchain pitfalls, standing
-  permissions) goes in source-controlled docs, never agent memory;
-  `.claude/settings.json` disables auto memory.
 
 ### Product boundaries
 
@@ -111,7 +167,7 @@
 
 - You may squash-merge PRs you opened once required checks pass. Never merge
   others' PRs or bypass checks.
-- Land one PR at a time as `CONTRIBUTING.md` "Landing" describes.
+- Land one PR at a time as `docs/CONTRIBUTING.md` "Landing" describes.
 
 ### Personal builds and releases
 

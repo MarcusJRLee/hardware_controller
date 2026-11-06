@@ -30,6 +30,9 @@ for file in "${changed[@]}"; do
     # Prose cannot change a build; the fast lane still checks links and maps.
     *.md|docs/*|LICENSE|NOTICE|.github/ISSUE_TEMPLATE/*|.claude/*)
       continue ;;
+    # Agent and git-hook tooling never reaches a build; the fast lane gates it.
+    .mjrlee_repo_setup/*|.codex/*|.lefthook/*|lefthook.yml)
+      continue ;;
     # CI itself must prove every lane it defines.
     .github/workflows/*|.github/actions/*|scripts/classify_changes.sh)
       for name in "${lanes[@]}"; do lane[$name]=true; done

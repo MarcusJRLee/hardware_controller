@@ -9,7 +9,7 @@
 The window mixes live hardware, Binding editing, Profiles, History, and
 preferences. The connected controller should stay the visual center, and the
 icons must say what each app is at 16 px. The current style is described in the
-root [README](../../README.md) and [BRANDING](../../BRANDING.md).
+root [README](../../README.md) and [BRANDING](../branding.md).
 
 | Criterion                       | Sidebar destinations | Separate windows | One scrolling workspace |
 | ------------------------------- | -------------------- | ---------------- | ----------------------- |
