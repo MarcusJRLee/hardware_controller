@@ -64,6 +64,22 @@ struct LocalAIDictationTests {
       try settings.validate()
     }
 
+    settings.dictionary = PersonalDictionary(
+      replacements: [
+        PersonalDictionaryReplacement(
+          spokenForm: "PR",
+          replacement: "PR {number}"
+        )
+      ]
+    )
+    #expect(
+      throws: LocalAISettingsValidationError.invalidReplacementPattern(
+        .slotMissingFromSpokenForm(.number)
+      )
+    ) {
+      try settings.validate()
+    }
+
     settings.dictionary = .empty
     settings.additionalInstructions = String(repeating: "x", count: 2_001)
     #expect(throws: LocalAISettingsValidationError.instructionsTooLong) {

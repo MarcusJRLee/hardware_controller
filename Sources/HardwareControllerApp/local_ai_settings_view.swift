@@ -188,11 +188,13 @@ struct LocalAISettingsSection: View {
 
   private var dictionaryReplacements: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("Exact replacements")
+      Text("Replacements")
         .font(.headline)
-      Text("Replace a spoken form after recognition, before refinement.")
-        .font(.caption)
-        .foregroundStyle(.secondary)
+      Text(
+        "Replace a spoken form after recognition, before refinement. Add {number} to turn a spoken number into digits, for example PR {number}."
+      )
+      .font(.caption)
+      .foregroundStyle(.secondary)
       ForEach(settings.dictionary.replacements) { item in
         HStack {
           Text("\(item.spokenForm) → \(item.replacement)")
@@ -226,7 +228,13 @@ struct LocalAISettingsSection: View {
           .disabled(
             normalizedSpokenForm.isEmpty
               || normalizedReplacement.isEmpty
+              || replacementPatternProblem != nil
           )
+      }
+      if let replacementPatternProblem {
+        Text(replacementPatternProblem)
+          .font(.caption)
+          .foregroundStyle(.secondary)
       }
     }
   }
@@ -485,6 +493,18 @@ struct LocalAISettingsSection: View {
     replacement.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
+  private var replacementPatternProblem: String? {
+    do {
+      try PersonalDictionaryReplacement(
+        spokenForm: normalizedSpokenForm,
+        replacement: normalizedReplacement
+      ).validatePattern()
+      return nil
+    } catch {
+      return error.settingsMessage
+    }
+  }
+
   private func addVocabularyEntry() {
     let entry = normalizedVocabularyEntry
     guard !entry.isEmpty else {
@@ -533,6 +553,19 @@ extension View {
   fileprivate func dictionaryInputField() -> some View {
     textFieldStyle(.roundedBorder)
       .controlSize(.regular)
+  }
+}
+
+extension DictionaryReplacementPatternError {
+  fileprivate var settingsMessage: String {
+    switch self {
+    case .spokenFormNeedsWords:
+      "Add a word beside {number} so ordinary numbers stay unchanged."
+    case .repeatedSlot(let slot):
+      "Use \(slot.placeholder) once in the spoken form."
+    case .slotMissingFromSpokenForm(let slot):
+      "Add \(slot.placeholder) to the spoken form to use it in the replacement."
+    }
   }
 }
 

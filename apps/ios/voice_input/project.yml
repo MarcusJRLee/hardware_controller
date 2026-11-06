@@ -81,9 +81,13 @@ targets:
     type: framework.static
     platform: iOS
     sources:
+      - path: ../../../Sources/HardwareControllerCore/dictionary_replacement_pattern.swift
+        group: portable_voice_core
       - path: ../../../Sources/HardwareControllerCore/local_ai_provider_kind.swift
         group: portable_voice_core
       - path: ../../../Sources/HardwareControllerCore/personal_dictionary.swift
+        group: portable_voice_core
+      - path: ../../../Sources/HardwareControllerCore/spoken_number_parser.swift
         group: portable_voice_core
       - path: ../../../Sources/HardwareControllerCore/voice_formatted_document_builder.swift
         group: portable_voice_core

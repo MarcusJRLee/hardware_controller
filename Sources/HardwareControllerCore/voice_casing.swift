@@ -85,7 +85,7 @@ public struct VoiceCasingTransformer: Sendable {
       patterns.flatMap { matches(pattern: $0, in: source) }
     )
     tokens.formUnion(dictionary.vocabulary)
-    tokens.formUnion(dictionary.replacements.map(\.replacement))
+    tokens.formUnion(dictionary.replacementOutputs(in: source))
     if preserveProseCasing {
       tokens.formUnion(matches(pattern: #"\b[A-Z]{2,}\b"#, in: source))
       tokens.formUnion(sourceSignaledNames(in: source))

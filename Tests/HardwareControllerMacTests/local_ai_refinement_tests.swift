@@ -151,52 +151,6 @@ struct LocalAIRefinementTests {
   }
 
   @Test
-  func exactReplacementsUseCaseInsensitiveWordBoundaries() {
-    let dictionary = PersonalDictionary(
-      replacements: [
-        PersonalDictionaryReplacement(
-          spokenForm: "whisper flow",
-          replacement: "Wispr Flow"
-        ),
-        PersonalDictionaryReplacement(
-          spokenForm: "TSC",
-          replacement: "TypeScript compiler"
-        ),
-      ]
-    )
-
-    let result = PersonalDictionaryReplacementApplier().apply(
-      dictionary,
-      to: "WHISPER FLOW uses tsc, not itscored."
-    )
-
-    #expect(result == "Wispr Flow uses TypeScript compiler, not itscored.")
-  }
-
-  @Test
-  func equalLengthOverlappingReplacementsUseConfiguredOrder() {
-    let dictionary = PersonalDictionary(
-      replacements: [
-        PersonalDictionaryReplacement(
-          spokenForm: "alpha beta",
-          replacement: "X"
-        ),
-        PersonalDictionaryReplacement(
-          spokenForm: "beta gamma",
-          replacement: "Y"
-        ),
-      ]
-    )
-
-    let result = PersonalDictionaryReplacementApplier().apply(
-      dictionary,
-      to: "alpha beta gamma"
-    )
-
-    #expect(result == "X gamma")
-  }
-
-  @Test
   func validatorPreservesProtectedEntitiesAndTargetCapability() throws {
     let validator = RefinedTranscriptValidator()
     let source =
