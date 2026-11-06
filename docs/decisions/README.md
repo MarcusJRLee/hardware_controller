@@ -21,7 +21,7 @@ Git keeps the history. The 63 numbered records these replace are at
 | [iOS keyboard delivery](ios_keyboard_delivery.md) | Styles, field safety, stale service, bounded insertion recovery. | 0044, 0045, 0047, 0048 |
 | [Local-only boundary](local_only_boundary.md) | Provider locality, the only network code, offline checks. | 0033, 0049 |
 | [Identity and licensing](identity_and_licensing.md) | Apache 2.0, ownership, app identity, publication. | 0024–0028 |
-| [Builds and workflow](builds_and_workflow.md) | Personal installs, version approval, branches, CI lanes. | 0019, 0023, 0051, 0052, 0059 |
+| [Builds and workflow](builds_and_workflow.md) | Personal installs, version approval, branches, landing, CI lanes, toolchain. | 0019, 0023, 0051, 0052, 0059 |
 
 Each record leads with its context and a decision matrix (options as columns,
 criteria as rows), then the decision and its consequences. Mark claims not yet
