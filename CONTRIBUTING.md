@@ -60,6 +60,27 @@ without a timeout, over budget, or on macOS without `needs: changes` or a push
 **CI health** workflow fails when a job's p50 passes 70% of its budget; run
 `scripts/ci_durations.sh` to see p50, max, and queue time.
 
+## Landing
+
+`main` requires up-to-date branches, so each merge restarts the next PR's
+lanes. Land one PR at a time: update its branch from `main`, wait for required
+checks, squash-merge, then move to the next.
+
+- CI runs on `pull_request` only, so pushing a branch costs nothing; open the
+  PR once its base has landed.
+- Cancel runs on a stacked PR until its base lands.
+
+## Toolchain compatibility
+
+CI uses the `macos-26` image's default Xcode (26.6, Swift 6.2, iOS 26.5 SDK as
+of 2026-11), which may be older than yours. These pass on newer Xcode and fail
+in CI:
+
+| Pattern | Why it fails on Xcode 26 | Write instead |
+| --- | --- | --- |
+| `AVAudioConverter.convert` input block capturing a mutable flag or buffer | The block is `@Sendable`. | A `Sendable` one-shot input object owning the buffer and a `Mutex` flag (`OneShotAudioInput` in `microphone_capture.swift`). |
+| Typed `throws` inside `withUnsafeBufferPointer`, `withCString`, or `map` | Those are `rethrows`, which erases the typed error. | Return `Result` from the closure and call `.get()` outside, or use a loop. |
+
 ## Source map
 
 | Path | Owns |

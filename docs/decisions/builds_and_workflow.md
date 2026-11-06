@@ -1,7 +1,8 @@
 # Builds, versions, and workflow
 
 - **Status:** Accepted
-- **Updated:** 2026-11-06
+- **Updated:** 2026-11-06 (added serial landing and toolchain drift policy;
+  moved CodeQL after merge)
 - **Replaces:** 0019, 0023, 0051, 0052, 0059
 
 ## Context
@@ -26,6 +27,14 @@ after merge.
 | Wait before a Swift PR can merge | 🔴 ~21 min.         | 🟢 ~7 min.         | 🟠 ~12–15 min, unmeasured. |
 | Security findings before merge   | 🟢 Yes.             | 🔴 No; on `main` within ~25 min. | 🟢 Yes. |
 | Runner cost                      | 🟢 Standard.        | 🟢 Standard.       | 🔴 Paid minutes. |
+
+CI's Xcode is older than the maintainer's, and on 2026-11-01 three changes
+passed locally and failed only in CI.
+
+| Criterion                  | One local Xcode, documented patterns | Second local Xcode matching CI |
+| -------------------------- | ------------------------------------ | ------------------------------ |
+| Drift caught before push   | 🟠 Known patterns only.              | 🟢 All.                        |
+| Local disk and upkeep      | 🟢 None added.                       | 🔴 A second install to update.  |
 
 ## Decision
 
@@ -59,11 +68,23 @@ after merge.
   never bypass protections.
 - Keep behavior, tests, migrations, and docs together in one PR; split
   unrelated work. Merging is source control only, never release approval.
+- PRs land one at a time, because each merge restarts the next PR's lanes
+  ([Landing](../../CONTRIBUTING.md#landing)). Agents may squash-merge PRs they
+  opened once required checks pass.
+
+**Toolchain**
+
+- CI uses the `macos-26` image's default Xcode; maintainers keep one, newer,
+  local Xcode rather than installing CI's. SDK and compiler drift therefore
+  surfaces one CI run late, so known patterns live in
+  [Toolchain compatibility](../../CONTRIBUTING.md#toolchain-compatibility).
+- `scripts/swift_format.sh` runs the formatter pinned in `tools/swift_format/`
+  locally and on CI, so lint never drifts.
 
 **CI**
 
 - An Ubuntu `changes` job runs `scripts/classify_changes.sh` and gates every
-  macOS job; workflow and classifier edits run every lane.
+  macOS PR job; workflow and classifier edits run every lane.
 - `Verify` always reports: prose-only changes run `scripts/check_fast.sh` on
   Ubuntu, anything else `scripts/check.sh` on macOS. `iOS` runs for iOS, shared
   Core, FFI, Rust, and ASR inputs.
