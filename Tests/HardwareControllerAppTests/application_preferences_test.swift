@@ -228,7 +228,7 @@ struct ApplicationPreferencesStoreTests {
 
     let migrated = makeStore(files: files).load()
     var panel = migrated.preferences
-    panel.askGeminiPanel = AskGeminiPanelSettings(zoom: 0.9)
+    panel.askGeminiPanel = AskGeminiPanelSettings(zoomByHost: ["gemini.google.com": 0.9])
     try makeStore(files: files).save(panel)
 
     #expect(migrated.issue == nil)
@@ -236,7 +236,22 @@ struct ApplicationPreferencesStoreTests {
     #expect(migrated.preferences.schemaVersion == ApplicationPreferences.currentSchemaVersion)
     let written = try JSONDecoder().decode(
       ApplicationPreferences.self, from: try #require(files.writes.last))
-    #expect(written.askGeminiPanel.zoom == 0.9)
+    #expect(written.askGeminiPanel.zoom(for: "gemini.google.com") == 0.9)
+  }
+
+  @Test
+  func schemaNinePanelWideZoomBecomesGeminiZoom() throws {
+    let files = PreferenceFileAccess()
+    let encoded = try JSONEncoder().encode(ApplicationPreferences(schemaVersion: 9))
+    var object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    object["askGeminiPanel"] = ["zoom": 0.8]
+    files.data = try JSONSerialization.data(withJSONObject: object)
+
+    let result = makeStore(files: files).load()
+
+    #expect(result.issue == nil)
+    #expect(result.preferences.schemaVersion == ApplicationPreferences.currentSchemaVersion)
+    #expect(result.preferences.askGeminiPanel.zoomByHost == ["gemini.google.com": 0.8])
   }
 
   @Test

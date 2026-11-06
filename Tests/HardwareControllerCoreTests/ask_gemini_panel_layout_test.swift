@@ -87,27 +87,38 @@ struct AskGeminiPanelLayoutTest {
   }
 
   @Test
-  func zoomStepsStopAtEitherEndAndSnapStoredValues() {
-    #expect(AskGeminiPanelSettings(zoom: 1.0).steppedZoom(increasing: false) == 0.9)
-    #expect(AskGeminiPanelSettings(zoom: 1.0).steppedZoom(increasing: true) == 1.1)
-    #expect(AskGeminiPanelSettings(zoom: 0.5).steppedZoom(increasing: false) == nil)
-    #expect(AskGeminiPanelSettings(zoom: 2.0).steppedZoom(increasing: true) == nil)
-    #expect(AskGeminiPanelSettings(zoom: 0.93).zoom == 0.9)
-    #expect(AskGeminiPanelSettings(zoom: 40).zoom == 2.0)
-    #expect(AskGeminiPanelSettings(zoom: .nan).zoom == 1.0)
+  func zoomIsRememberedPerSiteSnappedAndStepped() {
+    var settings = AskGeminiPanelSettings()
+    settings.setZoom(0.93, for: "Gemini.Google.com")
+    settings.setZoom(40, for: "accounts.google.com")
+    settings.setZoom(.nan, for: "myaccount.google.com")
+    settings.setZoom(0.8, for: " ")
+
+    #expect(settings.zoom(for: "gemini.google.com") == 0.9)
+    #expect(settings.zoom(for: "accounts.google.com") == 2.0)
+    #expect(settings.zoom(for: "www.google.com") == 1.0)
+    #expect(settings.zoom(for: nil) == 1.0)
+    #expect(settings.zoomByHost.keys.sorted() == ["accounts.google.com", "gemini.google.com"])
+    #expect(settings.steppedZoom(increasing: false, for: "gemini.google.com") == 0.8)
+    #expect(settings.steppedZoom(increasing: true, for: "www.google.com") == 1.1)
+    #expect(settings.steppedZoom(increasing: true, for: "accounts.google.com") == nil)
+    settings.setZoom(1.0, for: "gemini.google.com")
+    #expect(settings.zoomByHost["gemini.google.com"] == nil)
+    settings.setZoom(0.5, for: "gemini.google.com")
+    #expect(settings.steppedZoom(increasing: false, for: "gemini.google.com") == nil)
   }
 
   @Test
-  func decodingDropsUnusableLockPointsAndDefaultsMissingFields() throws {
-    let decoded = try decode(
+  func decodingDropsUnusableLockPointsAndMigratesPanelWideZoom() throws {
+    let schemaNine = try decode(
       #"{"lockPoint":{"displayID":"dell","x":0,"y":0,"width":-5,"height":10},"zoom":0.8}"#)
     let empty = try decode("{}")
     let valid = AskGeminiPanelSettings(
       lockPoint: AskGeminiLockPoint(frame: PanelRect(x: 1, y: 2, width: 3, height: 4), on: dell),
-      zoom: 0.9
+      zoomByHost: ["gemini.google.com": 0.9, "accounts.google.com": 1.25]
     )
 
-    #expect(decoded == AskGeminiPanelSettings(lockPoint: nil, zoom: 0.8))
+    #expect(schemaNine == AskGeminiPanelSettings(zoomByHost: ["gemini.google.com": 0.8]))
     #expect(empty == .default)
     #expect(try decode(String(decoding: JSONEncoder().encode(valid), as: UTF8.self)) == valid)
   }
@@ -121,6 +132,7 @@ struct AskGeminiPanelLayoutTest {
       (33, [.command, .shift], .previousChat),
       (17, [.command], .newChat),
       (13, [.command], .closeChat),
+      (13, [.command, .shift], .closeWindow),
       (24, [.command, .shift], .zoomIn),
       (27, [.command, .shift], .zoomOut),
       (29, [.command, .shift], .zoomReset),

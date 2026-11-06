@@ -1,7 +1,7 @@
 # Inputs, Profiles, and Actions
 
 - **Status:** Accepted
-- **Updated:** 2026-11-06 (adds the Ask Gemini Action and its panel)
+- **Updated:** 2026-11-06 (Ask Gemini panel: ⌘W closes a chat, ⌘⇧W the panel; zoom per site)
 - **Replaces:** 0004, 0014, 0016, 0018, 0034
 
 ## Context
@@ -90,9 +90,13 @@ several ways to start Voice without each growing its own workflow.
 - The panel opens at the saved lock point when its display is connected,
   otherwise on a display other than the one holding the focused window. The
   lock button sets, shows, and returns to the lock point.
-- Shortcuts while the panel has focus: ⌘T, ⌘W, ⌃Tab/⌃⇧Tab, ⌘⇧]/⌘⇧[, ⌘1–⌘9,
-  ⌘⇧+/⌘⇧-/⌘⇧0 for zoom, plus standard editing chords. Zoom and the lock point
-  persist in `preferences.json` (schema 9). Profiles moved to schema 6 so
+- Shortcuts while the panel is the key window: ⌘T, ⌘W (one chat), ⌘⇧W (every
+  chat and the panel, like the close button), ⌃Tab/⌃⇧Tab, ⌘⇧]/⌘⇧[, ⌘1–⌘9,
+  ⌘⇧+/⌘⇧-/⌘⇧0 for zoom, plus standard editing chords. The panel claims them
+  in `performKeyEquivalent`, before the menu bar's Close Window.
+- Zoom is stored per site, like a browser, and applied as each page commits.
+  Zoom and the lock point persist in `preferences.json` (schema 10; schema 9's
+  single zoom moves to `gemini.google.com`). Profiles moved to schema 6 so
   older builds never overwrite a Profile with this Action.
 - Network and privacy limits: [Local-only boundary](local_only_boundary.md).
 
