@@ -10,6 +10,7 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 # Reuses the release signature policy without running the release.
 source scripts/build_release.sh
+source scripts/local_env.sh
 
 canonical="${HC_INSTALL_PATH:-/Applications/Hardware Controller.app}"
 bundle_id="com.longdevity.hardwarecontroller"
@@ -22,7 +23,8 @@ release_fail() {
 
 # Loads ignored signing values and requires an unexpired Apple Development identity.
 load_signing_environment() {
-  local env_file="${HC_ENV_FILE:-.env.local}"
+  local env_file
+  env_file="$(local_env_file)"
   [[ -f "$env_file" ]] || release_fail "$env_file is missing; copy .env.example."
   set -a
   source "$env_file"
