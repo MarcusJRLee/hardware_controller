@@ -12,9 +12,11 @@ cd "$repo_root"
 failures=()
 tracked=("${(@f)$(git ls-files)}")
 
-# Dashes are reserved for ecosystem-mandated names.
+# Dashes are reserved for ecosystem-mandated names. Lefthook runs scripts only
+# from `.lefthook/<git hook name>/`, so only that directory may be dashed.
 for file in "${tracked[@]}"; do
   [[ "$file" == .github/* || "$file" == *.xcodeproj/* || "$file" == (rust-toolchain.toml|.swift-format) ]] && continue
+  [[ "$file" == .lefthook/*/* ]] && file="${file#.lefthook/*/}"
   [[ "$file" == *-* ]] && failures+=("$file: use lowercase_with_underscores, not dashes")
 done
 

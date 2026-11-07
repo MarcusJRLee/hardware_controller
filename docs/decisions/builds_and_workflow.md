@@ -59,7 +59,7 @@ passed locally and failed only in CI.
 - Keep behavior, tests, migrations, and docs together in one PR; split
   unrelated work. Merging is source control only, never release approval.
 - PRs land one at a time, because each merge restarts the next PR's lanes
-  ([Landing](../../CONTRIBUTING.md#landing)). Agents may squash-merge PRs they
+  ([Landing](../CONTRIBUTING.md#landing)). Agents may squash-merge PRs they
   opened once required checks pass.
 
 **Toolchain**
@@ -67,9 +67,26 @@ passed locally and failed only in CI.
 - CI uses the `macos-26` image's default Xcode; maintainers keep one, newer,
   local Xcode rather than installing CI's. SDK and compiler drift therefore
   surfaces one CI run late, so known patterns live in
-  [Toolchain compatibility](../../CONTRIBUTING.md#toolchain-compatibility).
+  [Toolchain compatibility](../CONTRIBUTING.md#toolchain-compatibility).
 - `scripts/swift_format.sh` runs the formatter pinned in `tools/swift_format/`
   locally and on CI, so lint never drifts.
+
+**Repo kit**
+
+- The shared `mjrlee-repo-setup` kit manages `.mjrlee_repo_setup/`, the rules
+  block in `AGENTS.md`, agent hooks (`.claude/settings.json`,
+  `.codex/hooks.json`), and lefthook git hooks (`.lefthook/`,
+  `lefthook.yml`'s `extends`). Update it by re-running the skill, never by hand.
+- Its git hooks refuse pushes to or deleting `main` and any force push to it,
+  warn when `main` changed the files a branch changes, and keep worktrees in
+  `.worktrees/<name>`. They need `brew install lefthook uv` and
+  `lefthook install` once per clone.
+- `scripts/check_fast.sh` runs the kit's Markdown placement, Docker label, and
+  roadmap gates, so CI provides a pinned `uv`. Kit-only changes take the fast
+  lane.
+- Markdown lives under `docs/`, in `README.md` files, skill trees, or
+  `.github/`; `CONTRIBUTING.md` and `SECURITY.md` live in `docs/`, where GitHub
+  also reads them.
 
 **CI**
 
@@ -90,6 +107,8 @@ passed locally and failed only in CI.
 ## Consequences
 
 - Several personal iterations share one version and build number.
+- Changed 2026-11: adopted the repo kit; root `CONTRIBUTING.md`,
+  `SECURITY.md`, and `BRANDING.md` moved into `docs/`.
 - A misclassified path could skip a lane; the classifier has tests, and the
   weekly full CodeQL run bounds the exposure. A new source directory may need a
   classifier rule.

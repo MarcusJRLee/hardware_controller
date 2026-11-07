@@ -1,0 +1,15 @@
+# Kit git hooks, installed to .mjrlee_repo_setup/lefthook.yml and pulled in by
+# the repo's lefthook.yml `extends`. They are scripts, not commands: lefthook
+# skips a pre-push command when the push changes no files, a script never.
+pre-push:
+  scripts:
+    "mjrlee_push_rules.sh":
+      runner: sh
+      use_stdin: true
+    "mjrlee_main_overlap.sh":
+      runner: sh
+      use_stdin: true
+post-checkout:
+  scripts:
+    "mjrlee_worktree_rules.sh":
+      runner: sh

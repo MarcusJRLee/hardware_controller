@@ -1,0 +1,17 @@
+extends:
+  - .mjrlee_repo_setup/lefthook.yml
+
+# Keeps the gitignored docs/roadmap/index.md current; offline so checkouts and
+# pulls never wait on the network.
+post-checkout:
+  commands:
+    roadmap_index:
+      run:
+        uv run --no-project python .mjrlee_repo_setup/tools/roadmap.py list
+        --offline > /dev/null
+post-merge:
+  commands:
+    roadmap_index:
+      run:
+        uv run --no-project python .mjrlee_repo_setup/tools/roadmap.py list
+        --offline > /dev/null

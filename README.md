@@ -44,7 +44,7 @@ measures cost, not quality; for quality, list your own clips as
 `id<TAB>clip.wav<TAB>reference` in an ignored TSV.
 
 Opt-in system checks (real microphone, speech, focused fields, local models)
-are listed in [CONTRIBUTING.md](CONTRIBUTING.md#opt-in-system-checks).
+are listed in [CONTRIBUTING.md](docs/CONTRIBUTING.md#opt-in-system-checks).
 
 ## Style
 
@@ -66,7 +66,7 @@ Voice Input (`swift tools/app_icons/render_app_icons.swift`). Details:
 | [Voice journeys](docs/voice_cujs.md) | Every critical user journey and the test that proves it. |
 | [Game plan](docs/game_plan.md) | Quality gates, open evidence, risks. |
 | [UX specification](docs/ux_spec.md) | Visual and accessibility contract. |
-| [Contributing](CONTRIBUTING.md) | Workflow, source map, test placement, Drivers. |
+| [Contributing](docs/CONTRIBUTING.md) | Workflow, source map, test placement, Drivers. |
 | [Decisions](docs/decisions/) | One current decision record per topic. |
 | [Infinity 3 evidence](docs/hardware/infinity_3.md) | Device protocol evidence. |
 | [Public distribution](docs/public_distribution.md) | Gated Developer ID and notarization runbook. |
@@ -76,4 +76,4 @@ A version number is not release approval: no release script, DMG, tag, or
 GitHub Release without explicit approval for that exact version.
 
 Licensed under [Apache 2.0](LICENSE); copyright Marcus John Rice Lee
-([NOTICE](NOTICE), [BRANDING](BRANDING.md)).
+([NOTICE](NOTICE), [BRANDING](docs/branding.md)).

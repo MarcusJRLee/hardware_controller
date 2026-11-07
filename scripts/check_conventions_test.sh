@@ -37,6 +37,8 @@ expect() {
 
 expect pass "a conforming tree" ':'
 expect fail "a dashed path" 'print > Tests/bad-name.txt'
+expect pass "a lefthook hook directory" 'mkdir -p .lefthook/pre-push && print > .lefthook/pre-push/rules.sh'
+expect fail "a dashed lefthook script" 'mkdir -p .lefthook/pre-push && print > .lefthook/pre-push/my-rules.sh'
 expect fail "an untested source" 'print > Sources/HardwareControllerCore/new_logic.swift'
 expect fail "a stale exemption" 'print > Tests/Suite/values_test.swift'
 expect fail "an exemption for a deleted file" 'rm Sources/HardwareControllerCore/values.swift'

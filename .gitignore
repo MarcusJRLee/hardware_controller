@@ -40,3 +40,18 @@ local/
 # IDEs
 .idea/
 .vscode/
+
+# Per-user agent settings.
+.claude/settings.local.json
+
+# Agent verification output (see AGENTS.md); delete after review.
+tmp/
+
+# Roadmap view rendered by roadmap.py; never committed.
+docs/roadmap/index.md
+
+# Agent worktrees (see AGENTS.md); nested checkouts.
+.worktrees/
+
+# Claude desktop's default worktree dir; nested checkouts.
+.claude/worktrees/
