@@ -5,7 +5,7 @@ it, why, and whether it may be deleted, without anyone having to remember:
 
 | Label             | Value                                              |
 | ----------------- | -------------------------------------------------- |
-| `mjrlee.owner`    | Repo and module that creates it, e.g. `civic/api`. |
+| `mjrlee.owner`    | Repo and module that creates it, e.g. `shop/api`. |
 | `mjrlee.purpose`  | One sentence on what it is for.                    |
 | `mjrlee.lifetime` | A key of LIFETIMES.                                |
 
