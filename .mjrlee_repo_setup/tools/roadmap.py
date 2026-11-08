@@ -607,8 +607,11 @@ def write_index(root: Path, *, offline: bool) -> str:
     drafts = new_elsewhere(root, {i.slug for i in items})
     every = sorted([*items, *drafts], key=Item.sort_key)
     index = render_index(every, locate(root, [i.slug for i in every], claimed))
-    if every or (root / ROADMAP_DIR).is_dir():
-        (root / ROADMAP_DIR / INDEX).write_text(index, "utf-8")
+    folder = root / ROADMAP_DIR
+    if every or folder.is_dir():
+        # A draft in another worktree can list before this checkout has items.
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / INDEX).write_text(index, "utf-8")
     return index
 
 
