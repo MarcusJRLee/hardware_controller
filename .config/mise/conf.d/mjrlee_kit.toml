@@ -1,0 +1,9 @@
+# Kit-pinned dev tools, installed to .config/mise/conf.d/mjrlee_kit.toml. mise
+# merges it with the repo's own mise.toml, so repos add tools there, not here.
+# Bump a version here, then re-sync each repo; never edit a repo's copy.
+[tools]
+lefthook = "2.2.2"
+pnpm = "11.8.0" # Bootstrap only: pnpm then runs package.json's packageManager.
+shellcheck = "0.11.0"
+shfmt = "3.14.1"
+uv = "0.12.13"

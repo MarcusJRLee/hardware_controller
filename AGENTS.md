@@ -42,6 +42,11 @@
 - Update source-controlled documentation in the same change as behavior. Work is
   incomplete while architecture, runbooks, state, or acceptance docs describe
   obsolete behavior.
+- A repo is self-contained: a fresh clone on any machine builds, tests, and
+  passes its checks with only what the repo commits and pins, offline once its
+  tools are installed. Never make a check depend on another repo, a sibling
+  checkout, or one machine's paths; an extra that reads them must do nothing
+  when they are absent.
 - Keep durable knowledge (runbooks, gotchas, decisions, project state) in the
   repo, where any agent or human finds it: the owning module's README, or
   AGENTS.md for repo-wide rules. Never in provider-specific agent memory.

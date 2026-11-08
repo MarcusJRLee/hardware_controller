@@ -1,5 +1,5 @@
 {
-  "kit_version": "8b16031686f1b275",
+  "kit_version": "3801d3df6363751a",
   "units": {
     "file:.mjrlee_repo_setup/hooks/docker_labels.py": "4602034a404c788add751aeadddbe4f522c33abc7cb71358b8f66072391100fc",
     "file:.mjrlee_repo_setup/hooks/docker_resources.py": "0b05869addfb83365e7a051ee116f5b6bd98f6fb96bcab1386ab47f6d7009692",
@@ -22,9 +22,10 @@
     "file:.lefthook/post-checkout/mjrlee_worktree_rules.sh": "7c5ae81ecc7e696e6a0a5a9b914b69c247ef3f352afedfbcca416ab43ac8202b",
     "file:.lefthook/pre-push/mjrlee_main_overlap.sh": "c580d32af226c87db9c8d4e89c9960e995f215daac9f143c65c98dea54ec88ff",
     "file:.lefthook/pre-push/mjrlee_push_rules.sh": "14f94522abf3ec46a8d121bf0b30c9304364227f153b6ce62e19c5071e6fe6ae",
+    "file:.config/mise/conf.d/mjrlee_kit.toml": "132239157a4932782b996cb54f10eed9eaef5578c4be124402486f799ce84a92",
     "json:.claude/settings.json#hooks": "c8dd2fc9031dab39ecb8d8c41ab6adc7800017528034ab302c1d6151c7cddd4b",
     "file:.codex/hooks.json": "d447dfdde6b2bfc611993d46d37d67c3d8d5d7f6e2550d232fedea556c2ae5c8",
-    "block:AGENTS.md#rules": "c04095787e65232dd664e4102ed3decf3179051fe4d88eecef8073f8bbcfab69",
+    "block:AGENTS.md#rules": "ad4a896bf00826891a7581de87968fe18c4094d5537c952317a916bb8d7e33ed",
     "symlink:CLAUDE.md": "343aa72d3e62ce112e77d36c5f47ef60a01e8f81754e53ff63bf7f996d04799b",
     "lines:.gitignore": "40e0a1c2136e7ea2de11521a98314f2e479060fda2a27227120fed31eb55d7da",
     "lines:lefthook.yml#extends": "ef238a97b59aaa465d7e73990f69354cbd56434a8a6836066af5cdebdd1a01d3"
