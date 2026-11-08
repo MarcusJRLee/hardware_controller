@@ -16,9 +16,9 @@ items, so the PR that finishes one deletes its file and its slug from every
 `depends_on`. Order is ready first, then priority, then `rank`, a base-36 key
 that `new` and `move` write into the one file they touch, so parallel branches
 never conflict over order. A pushed `roadmap/<slug>` branch claims an item;
-`claim` creates it in `.worktrees/<slug>` from the default branch, installs
-dependencies (the pre-push gate needs them), then pushes it create-only, so of
-two racing claims exactly one succeeds.
+`claim` creates it in `.worktrees/<slug>` from the default branch, where the
+kit's post-checkout hook sets it up (the pre-push gate needs that), then pushes
+it create-only, so of two racing claims exactly one succeeds.
 
 Every command except `check` rewrites the gitignored `docs/roadmap/index.md`
 view, which therefore never goes stale in a commit; a run in any worktree also
@@ -351,12 +351,6 @@ def _cell(text: str) -> str:
     return text.replace("|", r"\|")
 
 
-# Lockfile → frozen install; the first match wins.
-INSTALLS: Final = (
-    ("pnpm-lock.yaml", ("pnpm", "install", "--frozen-lockfile")),
-    ("bun.lock", ("bun", "install", "--frozen-lockfile")),
-    ("package-lock.json", ("npm", "ci")),
-)
 # Mirrors `WORKTREE_DIR` in `hooks/git_queries.py`, which a module in another
 # directory may not import (agents_boundary_test); a test pins the copy.
 WORKTREE_DIR: Final = ".worktrees"
@@ -364,16 +358,11 @@ WORKTREE_DIR: Final = ".worktrees"
 SLOW_GIT: Final = 300
 
 
-def install_command(worktree: Path) -> tuple[str, ...] | None:
-    return next(
-        (argv for lock, argv in INSTALLS if (worktree / lock).is_file()), None
-    )
-
-
 def claim(root: Path, items: Sequence[Item], slug: str | None) -> str:
     """Claim an item: branch and worktree from the default branch, then push.
 
-    Dependencies are installed before the push because the pre-push gate
+    `git worktree add` runs the kit's post-checkout setup
+    (`hooks/setup_checkout.py`) before the push, because the pre-push gate
     checks the worktree. The push is the atomic claim: it wins only if it
     created the branch (porcelain flag `*`). Git reports pushing a commit the
     branch already points at as up to date, without checking a lease, so the
@@ -403,34 +392,30 @@ def claim(root: Path, items: Sequence[Item], slug: str | None) -> str:
             "origin/HEAD is unset; run `git remote set-head origin --auto`"
         )
     branch = f"{CLAIM_PREFIX}{slug}"
-    if (
-        _git(
-            root,
-            "worktree",
-            "add",
-            "--quiet",
-            "-b",
-            branch,
-            str(worktree),
-            head.strip(),
-            timeout=SLOW_GIT,
-        )
-        is None
-    ):
-        raise RoadmapError(f"`git worktree add` failed for {worktree}")
 
     def undo(reason: str) -> RoadmapError:
         _git(root, "worktree", "remove", "--force", str(worktree))
         _git(root, "branch", "-D", branch)
         return RoadmapError(f"{reason}; nothing was claimed")
 
-    argv = install_command(worktree)
-    if argv is not None:
-        result = subprocess.run(  # noqa: S603 - Fixed installer argv.
-            argv, cwd=worktree, capture_output=True, text=True, check=False
-        )
-        if result.returncode != 0:
-            raise undo(f"`{' '.join(argv)}` failed: {_tail(result, 300)}")
+    added = _run_git(
+        root,
+        "worktree",
+        "add",
+        "--quiet",
+        "-b",
+        branch,
+        str(worktree),
+        head.strip(),
+        timeout=SLOW_GIT,
+    )
+    if added is None or added.returncode != 0:
+        why = f"`git worktree add` failed: {_tail(added, 300)}"
+        # Only a failing post-checkout setup leaves a worktree behind; any
+        # earlier failure made nothing, and its branch may predate this claim.
+        if worktree.exists():
+            raise undo(why)
+        raise RoadmapError(why)
     ref = f"refs/heads/{branch}"
     pushed = _run_git(
         worktree,
@@ -622,8 +607,11 @@ def write_index(root: Path, *, offline: bool) -> str:
     drafts = new_elsewhere(root, {i.slug for i in items})
     every = sorted([*items, *drafts], key=Item.sort_key)
     index = render_index(every, locate(root, [i.slug for i in every], claimed))
-    if every or (root / ROADMAP_DIR).is_dir():
-        (root / ROADMAP_DIR / INDEX).write_text(index, "utf-8")
+    folder = root / ROADMAP_DIR
+    if every or folder.is_dir():
+        # A draft in another worktree can list before this checkout has items.
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / INDEX).write_text(index, "utf-8")
     return index
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Final
 
@@ -62,6 +63,34 @@ def main_checkout(cwd: Path) -> Path | None:
         cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"
     )
     return Path(common).resolve().parent if common else None
+
+
+def is_linked_worktree(cwd: Path) -> bool | None:
+    """Return True in a linked worktree, False in the main checkout, else None."""
+
+    git_dir = run_git(cwd, "rev-parse", "--absolute-git-dir")
+    common = run_git(
+        cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"
+    )
+    if git_dir is None or common is None:
+        return None
+    return Path(git_dir).resolve() != Path(common).resolve()
+
+
+def pushed_commits(lines: Iterable[str], cwd: Path) -> list[str]:
+    """Return the commits a pre-push sends that no origin branch has yet.
+
+    `lines` are git's pre-push ref lines; deletions send no commits.
+    """
+
+    found: list[str] = []
+    for line in lines:
+        parts = line.split()
+        if len(parts) != 4 or is_null_sha(parts[1]):
+            continue
+        listed = run_git(cwd, "rev-list", parts[1], "--not", "--remotes=origin")
+        found.extend(c for c in (listed or "").split() if c not in found)
+    return found
 
 
 def worktree_dir(cwd: Path) -> Path | None:

@@ -1,0 +1,5 @@
+# hardware_controller's settings for what the kit drives; format in
+# .mjrlee_repo_setup/hooks/repo_config.py.
+
+[launch]
+phase = "pre_launch"

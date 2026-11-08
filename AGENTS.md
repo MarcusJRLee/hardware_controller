@@ -36,12 +36,20 @@
   it. This file follows the same rule: every rule earns its place.
 - Don't go editing files outside of the current working directory without
   explicit permission. Ask first.
-- Any data source that is not expected to go beyond 20 MB in size (like a list
-  of household automations) should be in a source controlled file that can hold
-  comments rather than a database that is hard to edit / read.
+- Config as code: the repo is the source of truth for anything hand-curated and
+  small (roughly under 20 MB), both the settings of external systems (GitHub,
+  DNS, launchd, app preferences) and data (like a list of household
+  automations). Keep it in a commented, source-controlled file that a committed
+  script applies. Never change it only through a UI, console, or database. Copy
+  any change made outside back into the file.
 - Update source-controlled documentation in the same change as behavior. Work is
   incomplete while architecture, runbooks, state, or acceptance docs describe
   obsolete behavior.
+- A repo is self-contained: a fresh clone on any machine builds, tests, and
+  passes its checks with only what the repo commits and pins, offline once its
+  tools are installed. Never make a check depend on another repo, a sibling
+  checkout, or one machine's paths; an extra that reads them must do nothing
+  when they are absent.
 - Keep durable knowledge (runbooks, gotchas, decisions, project state) in the
   repo, where any agent or human finds it: the owning module's README, or
   AGENTS.md for repo-wide rules. Never in provider-specific agent memory.
@@ -78,6 +86,24 @@
   and sets up `.worktrees/<slug>` to work in. The PR that finishes an item
   deletes its file and its slug from every `depends_on`. Record an external
   blocker as an `executor: human` item that others depend on.
+- [Launch] Every repo declares `[launch] phase` in
+  `.mjrlee_repo_setup/repo.toml`: `pre_launch` or `public`, never a default.
+  Before launch, build the best foundation: tearing down, wiping data, and
+  service interruptions are fine. After launch, never interrupt service: every
+  behavior change ships behind a flag (each commit carries `Flag: <name>` or
+  `Flag: none (<reason>)`; a hook enforces it), schema changes expand before
+  they contract and only move forward, rollouts are staged, and every
+  user-facing surface has a kill switch.
+- [Flags] Every flag lives in the repo's one flag catalog, with its owner, the
+  binary it gates, its default, its rules per environment, the metrics that
+  judge it, and a removal date the catalog's lint enforces. A flag provider
+  holds only an applied copy, and a drift check fails on dashboard edits.
+  Evaluate at runtime where the repo has a backend, so a merged flag change
+  reaches users within the hour without a release; otherwise evaluate at build
+  time and roll out through staged releases.
+- [Metrics] Each rollout or experiment names its primary and guardrail metrics
+  in the flag catalog. Dashboards are code; agents read metrics through an API
+  or CLI.
 - [Git] Make all repository changes on a dedicated branch and deliver them
   through a pull request; modify the default branch or use any non-PR workflow
   only when the user explicitly requests and approves that exception.
@@ -90,6 +116,10 @@
   and routes Claude Code's own worktrees to `.worktrees/`), and remove each one
   with its local branch once its PR merges. The main checkout stays on the
   default branch; a hook switches it back.
+- [Git] A new worktree sets itself up: the post-checkout hook runs
+  `[checkout] setup` from `.mjrlee_repo_setup/repo.toml`, else the lockfile's
+  install. Where that file's `[replace]` names a command, such as `gh pr merge`,
+  run its replacement instead; a hook denies the original.
 - [GitHub] GitHub CLI credentials live in the macOS Keychain. Sandboxed `gh`
   commands cannot read them and may falsely report an invalid token. Run `gh`
   with scoped Keychain access and verify there before asking the user to
