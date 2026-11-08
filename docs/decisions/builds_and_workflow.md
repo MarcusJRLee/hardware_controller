@@ -79,11 +79,12 @@ passed locally and failed only in CI.
   `lefthook.yml`'s `extends`). Update it by re-running the skill, never by hand.
 - Its git hooks refuse pushes to or deleting `main` and any force push to it,
   warn when `main` changed the files a branch changes, and keep worktrees in
-  `.worktrees/<name>`. They need `brew install lefthook uv` and
-  `lefthook install` once per clone.
+  `.worktrees/<name>`. They need the kit's tools: `mise trust && mise install`
+  and `lefthook install` once per clone.
 - `scripts/check_fast.sh` runs the kit's Markdown placement, Docker label, and
-  roadmap gates, so CI provides a pinned `uv`. Kit-only changes take the fast
-  lane.
+  roadmap gates, so CI installs the kit's tools through mise
+  (`.github/actions/mise`), at the versions the kit pins. Kit-only changes take
+  the fast lane.
 - Markdown lives under `docs/`, in `README.md` files, skill trees, or
   `.github/`; `CONTRIBUTING.md` and `SECURITY.md` live in `docs/`, where GitHub
   also reads them.
