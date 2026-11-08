@@ -31,15 +31,9 @@ def check(cwd: Path, previous: str, flag: str) -> Path | None:
     # Only `git worktree add` (and clone) check out from the null commit.
     if not git_queries.is_null_sha(previous) or flag != "1":
         return None
-    git_dir = git_queries.run_git(cwd, "rev-parse", "--absolute-git-dir")
-    common = git_queries.run_git(
-        cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"
-    )
     top = git_queries.repo_root(cwd)
     main = git_queries.main_checkout(cwd)
-    if git_dir is None or common is None or top is None or main is None:
-        return None
-    if Path(git_dir).resolve() == Path(common).resolve():
+    if top is None or main is None or not git_queries.is_linked_worktree(cwd):
         return None
     return None if git_queries.is_allowed_worktree(top, main) else top
 
@@ -49,13 +43,10 @@ def home_branch(cwd: Path, flag: str) -> str | None:
 
     if flag != "1":
         return None
-    git_dir = git_queries.run_git(cwd, "rev-parse", "--absolute-git-dir")
-    common = git_queries.run_git(
-        cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"
-    )
-    if git_dir is None or common is None:
+    if git_queries.is_linked_worktree(cwd) is not False:
         return None
-    if Path(git_dir).resolve() != Path(common).resolve():
+    git_dir = git_queries.run_git(cwd, "rev-parse", "--absolute-git-dir")
+    if git_dir is None:
         return None
     if any((Path(git_dir) / name).exists() for name in DETACHING_OPERATIONS):
         return None

@@ -64,6 +64,18 @@ def main_checkout(cwd: Path) -> Path | None:
     return Path(common).resolve().parent if common else None
 
 
+def is_linked_worktree(cwd: Path) -> bool | None:
+    """Return True in a linked worktree, False in the main checkout, else None."""
+
+    git_dir = run_git(cwd, "rev-parse", "--absolute-git-dir")
+    common = run_git(
+        cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"
+    )
+    if git_dir is None or common is None:
+        return None
+    return Path(git_dir).resolve() != Path(common).resolve()
+
+
 def worktree_dir(cwd: Path) -> Path | None:
     """Return the dir new worktrees go in, from any worktree of the repo."""
 

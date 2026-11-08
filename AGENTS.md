@@ -42,6 +42,11 @@
 - Update source-controlled documentation in the same change as behavior. Work is
   incomplete while architecture, runbooks, state, or acceptance docs describe
   obsolete behavior.
+- A repo is self-contained: a fresh clone on any machine builds, tests, and
+  passes its checks with only what the repo commits and pins, offline once its
+  tools are installed. Never make a check depend on another repo, a sibling
+  checkout, or one machine's paths; an extra that reads them must do nothing
+  when they are absent.
 - Keep durable knowledge (runbooks, gotchas, decisions, project state) in the
   repo, where any agent or human finds it: the owning module's README, or
   AGENTS.md for repo-wide rules. Never in provider-specific agent memory.
@@ -90,6 +95,10 @@
   and routes Claude Code's own worktrees to `.worktrees/`), and remove each one
   with its local branch once its PR merges. The main checkout stays on the
   default branch; a hook switches it back.
+- [Git] A new worktree sets itself up: the post-checkout hook runs
+  `[checkout] setup` from `.mjrlee_repo_setup/repo.toml`, else the lockfile's
+  install. Where that file's `[replace]` names a command, such as `gh pr merge`,
+  run its replacement instead; a hook denies the original.
 - [GitHub] GitHub CLI credentials live in the macOS Keychain. Sandboxed `gh`
   commands cannot read them and may falsely report an invalid token. Run `gh`
   with scoped Keychain access and verify there before asking the user to

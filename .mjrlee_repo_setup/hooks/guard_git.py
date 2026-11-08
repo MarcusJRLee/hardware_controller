@@ -2,18 +2,22 @@
 
 The [Git] rules run as git hooks (`push_rules.py`, `worktree_rules.py`), where
 git supplies the real refs and paths, so no shell parsing is needed there. This
-hook only denies the few ways to switch those hooks off, by plain text match.
-Blocks by printing an explicit JSON deny decision, which Claude Code and Codex
-both honor.
+hook only denies the few ways to switch those hooks off, by plain text match,
+and the commands the repo's `repo.toml` replaces (`repo_commands.py`), such as
+`gh pr merge` where the repo merges through its own script. Blocks by printing
+an explicit JSON deny decision, which Claude Code and Codex both honor.
 """
 
 from __future__ import annotations
 
 import re
 import sys
+from pathlib import Path
 from typing import Final
 
+import git_queries
 from hook_event import deny_output, parse_event
+from repo_commands import CONFIG, RepoCommandsError, load
 
 # (pattern, what it does). Matching is textual, so a commit message or PR body
 # that merely mentions one is caught too; BYPASS_HINT says how to pass it.
@@ -58,11 +62,39 @@ def find_bypass(command: str) -> str | None:
     )
 
 
+def find_replaced(cwd: Path, command: str) -> str | None:
+    """Return why `command` is denied in favor of the repo's own, or None.
+
+    A malformed `repo.toml` denies nothing here; `setup_checkout.py` and
+    `verify_repo_kit.py` report it.
+    """
+
+    root = git_queries.repo_root(cwd)
+    if root is None:
+        return None
+    try:
+        replacement = load(root).replacement_for(command)
+    except RepoCommandsError:
+        return None
+    if replacement is None:
+        return None
+    return (
+        f"Blocked: this repo runs `{replacement.instead}` instead of "
+        f"`{' '.join(replacement.words)}` ({CONFIG}). If this is only "
+        "text, pass it from a file."
+    )
+
+
 def main() -> int:
     event = parse_event(sys.stdin.read())
-    why = find_bypass(event.command or "")
+    command = event.command or ""
+    why = find_bypass(command)
     if why is not None:
         print(deny_output(event, f"Blocked: {why}. {BYPASS_HINT}"))
+        return 0
+    replaced = find_replaced(event.cwd, command)
+    if replaced is not None:
+        print(deny_output(event, replaced))
     return 0
 
 

@@ -13,3 +13,5 @@ post-checkout:
   scripts:
     "mjrlee_worktree_rules.sh":
       runner: sh
+    "mjrlee_setup_checkout.sh":
+      runner: sh
