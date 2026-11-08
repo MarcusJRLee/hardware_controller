@@ -4,7 +4,8 @@ Issues and pull requests are welcome. For a substantial behavior or
 architecture change, open an issue first so scope and evidence are agreed.
 
 ```bash
-brew install lefthook uv && lefthook install   # Once per clone: repo-kit git hooks.
+brew install mise    # Once per Mac, then add `eval "$(mise activate zsh --shims)"` to ~/.zprofile.
+mise trust && mise install && lefthook install   # Once per clone: kit tools, git hooks.
 scripts/run_demo.sh   # Explore without a pedal, signing, or permissions.
 scripts/check.sh      # Required before every PR; same as the Verify CI job.
 scripts/check_ios.sh  # When touching apps/ios or shared Voice code.

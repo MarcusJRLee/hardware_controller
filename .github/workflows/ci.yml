@@ -46,9 +46,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Runs the repo-kit gates in scripts/check_fast.sh on both lanes.
-      - name: Provide pinned uv
-        uses: ./.github/actions/uv
+      # The kit's pinned tools (uv runs the repo-kit gates in
+      # scripts/check_fast.sh) on both lanes.
+      - name: Provide kit tools
+        uses: ./.github/actions/mise
       - name: Run fast checks
         if: needs.changes.outputs.macos != 'true'
         run: |

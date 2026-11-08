@@ -1,0 +1,41 @@
+name: Kit tools through mise
+description: >-
+  Installs mise, verified against its pinned digest, then the tools the repo kit
+  pins in .config/mise/conf.d/mjrlee_kit.toml (uv for the repo-kit gates in
+  scripts/check_fast.sh, among others). Tool versions come only from that file,
+  so CI matches every machine; mise's version here is the workflow's one pin.
+  Repository policy allows only GitHub-owned actions, so this replaces a
+  third-party setup action.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        MISE_VERSION: "2026.10.18"
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        case "$RUNNER_OS-$RUNNER_ARCH" in
+          Linux-X64)
+            target=linux-x64
+            digest=0d41b60745a6273a80089c86f80d8729042d2f57f87fda70aecc7d1c3ffbd3be ;;
+          macOS-ARM64)
+            target=macos-arm64
+            digest=1b1cd6ad4a6176db5ddaf03bf71e131b26324af09cfcf14d7d7038bee60be85d ;;
+          *)
+            echo "No pinned mise for $RUNNER_OS-$RUNNER_ARCH." >&2
+            exit 1 ;;
+        esac
+        directory="$RUNNER_TEMP/mise"
+        mkdir -p "$directory"
+        archive="$directory/mise.tar.gz"
+        curl -fsSL --retry 3 -o "$archive" \
+          "https://github.com/jdx/mise/releases/download/v$MISE_VERSION/mise-v$MISE_VERSION-$target.tar.gz"
+        echo "$digest  $archive" | shasum -a 256 -c -
+        tar -xzf "$archive" -C "$directory" --strip-components 2 mise/bin/mise
+        # CI trusts only this checkout's config, as `mise trust` does locally.
+        echo "MISE_TRUSTED_CONFIG_PATHS=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+        export MISE_TRUSTED_CONFIG_PATHS="$GITHUB_WORKSPACE"
+        cd "$GITHUB_WORKSPACE"
+        "$directory/mise" install
+        echo "$directory" >> "$GITHUB_PATH"
+        "$directory/mise" bin-paths >> "$GITHUB_PATH"
