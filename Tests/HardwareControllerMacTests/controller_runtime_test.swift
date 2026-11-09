@@ -448,6 +448,8 @@ struct ControllerRuntimeTest {
     )
   )
   func tenThousandTransitionSoakMeetsDispatchBudget() {
+    // Opt-in soak, run alone by scripts/check.sh: real dispatch latency is what
+    // it measures.
     let executor = RecordingExecutor()
     let snapshots = SnapshotRecorder()
     let runtime = makeRuntime(
