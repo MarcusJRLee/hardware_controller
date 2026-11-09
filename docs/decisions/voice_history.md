@@ -56,8 +56,9 @@ iOS must share the same semantics without sharing a database layout.
 - Run maintenance after a durable commit, at first History access, and after a
   settings change, on actors outside hardware callbacks, targeting, and
   insertion. On iOS a post-commit maintenance failure is shown but never
-  invalidates the commit. SQLite connections share a five-second contention
-  bound.
+  invalidates the commit. SQLite connections, including startup's read-only
+  corruption check, share a five-second contention bound, so a closing or
+  still-maintaining connection delays startup instead of failing it.
 - The policy itself is the single Rust planner
   ([portable_voice_engine](portable_voice_engine.md)).
 

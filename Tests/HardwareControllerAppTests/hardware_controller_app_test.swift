@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import HardwareControllerTestSupport
 import SwiftUI
 import Testing
 
@@ -156,21 +157,4 @@ private final class FakeApplicationLifecycle:
       sleepObservers.append(observer)
     }
   }
-}
-
-@MainActor
-/// Waits for one asynchronously forwarded workspace event.
-private func waitUntil(
-  timeout: Duration = .seconds(10),
-  _ condition: @escaping @MainActor () -> Bool
-) async throws {
-  let clock = ContinuousClock()
-  let deadline = clock.now.advanced(by: timeout)
-  while clock.now < deadline {
-    if condition() {
-      return
-    }
-    try await Task.sleep(for: .milliseconds(5))
-  }
-  Issue.record("Timed out waiting for the workspace lifecycle event.")
 }

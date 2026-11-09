@@ -56,6 +56,7 @@ public actor OwnedTranscriptionController {
   private let authorization: any TranscriptionAuthorizationProviding
   private let locale: Locale
   private let finalizationTimeout: Duration
+  private let clock: any Clock<Duration>
   private let snapshotHandler: SnapshotHandler
   private let audioBufferHandler: @Sendable (CapturedAudioBuffer) -> Void
   private var vocabularyHints: [String]
@@ -90,6 +91,7 @@ public actor OwnedTranscriptionController {
     locale: Locale = .current,
     vocabularyHints: [String] = [],
     finalizationTimeout: Duration = .seconds(5),
+    clock: any Clock<Duration> = ContinuousClock(),
     audioBufferHandler:
       @escaping @Sendable (CapturedAudioBuffer) -> Void = { _ in },
     snapshotHandler:
@@ -102,6 +104,7 @@ public actor OwnedTranscriptionController {
     self.authorization = authorization
     self.locale = locale
     self.finalizationTimeout = finalizationTimeout
+    self.clock = clock
     self.audioBufferHandler = audioBufferHandler
     self.snapshotHandler = snapshotHandler
     self.vocabularyHints = vocabularyHints
@@ -469,9 +472,9 @@ public actor OwnedTranscriptionController {
     finalizationTask = Task {
       await finalize(sessionID: sessionID)
     }
-    finalizationTimeoutTask = Task {
+    finalizationTimeoutTask = Task { [clock, finalizationTimeout] in
       do {
-        try await Task.sleep(for: finalizationTimeout)
+        try await clock.sleep(for: finalizationTimeout)
       } catch {
         return
       }

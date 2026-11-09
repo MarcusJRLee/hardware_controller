@@ -53,6 +53,7 @@ public actor LocalAIDictationController {
   private let formattedTextRenderer: VoiceFormattedTextRenderer
   private let locale: Locale
   private let refinementTimeout: Duration
+  private let clock: any Clock<Duration>
   private let snapshotHandler: SnapshotHandler
   private let speechMailbox: TranscriptionSnapshotMailbox
   private let history: any VoiceSessionHistoryRecording
@@ -91,6 +92,7 @@ public actor LocalAIDictationController {
     locale: Locale = .current,
     finalizationTimeout: Duration = .seconds(5),
     refinementTimeout: Duration = .seconds(3),
+    clock: any Clock<Duration> = ContinuousClock(),
     history: any VoiceSessionHistoryRecording =
       DiscardingVoiceSessionHistory(),
     now: @escaping @Sendable () -> Date = { Date() },
@@ -109,6 +111,7 @@ public actor LocalAIDictationController {
       locale: locale,
       vocabularyHints: settings.dictionary.vocabulary,
       finalizationTimeout: finalizationTimeout,
+      clock: clock,
       audioBufferHandler: history.append,
       snapshotHandler: mailbox.publish
     )
@@ -129,6 +132,7 @@ public actor LocalAIDictationController {
     self.profileName = profileName
     self.locale = locale
     self.refinementTimeout = refinementTimeout
+    self.clock = clock
     self.history = history
     self.now = now
     self.snapshotHandler = snapshotHandler
@@ -698,9 +702,9 @@ public actor LocalAIDictationController {
       }
       await race.resolve(outcome)
     }
-    let timeoutTask = Task { [refinementTimeout] in
+    let timeoutTask = Task { [clock, refinementTimeout] in
       do {
-        try await Task.sleep(for: refinementTimeout)
+        try await clock.sleep(for: refinementTimeout)
         // Publish the timeout before cancellation can resolve the race.
         await race.resolve(.failure(.timedOut))
         preparationTask?.cancel()

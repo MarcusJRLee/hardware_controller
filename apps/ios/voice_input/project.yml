@@ -224,6 +224,9 @@ targets:
     platform: iOS
     sources:
       - tests
+      # Deterministic clocks and awaited conditions shared with the macOS tests.
+      - path: ../../../Tests/hardware_controller_test_support
+        group: test_support
       - path: ../../../Tests/cuj/voice_model_package_v1/valid
         group: fixtures
         createIntermediateGroups: false

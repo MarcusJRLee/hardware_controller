@@ -299,6 +299,7 @@ struct MicrophoneCaptureTest {
   func capturesARealAuthorizedMicrophoneBuffer() async throws {
     #expect(MicrophonePermission.status == .authorized)
     let capture = AVAudioEngineMicrophoneCapture()
+    // Opt-in hardware check: real device latency is what it measures.
     let clock = ContinuousClock()
     let preparationStart = clock.now
     try await capture.prepare()
@@ -366,6 +367,7 @@ struct MicrophoneCaptureTest {
         }
         throw TestError.streamEnded
       }
+      // Opt-in callers only: a real device either streams or this fails.
       group.addTask {
         try await Task.sleep(for: .seconds(3))
         throw TestError.timedOut

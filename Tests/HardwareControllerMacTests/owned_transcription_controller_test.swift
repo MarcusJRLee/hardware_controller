@@ -2,6 +2,7 @@ import AVFoundation
 @preconcurrency import ApplicationServices
 import Foundation
 import HardwareControllerCore
+import HardwareControllerTestSupport
 import Testing
 
 @testable import HardwareControllerMac
@@ -73,6 +74,8 @@ struct OwnedTranscriptionControllerTest {
 
     await controller.handle(.begin)
     await controller.handle(.finish)
+    await fixture.clock.waitForSleeper(dueWithin: .milliseconds(50))
+    fixture.clock.advance(by: .milliseconds(50))
 
     try await waitUntil {
       await controller.snapshot().phase == .completed
@@ -532,10 +535,17 @@ struct OwnedTranscriptionControllerTest {
     }
 
     await controller.handle(.finish)
+    await fixture.clock.waitForSleeper(dueWithin: .milliseconds(20))
+    fixture.clock.advance(by: .milliseconds(19))
+    #expect(fixture.snapshots.phases.last == .finalizing)
+    fixture.clock.advance(by: .milliseconds(1))
     try await waitUntil {
       fixture.snapshots.phases.last == .failed
     }
+    // Failure publishes while the backend is still cancelling.
     #expect(fixture.session.cancelFinishedCount == 0)
+    await fixture.clock.waitForSleeper(dueWithin: .milliseconds(200))
+    fixture.clock.advance(by: .milliseconds(200))
     try await waitUntil {
       fixture.session.cancelFinishedCount == 1
     }
@@ -586,7 +596,8 @@ struct OwnedTranscriptionControllerTest {
     try await waitUntil {
       await controller.snapshot().phase == .completed
     }
-    try await Task.sleep(for: .milliseconds(40))
+    #expect(fixture.clock.pendingSleepers == 0)
+    fixture.clock.advance(by: .milliseconds(20))
 
     #expect(await controller.snapshot().phase == .completed)
     #expect(fixture.session.cancelCount == 0)
@@ -796,6 +807,8 @@ private final class Fixture: @unchecked Sendable {
   let writer: FakeTranscriptWriter
   let snapshots = SnapshotRecorder()
   let factory: FakeRecognitionFactory
+  /// Drives the finalization deadline and every fake delay.
+  let clock = ManualClock()
   private let authorization: FixedAuthorization
   private let deliveryCapability: FocusedTextDeliveryCapability
   private let finalizationTimeout: Duration
@@ -826,11 +839,13 @@ private final class Fixture: @unchecked Sendable {
     self.targetFailure = targetFailure
     session = FakeRecognitionSession(
       finishBehavior: finishBehavior,
-      cancellationDelay: cancellationDelay
+      cancellationDelay: cancellationDelay,
+      clock: clock
     )
     factory = FakeRecognitionFactory(
       session: session,
       delay: preparationDelay,
+      clock: clock,
       sessionCreationCancels: sessionCreationCancels
     )
   }
@@ -850,6 +865,7 @@ private final class Fixture: @unchecked Sendable {
       writer: writer,
       authorization: authorization,
       finalizationTimeout: finalizationTimeout,
+      clock: clock,
       audioBufferHandler: audioBufferHandler,
       snapshotHandler: { [snapshots] snapshot in
         snapshots.append(snapshot)
@@ -893,6 +909,7 @@ private final class FakeRecognitionFactory:
 {
   let session: FakeRecognitionSession
   let delay: Duration
+  private let clock: ManualClock
   private let sessionCreationCancels: Bool
   private let lock = NSLock()
   private var prepares = 0
@@ -909,10 +926,12 @@ private final class FakeRecognitionFactory:
   init(
     session: FakeRecognitionSession,
     delay: Duration,
+    clock: ManualClock,
     sessionCreationCancels: Bool
   ) {
     self.session = session
     self.delay = delay
+    self.clock = clock
     self.sessionCreationCancels = sessionCreationCancels
   }
 
@@ -925,7 +944,7 @@ private final class FakeRecognitionFactory:
   func makeSession(
     locale: Locale
   ) async throws -> any SpeechRecognitionSession {
-    try await Task.sleep(for: delay)
+    try await clock.sleep(for: delay)
     if sessionCreationCancels {
       throw CancellationError()
     }
@@ -964,6 +983,7 @@ private final class FakeRecognitionSession:
   private let cancellationStream: AsyncStream<Void>
   private let cancellationContinuation: AsyncStream<Void>.Continuation
   private let cancellationDelay: Duration
+  private let clock: ManualClock
   private let lock = NSLock()
   private var cancellations = 0
   private var finishedCancellations = 0
@@ -979,10 +999,12 @@ private final class FakeRecognitionSession:
   /// Creates a controllable finalization boundary.
   init(
     finishBehavior: FakeFinishBehavior = .complete,
-    cancellationDelay: Duration = .zero
+    cancellationDelay: Duration,
+    clock: ManualClock
   ) {
     self.finishBehavior = finishBehavior
     self.cancellationDelay = cancellationDelay
+    self.clock = clock
     (updates, continuation) =
       AsyncThrowingStream.makeStream()
     (cancellationStream, cancellationContinuation) =
@@ -1027,7 +1049,7 @@ private final class FakeRecognitionSession:
     lock.withLock {
       cancellations += 1
     }
-    try? await Task.sleep(for: cancellationDelay)
+    try? await clock.sleep(for: cancellationDelay)
     cancellationContinuation.yield()
     cancellationContinuation.finish()
     continuation.finish()
@@ -1275,19 +1297,4 @@ private final class SnapshotRecorder: @unchecked Sendable {
       storage.append(snapshot)
     }
   }
-}
-
-private func waitUntil(
-  timeout: Duration = .seconds(5),
-  _ condition: @escaping @Sendable () async -> Bool
-) async throws {
-  let clock = ContinuousClock()
-  let deadline = clock.now.advanced(by: timeout)
-  while clock.now < deadline {
-    if await condition() {
-      return
-    }
-    try await Task.sleep(for: .milliseconds(5))
-  }
-  Issue.record("Timed out waiting for asynchronous state.")
 }

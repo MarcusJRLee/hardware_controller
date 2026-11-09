@@ -178,6 +178,12 @@ final class VoiceInputKeychainStoreTest: XCTestCase {
   }
 
   func testSnapshotHandoffLatencyHasHeadroomForInteractiveUse() throws {
+    // Opt-in benchmark: real Keychain latency is what it measures, so a busy
+    // simulator host must not fail the default suite.
+    try XCTSkipUnless(
+      ProcessInfo.processInfo.environment["HC_RUN_KEYCHAIN_BENCHMARK"] == "1",
+      "Set TEST_RUNNER_HC_RUN_KEYCHAIN_BENCHMARK=1 to measure Keychain handoff latency."
+    )
     let clock = ContinuousClock()
     var samples: [Double] = []
     for sequence in 1...100 {

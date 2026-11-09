@@ -2,6 +2,7 @@ import CryptoKit
 import Foundation
 import HardwareControllerCore
 import HardwareControllerModelDownload
+import HardwareControllerTestSupport
 import Testing
 
 @testable import HardwareControllerApp
@@ -97,7 +98,7 @@ struct SpeechEngineModelTest {
 
     model.startDownload()
     #expect(model.isDownloading)
-    try await settle { !model.isDownloading }
+    try await waitUntil("the download to settle") { !model.isDownloading }
 
     #expect(!model.requiresSetup)
     #expect(model.installedPackage?.displayName == "Fixture Model")
@@ -112,7 +113,7 @@ struct SpeechEngineModelTest {
     let (model, store) = try Self.model(files: [:], applied: applied)
     defer { try? store.removeAll() }
     model.startDownload()
-    try await settle { !model.isDownloading }
+    try await waitUntil("the download to settle") { !model.isDownloading }
     #expect(model.downloadState == .failed("The download failed: offline"))
     #expect(model.requiresSetup)
     #expect(applied.configurations.isEmpty)
@@ -138,22 +139,9 @@ struct SpeechEngineModelTest {
     let (model, store) = try Self.model(applied: applied)
     defer { try? store.removeAll() }
     model.startDownload()
-    try await settle { !model.isDownloading }
+    try await waitUntil("the download to settle") { !model.isDownloading }
     model.removeModel()
     #expect(model.installedPackage == nil)
     #expect(model.requiresSetup)
-  }
-}
-
-/// Polls a main-actor condition for up to ten seconds.
-@MainActor
-private func settle(_ condition: () -> Bool) async throws {
-  let deadline = ContinuousClock.now + .seconds(10)
-  while !condition() {
-    guard ContinuousClock.now < deadline else {
-      Issue.record("Timed out waiting for the condition.")
-      return
-    }
-    try await Task.sleep(for: .milliseconds(10))
   }
 }

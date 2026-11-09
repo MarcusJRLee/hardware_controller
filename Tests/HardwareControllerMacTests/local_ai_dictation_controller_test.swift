@@ -2,6 +2,7 @@ import AVFoundation
 @preconcurrency import ApplicationServices
 import Foundation
 import HardwareControllerCore
+import HardwareControllerTestSupport
 import Testing
 
 @testable import HardwareControllerMac
@@ -106,7 +107,7 @@ struct LocalAIDictationControllerTest {
     fixture.microphone.emit(try makeVoiceAudioFixture())
     fixture.session.emit(.committed("keep this revised plan"))
     await controller.handle(.finish)
-    try await localAIWaitUntil {
+    try await waitUntil {
       await controller.snapshot().phase == .failed
     }
 
@@ -140,13 +141,13 @@ struct LocalAIDictationControllerTest {
     await controller.handle(.begin)
     try await fixture.waitUntilListening(controller)
     fixture.microphone.emit(try makeVoiceAudioFixture())
-    try await localAIWaitUntil {
+    try await waitUntil {
       fixture.session.appendCount == 1
     }
     fixture.session.fail(
       SpeechRecognitionBackendError.modelUnavailable
     )
-    try await localAIWaitUntil {
+    try await waitUntil {
       await controller.snapshot().phase == .failed
     }
 
@@ -188,16 +189,18 @@ struct LocalAIDictationControllerTest {
 
     for evaluationCase in LocalAIEvaluationCorpus.cases {
       let fixture = LocalAIControllerFixture(refinement: .output("Unused."))
+      // Opt-in benchmark: the production clock keeps the real deadline.
       let controller = fixture.makeController(
         settings: settings,
-        refiner: refiner
+        refiner: refiner,
+        clock: ContinuousClock()
       )
       await controller.handle(.begin)
       try await fixture.waitUntilListening(controller)
       fixture.session.emit(.committed(evaluationCase.transcript))
       let start = MonotonicClock.nowNanoseconds()
       await controller.handle(.finish)
-      try await localAIWaitUntil(timeout: .seconds(4)) {
+      try await waitUntil(timeout: .seconds(4)) {
         await controller.snapshot().phase == .completed
       }
       let end = MonotonicClock.nowNanoseconds()
@@ -272,9 +275,11 @@ struct LocalAIDictationControllerTest {
       refinementTimeout: .milliseconds(20)
     )
 
-    let failure = await controller.testProvider()
+    let test = Task { await controller.testProvider() }
+    await fixture.clock.waitForSleeper(dueWithin: .milliseconds(20))
+    fixture.clock.advance(by: .milliseconds(20))
 
-    #expect(failure == .timedOut)
+    #expect(await test.value == .timedOut)
     await fixture.refiner.waitUntilPreparationCancelled()
     #expect(await fixture.refiner.wasPreparationCancelled)
   }
@@ -307,7 +312,7 @@ struct LocalAIDictationControllerTest {
     let testTask = Task {
       await controller.testProvider()
     }
-    try await localAIWaitUntil {
+    try await waitUntil {
       await fixture.refiner.preparationCount == 1
     }
 
@@ -335,7 +340,7 @@ struct LocalAIDictationControllerTest {
     let testTask = Task {
       await controller.testProvider()
     }
-    try await localAIWaitUntil {
+    try await waitUntil {
       await fixture.refiner.preparationCount == 1
     }
 
@@ -368,7 +373,7 @@ struct LocalAIDictationControllerTest {
     )
 
     await controller.handle(.begin)
-    try await localAIWaitUntil {
+    try await waitUntil {
       await controller.snapshot().phase == .failed
     }
 
@@ -761,6 +766,10 @@ struct LocalAIDictationControllerTest {
     try await fixture.waitUntilListening(controller)
     fixture.session.emit(.committed("time bounded"))
     await controller.handle(.finish)
+    await fixture.clock.waitForSleeper(dueWithin: .milliseconds(20))
+    fixture.clock.advance(by: .milliseconds(19))
+    #expect(fixture.writer.inserted.isEmpty)
+    fixture.clock.advance(by: .milliseconds(1))
     try await fixture.waitUntilCompleted(controller)
 
     #expect(fixture.writer.inserted == ["time bounded"])
@@ -780,13 +789,15 @@ struct LocalAIDictationControllerTest {
     try await fixture.waitUntilListening(controller)
     fixture.session.emit(.committed("time bounded"))
     await controller.handle(.finish)
+    await fixture.clock.waitForSleeper(dueWithin: .milliseconds(10))
+    fixture.clock.advance(by: .milliseconds(10))
     try await fixture.waitUntilCompleted(controller)
 
     #expect(fixture.writer.inserted == ["time bounded"])
     #expect(await controller.snapshot().refinedText == "time bounded")
     #expect(await controller.snapshot().fallbackReason == .timedOut)
     await fixture.refiner.releaseBlockedRefinement()
-    try await localAIWaitUntil {
+    try await waitUntil {
       await fixture.refiner.refinementCompletionCount == 1
     }
     #expect(fixture.writer.inserted == ["time bounded"])
@@ -807,6 +818,8 @@ struct LocalAIDictationControllerTest {
     try await fixture.waitUntilListening(controller)
     fixture.session.emit(.committed("time bounded"))
     await controller.handle(.finish)
+    await fixture.clock.waitForSleeper(dueWithin: .milliseconds(20))
+    fixture.clock.advance(by: .milliseconds(20))
     try await fixture.waitUntilCompleted(controller)
 
     #expect(fixture.writer.inserted == ["time bounded"])
@@ -826,11 +839,15 @@ struct LocalAIDictationControllerTest {
     try await fixture.waitUntilListening(controller)
     fixture.session.emit(.committed("cancel this"))
     await controller.handle(.finish)
-    try await localAIWaitUntil {
+    try await waitUntil {
       await controller.snapshot().phase == .refining
     }
     await controller.handle(.cancel)
-    try await Task.sleep(for: .milliseconds(30))
+    // Once no timer is pending, no late result or timeout can still land.
+    try await waitUntil("cancelled refinement timers") {
+      fixture.clock.pendingSleepers == 0
+    }
+    fixture.clock.advance(by: .seconds(1))
 
     #expect(await controller.snapshot().phase == .idle)
     #expect(fixture.writer.inserted.isEmpty)
@@ -871,6 +888,8 @@ private final class LocalAIControllerFixture: @unchecked Sendable {
   let writer: LocalAIRecordingWriter
   let factory: LocalAIFakeRecognitionFactory
   let refiner: LocalAIFakeRefinementRouter
+  /// Drives every deadline and fake provider delay.
+  let clock = ManualClock()
 
   init(
     refinement: LocalAIFakeRefinementRouter.Behavior,
@@ -881,7 +900,8 @@ private final class LocalAIControllerFixture: @unchecked Sendable {
     factory = LocalAIFakeRecognitionFactory(session: session)
     refiner = LocalAIFakeRefinementRouter(
       behavior: refinement,
-      preparationDelay: preparationDelay
+      preparationDelay: preparationDelay,
+      clock: clock
     )
   }
 
@@ -889,6 +909,7 @@ private final class LocalAIControllerFixture: @unchecked Sendable {
     settings: LocalAISettings = .default,
     refinementTimeout: Duration = .seconds(3),
     refiner: (any LocalAIRefinementRouting)? = nil,
+    clock: (any Clock<Duration>)? = nil,
     authorization: any TranscriptionAuthorizationProviding =
       LocalAIFixedAuthorization(),
     supportsMultilineText: Bool = true,
@@ -914,6 +935,7 @@ private final class LocalAIControllerFixture: @unchecked Sendable {
       settings: settings,
       profileName: "Coding",
       refinementTimeout: refinementTimeout,
+      clock: clock ?? self.clock,
       history: history,
       now: now
     )
@@ -922,7 +944,7 @@ private final class LocalAIControllerFixture: @unchecked Sendable {
   func waitUntilListening(
     _ controller: LocalAIDictationController
   ) async throws {
-    try await localAIWaitUntil {
+    try await waitUntil {
       await controller.snapshot().phase == .listening
     }
   }
@@ -930,7 +952,7 @@ private final class LocalAIControllerFixture: @unchecked Sendable {
   func waitUntilCompleted(
     _ controller: LocalAIDictationController
   ) async throws {
-    try await localAIWaitUntil {
+    try await waitUntil {
       await controller.snapshot().phase == .completed
     }
   }
@@ -1180,6 +1202,7 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
 
   let behavior: Behavior
   let preparationDelay: Duration?
+  private let clock: ManualClock
   private(set) var wasPreparationCancelled = false
   private var preparationCancellationObservers: [CheckedContinuation<Void, Never>] = []
   private(set) var preparationCount = 0
@@ -1192,10 +1215,12 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
 
   init(
     behavior: Behavior,
-    preparationDelay: Duration?
+    preparationDelay: Duration?,
+    clock: ManualClock
   ) {
     self.behavior = behavior
     self.preparationDelay = preparationDelay
+    self.clock = clock
   }
 
   func readiness(
@@ -1220,7 +1245,7 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
       return
     }
     do {
-      try await Task.sleep(for: preparationDelay)
+      try await clock.sleep(for: preparationDelay)
     } catch is CancellationError {
       wasPreparationCancelled = true
       let observers = preparationCancellationObservers
@@ -1263,7 +1288,7 @@ private actor LocalAIFakeRefinementRouter: LocalAIRefinementRouting {
     case .structuredOutput(let value):
       output = value
     case .delayedOutput(let value, let delay):
-      try await Task.sleep(for: delay)
+      try await clock.sleep(for: delay)
       output = .paragraph(value)
     case .nonCooperativeBlockedOutput(let value):
       await withCheckedContinuation { continuation in
@@ -1336,19 +1361,4 @@ private actor RemoteCapableRefinerProbe: TranscriptRefining {
   func shutdown() {
     invocationCount += 1
   }
-}
-
-private func localAIWaitUntil(
-  timeout: Duration = .seconds(5),
-  _ condition: @escaping @Sendable () async -> Bool
-) async throws {
-  let clock = ContinuousClock()
-  let deadline = clock.now.advanced(by: timeout)
-  while clock.now < deadline {
-    if await condition() {
-      return
-    }
-    try await Task.sleep(for: .milliseconds(5))
-  }
-  Issue.record("Timed out waiting for Local AI Dictation state.")
 }

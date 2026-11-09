@@ -6,6 +6,8 @@ import Testing
 
 @testable import HardwareControllerMac
 
+/// Opt-in real-device capture: it sleeps in real time while a person presses
+/// the unit.
 struct Infinity3PhysicalCaptureTest {
   /// Captures sanitized raw reports and typed Button values from the real unit.
   @Test(

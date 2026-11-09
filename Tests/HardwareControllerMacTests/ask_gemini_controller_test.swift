@@ -1,5 +1,6 @@
 import Foundation
 import HardwareControllerCore
+import HardwareControllerTestSupport
 import Testing
 
 @testable import HardwareControllerMac
@@ -125,19 +126,4 @@ private final class AskGeminiFakeMicrophone: MicrophoneCapturing, @unchecked Sen
       continuation = nil
     }
   }
-}
-
-private func waitUntil(
-  timeout: Duration = .seconds(5),
-  _ condition: @escaping @Sendable () async -> Bool
-) async throws {
-  let clock = ContinuousClock()
-  let deadline = clock.now.advanced(by: timeout)
-  while clock.now < deadline {
-    if await condition() {
-      return
-    }
-    try await Task.sleep(for: .milliseconds(5))
-  }
-  Issue.record("Timed out waiting for Ask Gemini state.")
 }

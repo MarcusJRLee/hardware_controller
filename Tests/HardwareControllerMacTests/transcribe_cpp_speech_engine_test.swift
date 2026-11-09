@@ -1,5 +1,6 @@
 import Foundation
 import HardwareControllerASRProtocol
+import HardwareControllerTestSupport
 import Testing
 
 @testable import HardwareControllerMac
@@ -48,11 +49,18 @@ struct TranscribeCppSpeechEngineTest {
   @Test
   func hungDecodeIsKilledAtTheDeadline() async throws {
     let connection = FakeASRServiceConnection(transcribe: [.hang])
-    let engine = ASRTestFixtures.engine(connection)
-    let start = ContinuousClock.now
-    await #expect(throws: TranscribeCppEngineFailure.serviceFailed) { try await transcribe(engine) }
-    #expect(ContinuousClock.now - start < .seconds(2))
-    #expect(await connection.terminations >= 1)
+    let clock = ManualClock()
+    let engine = ASRTestFixtures.engine(connection, clock: clock)
+    let decode = Task { try await transcribe(engine) }
+    let deadline = ASRTestFixtures.policy.deadline(forSampleCount: samples.count)
+
+    await clock.waitForSleeper(dueWithin: deadline)
+    clock.advance(by: deadline - .nanoseconds(1))
+    #expect(await connection.terminations == 0)
+    clock.advance(by: .nanoseconds(1))
+
+    await #expect(throws: TranscribeCppEngineFailure.serviceFailed) { try await decode.value }
+    #expect(await connection.terminations == 1)
     #expect(await engine.status.usesGPU == false)
   }
 
@@ -87,10 +95,13 @@ struct TranscribeCppSpeechEngineTest {
   @Test
   func idleServiceIsTerminated() async throws {
     let connection = FakeASRServiceConnection()
-    let engine = ASRTestFixtures.engine(connection)
+    let clock = ManualClock()
+    let engine = ASRTestFixtures.engine(connection, clock: clock)
     _ = try await transcribe(engine)
-    try await Task.sleep(for: .milliseconds(300))
-    #expect(await connection.terminations == 1)
+
+    await clock.waitForSleeper(dueWithin: ASRTestFixtures.policy.idleTimeout)
+    clock.advance(by: ASRTestFixtures.policy.idleTimeout)
+    try await waitUntil("the idle unload") { await connection.terminations == 1 }
     _ = try await transcribe(engine)
     #expect(await connection.loads.count == 2)
   }

@@ -34,7 +34,8 @@ struct AppModelTests {
 
     model.start()
     await model.stop()
-    try await Task.sleep(for: .milliseconds(10))
+    // Drains snapshot deliveries the runtime enqueued before it stopped.
+    await model.waitForPendingIntents()
 
     #expect(!model.isConnected)
     #expect(!model.isAnyActionActive)
@@ -97,7 +98,7 @@ struct AppModelTests {
     let envelope = model.envelope
 
     model.edit(.binding(.action(.keyboardShortcut), .active(.left)))
-    try? await Task.sleep(for: .milliseconds(10))
+    await model.waitForPendingIntents()
 
     #expect(model.envelope == envelope)
   }

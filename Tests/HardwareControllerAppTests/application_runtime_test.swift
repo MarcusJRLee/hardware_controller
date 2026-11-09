@@ -1,6 +1,7 @@
 import Foundation
 import HardwareControllerCore
 import HardwareControllerMac
+import HardwareControllerTestSupport
 import Testing
 
 @testable import HardwareControllerApp
@@ -1313,21 +1314,4 @@ private final class ApplicationSnapshotRecorder:
       storage.append(snapshot)
     }
   }
-}
-
-@MainActor
-/// Waits for an asynchronously published runtime condition.
-private func waitUntil(
-  timeout: Duration = .seconds(10),
-  _ condition: @escaping @MainActor () -> Bool
-) async throws {
-  let clock = ContinuousClock()
-  let deadline = clock.now.advanced(by: timeout)
-  while clock.now < deadline {
-    if condition() {
-      return
-    }
-    try await Task.sleep(for: .milliseconds(5))
-  }
-  Issue.record("Timed out waiting for application state.")
 }
