@@ -56,6 +56,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
   private let controlReloader: @Sendable () -> Void
   private let lifecyclePolicy = VoiceInputLifecyclePolicy()
   private let heartbeatInterval: Duration
+  private let clock: any Clock<Duration>
   private let now: @Sendable () -> Date
   private var recorder: (any VoiceInputAudioRecording)?
   private var liveFeed: LiveFeed?
@@ -88,6 +89,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
       VoiceInputSystemBackgroundTaskManager(),
     controlReloader: @escaping @Sendable () -> Void = {},
     heartbeatInterval: Duration = .milliseconds(500),
+    clock: any Clock<Duration> = ContinuousClock(),
     now: @escaping @Sendable () -> Date = { .now }
   ) {
     self.store = store
@@ -103,6 +105,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
     self.backgroundTaskManager = backgroundTaskManager
     self.controlReloader = controlReloader
     self.heartbeatInterval = heartbeatInterval
+    self.clock = clock
     self.now = now
     sequence = (try? store.readSnapshot().sequence) ?? 0
   }
@@ -408,9 +411,10 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
       return
     }
     let interval = heartbeatInterval
+    let clock = clock
     heartbeatTask = Task { [weak self] in
       while !Task.isCancelled {
-        try? await Task.sleep(for: interval)
+        try? await clock.sleep(for: interval)
         guard !Task.isCancelled, let self else {
           return
         }

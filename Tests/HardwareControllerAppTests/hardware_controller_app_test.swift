@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import HardwareControllerTestSupport
 import SwiftUI
 import Testing
 
@@ -53,13 +54,15 @@ struct HardwareControllerAppTests {
     window.orderFront(nil)
     defer { window.close() }
 
-    try await waitUntil { window.title == "Hardware Controller" }
+    try await waitUntil("the Hardware Controller window title") {
+      window.title == "Hardware Controller"
+    }
     navigation.select(.profiles)
-    try await waitUntil { window.title == "Profiles" }
+    try await waitUntil("the Profiles window title") { window.title == "Profiles" }
     navigation.select(.history)
-    try await waitUntil { window.title == "History" }
+    try await waitUntil("the History window title") { window.title == "History" }
     navigation.select(.controller)
-    try await waitUntil { window.title == "Controller" }
+    try await waitUntil("the Controller window title") { window.title == "Controller" }
   }
 
   /// Forwards workspace sleep and wake notifications exactly once.
@@ -156,21 +159,4 @@ private final class FakeApplicationLifecycle:
       sleepObservers.append(observer)
     }
   }
-}
-
-@MainActor
-/// Waits for one asynchronously forwarded workspace event.
-private func waitUntil(
-  timeout: Duration = .seconds(10),
-  _ condition: @escaping @MainActor () -> Bool
-) async throws {
-  let clock = ContinuousClock()
-  let deadline = clock.now.advanced(by: timeout)
-  while clock.now < deadline {
-    if condition() {
-      return
-    }
-    try await Task.sleep(for: .milliseconds(5))
-  }
-  Issue.record("Timed out waiting for the workspace lifecycle event.")
 }

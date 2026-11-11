@@ -74,6 +74,7 @@ struct SpeechRecognitionBackendTest {
   func modernBackendPreparesTheLocalSystemModel() async throws {
     let factory = AppleSpeechRecognitionSessionFactory()
     try await factory.prepare(locale: .current)
+    // Opt-in system check: real warm-start latency is what it measures.
     let clock = ContinuousClock()
     let start = clock.now
 

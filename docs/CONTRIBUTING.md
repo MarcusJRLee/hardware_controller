@@ -99,6 +99,7 @@ in CI:
 | `apps/ios/voice_input/` | iOS app, keyboard, widgets, and their tests. |
 | `schemas/` | Versioned Model-package and archive contracts. |
 | `Tests/cuj/` | Fixtures shared by Rust, Swift, and C. |
+| `Tests/hardware_controller_test_support/` | `ManualClock` and `waitUntil`, shared by macOS and iOS tests. |
 | `packaging/` | Info.plist, entitlements, icon source. |
 | `.mjrlee_repo_setup/`, `.lefthook/`, `.codex/` | Shared repo kit: agent and git hooks, gates, roadmap tool; edit the kit, not these copies. |
 
@@ -109,6 +110,12 @@ in CI:
   `HardwareControllerAppTests`.
 - Default tests never prompt for permissions, need a pedal or microphone, or
   touch the network. Inject clocks, stores, and system boundaries.
+- Default tests never sleep or bound real time: Swift Testing runs them in
+  parallel, so a loaded runner stretches both. Drive deadlines with
+  `ManualClock` (`waitForSleeper(dueWithin:)`, then `advance(by:)`) and await
+  events with `waitUntil`, both in `Tests/hardware_controller_test_support/`.
+  Only opt-in suites and SQLite busy-wait tests use real time, with a comment
+  saying why.
 - Portable policy changes update the shared fixture, Rust test, Swift test,
   header, and decision together. Unsafe code stays in `voice_ffi`.
 
@@ -121,6 +128,7 @@ HC_RUN_TEXT_INSERTION_INTEGRATION=1 swift test --filter insertsTextIntoTheFocuse
 HC_RUN_LOCAL_AI_MODEL_EVALUATION=1 swift test --filter LocalAIModelEvaluationTest
 HC_RUN_LOCAL_AI_END_TO_END_BENCHMARK=1 swift test --filter measuresWarmReleaseToInsertionWithTheRecommendedModel
 HC_RUN_IOS_ASR_PERFORMANCE=1 scripts/check_voice_asr_bridge.sh
+TEST_RUNNER_HC_RUN_KEYCHAIN_BENCHMARK=1 scripts/check_ios.sh
 ```
 
 Real speech through the macOS recognizer:

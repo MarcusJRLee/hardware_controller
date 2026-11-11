@@ -2,6 +2,7 @@ import AVFoundation
 import Dispatch
 import Foundation
 import HardwareControllerCore
+import HardwareControllerTestSupport
 import Testing
 
 @testable import HardwareControllerMac
@@ -29,7 +30,8 @@ struct SQLiteVoiceHistoryRetentionStoreTest {
       audioDirectory: root.appending(path: "audio"),
       artifactSize: { url in
         inspectionStarted.signal()
-        guard allowInspection.wait(timeout: .now() + 2) == .success else {
+        // A hang guard, not a speed bound: a slow pin must still land here.
+        guard allowInspection.wait(timeout: conditionHangGuardDeadline()) == .success else {
           throw CocoaError(.fileReadUnknown)
         }
         return Int64(
@@ -53,7 +55,7 @@ struct SQLiteVoiceHistoryRetentionStoreTest {
       DispatchQueue.global().async {
         continuation.resume(
           returning:
-            inspectionStarted.wait(timeout: .now() + 2) == .success
+            inspectionStarted.wait(timeout: conditionHangGuardDeadline()) == .success
         )
       }
     }

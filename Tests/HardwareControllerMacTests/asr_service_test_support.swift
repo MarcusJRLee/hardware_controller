@@ -2,6 +2,7 @@ import AVFoundation
 import Foundation
 import HardwareControllerASRProtocol
 import HardwareControllerCore
+import HardwareControllerTestSupport
 
 @testable import HardwareControllerMac
 
@@ -74,15 +75,14 @@ enum ASRTestFixtures {
     manifestSHA256: Data(repeating: 1, count: 32)
   )
 
-  /// Short deadlines and idle timeouts keep supervision tests fast.
-  static let fastPolicy = TranscribeCppSpeechEngine.Policy(
-    minimumDeadline: .milliseconds(100),
-    deadlinePerAudioSecond: .zero,
-    idleTimeout: .milliseconds(50)
-  )
+  static let policy = TranscribeCppSpeechEngine.Policy()
 
-  static func engine(_ connection: FakeASRServiceConnection) -> TranscribeCppSpeechEngine {
-    TranscribeCppSpeechEngine(connection: connection, policy: fastPolicy)
+  /// Deadlines and idle unloads fire only when a test advances `clock`.
+  static func engine(
+    _ connection: FakeASRServiceConnection,
+    clock: ManualClock = ManualClock()
+  ) -> TranscribeCppSpeechEngine {
+    TranscribeCppSpeechEngine(connection: connection, policy: policy, clock: clock)
   }
 }
 

@@ -1,5 +1,6 @@
 import Foundation
 import HardwareControllerCore
+import HardwareControllerTestSupport
 import SQLite3
 import Testing
 
@@ -57,6 +58,7 @@ struct SQLiteVoiceSessionStoreTest {
     sqlite3_close(opened)
     database = nil
     let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    // Opt-in benchmark: real search latency is what it measures.
     let clock = ContinuousClock()
     var samples: [Duration] = []
     var matches: [VoiceSessionHistoryItem] = []
@@ -425,6 +427,9 @@ struct SQLiteVoiceSessionStoreTest {
     let completion = Task {
       try await history.complete(document)
     }
+    // SQLite's busy handler waits on real time, which is what this tests. The
+    // hold is far below the coordination timeout, so a stalled runner only
+    // releases later (or before the write starts) and never fails the test.
     try await Task.sleep(for: .milliseconds(100))
     #expect(sqlite3_exec(opened, "COMMIT;", nil, nil, nil) == SQLITE_OK)
     sqlite3_close(opened)
@@ -998,14 +1003,11 @@ struct SQLiteVoiceSessionStoreTest {
       retentionSettings: .unlimited
     )
     var sessions: [VoiceSessionHistoryItem] = []
-    for _ in 0..<500 {
+    // Post-finalization retention runs in the background; await convergence.
+    try await waitUntil("retention to converge") {
       sessions = try await reopened.recentSessions(limit: 10)
-      if sessions.filter({ $0.audioArtifactURL != nil }).count == 1,
-        sessions.filter({ $0.audioExpirationReason != nil }).count == 1
-      {
-        break
-      }
-      try await Task.sleep(for: .milliseconds(10))
+      return sessions.filter({ $0.audioArtifactURL != nil }).count == 1
+        && sessions.filter({ $0.audioExpirationReason != nil }).count == 1
     }
     #expect(sessions.count == 2)
     #expect(sessions.filter { $0.audioArtifactURL != nil }.count == 1)
@@ -1036,6 +1038,8 @@ struct SQLiteVoiceSessionStoreTest {
     )
 
     async let completion: Void = history.complete(document)
+    // Opt-in because SQLite's busy handler waits on real time, which is what
+    // this tests: a hold past two seconds still lands within the bound.
     try await Task.sleep(for: .milliseconds(2_250))
     try lock.release()
     try await completion

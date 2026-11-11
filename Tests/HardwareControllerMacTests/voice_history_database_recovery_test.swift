@@ -63,4 +63,29 @@ struct VoiceHistoryDatabaseRecoveryTest {
     #expect(remaining.isSuperset(of: [preserved, preserved + "-wal"]))
     #expect(try Data(contentsOf: directory.appending(path: preserved)) == garbage)
   }
+
+  /// Another connection's lock delays inspection instead of failing startup.
+  @Test
+  func lockedDatabaseIsInspectedOnceTheHolderReleases() async throws {
+    try makeDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    var holder: OpaquePointer?
+    #expect(sqlite3_open(databaseURL.path, &holder) == SQLITE_OK)
+    defer { sqlite3_close(holder) }
+    #expect(
+      sqlite3_exec(holder, "CREATE TABLE t (x INTEGER); BEGIN EXCLUSIVE;", nil, nil, nil)
+        == SQLITE_OK
+    )
+    let databaseURL = databaseURL
+    let inspection = Task.detached {
+      try VoiceHistoryDatabaseRecovery.prepare(databaseURL: databaseURL)
+    }
+    // SQLite's busy handler waits on real time, which is what this tests. The
+    // hold is far below the coordination timeout, so a stalled runner only
+    // releases later (or before inspection starts) and never fails the test.
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(sqlite3_exec(holder, "COMMIT;", nil, nil, nil) == SQLITE_OK)
+
+    #expect(try await inspection.value == nil)
+  }
 }

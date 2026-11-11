@@ -4,6 +4,8 @@ import Testing
 
 @testable import HardwareControllerMac
 
+/// Opt-in model evaluation: it bounds real time because provider latency is
+/// what it measures.
 struct LocalAIModelEvaluationTest {
   @Test(
     .enabled(

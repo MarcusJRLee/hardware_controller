@@ -135,6 +135,11 @@ let package = Package(
         "HardwareControllerModelDownload",
       ]
     ),
+    // Deterministic clocks and awaited conditions shared by test targets.
+    .target(
+      name: "HardwareControllerTestSupport",
+      path: "Tests/hardware_controller_test_support"
+    ),
     .testTarget(
       name: "HardwareControllerAudioBoundaryTests",
       dependencies: [
@@ -156,6 +161,7 @@ let package = Package(
         "HardwareControllerCore",
         "HardwareControllerMac",
         "HardwareControllerModelDownload",
+        "HardwareControllerTestSupport",
         "HardwareControllerVoiceFFI",
       ]
     ),
@@ -185,6 +191,7 @@ let package = Package(
         "HardwareControllerApp",
         "HardwareControllerCore",
         "HardwareControllerModelDownload",
+        "HardwareControllerTestSupport",
       ]
     ),
     .testTarget(

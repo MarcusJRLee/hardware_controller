@@ -48,8 +48,7 @@ final class VoiceInputCaptureServiceTest: XCTestCase {
     let reloadCount = Mutex(0)
     let fixture = try CaptureFixture(
       liveActivityID: "activity",
-      controlReloader: { reloadCount.withLock { $0 += 1 } },
-      heartbeatInterval: .seconds(60)
+      controlReloader: { reloadCount.withLock { $0 += 1 } }
     )
     addTeardownBlock { try fixture.remove() }
 
@@ -251,22 +250,19 @@ final class VoiceInputCaptureServiceTest: XCTestCase {
       transcriber: BlockingFinalizationTranscriber(
         entered: entered.continuation,
         release: release.stream
-      ),
-      heartbeatInterval: .milliseconds(10)
+      )
     )
     addTeardownBlock { try fixture.remove() }
     try await fixture.service.start(sessionID: UUID())
     let recordingSequence = try fixture.store.readSnapshot().sequence
     let stopping = Task { try await fixture.service.stop(styleKind: .natural) }
     for await _ in entered.stream.prefix(1) {}
-    let deadline = ContinuousClock.now.advanced(by: .seconds(1))
-    var transcribing = try fixture.store.readSnapshot()
-    while transcribing.sequence <= recordingSequence + 1,
-      ContinuousClock.now < deadline
-    {
-      try await Task.sleep(for: .milliseconds(10))
-      transcribing = try fixture.store.readSnapshot()
+    await fixture.clock.waitForSleeper(dueWithin: CaptureFixture.heartbeatInterval)
+    fixture.clock.advance(by: CaptureFixture.heartbeatInterval)
+    try await waitUntil("a transcribing heartbeat") {
+      try fixture.store.readSnapshot().sequence > recordingSequence + 1
     }
+    let transcribing = try fixture.store.readSnapshot()
     release.continuation.finish()
     _ = try? await stopping.value
 
@@ -361,7 +357,7 @@ final class VoiceInputCaptureServiceTest: XCTestCase {
       recorderFactory: RecordingAudioRecorderFactory(),
       activityManager: RecordingLiveActivityManager(startedID: "activity"),
       backgroundTaskManager: RecordingBackgroundTaskManager(),
-      heartbeatInterval: .seconds(60)
+      clock: ManualClock()
     )
     try await service.start(sessionID: UUID())
     let stopping = Task { try await service.stop(styleKind: .natural) }
@@ -410,7 +406,7 @@ private struct CaptureHarness {
       recorderFactory: RecordingAudioRecorderFactory(),
       activityManager: activityManager,
       backgroundTaskManager: RecordingBackgroundTaskManager(),
-      heartbeatInterval: .seconds(60)
+      clock: ManualClock()
     )
   }
 
@@ -567,6 +563,9 @@ private struct CaptureFixture {
   let recorderFactory: RecordingAudioRecorderFactory
   let activityManager: RecordingLiveActivityManager
   let service: VoiceInputCaptureService
+  /// Heartbeats fire only when a test advances this clock.
+  let clock = ManualClock()
+  static let heartbeatInterval: Duration = .milliseconds(500)
 
   init(
     liveActivityID: String?,
@@ -575,8 +574,7 @@ private struct CaptureFixture {
     liveAudioTap: (any VoiceInputLiveAudioTapping)? = nil,
     backgroundTaskManager: any VoiceInputBackgroundTaskManaging =
       RecordingBackgroundTaskManager(),
-    controlReloader: @escaping @Sendable () -> Void = {},
-    heartbeatInterval: Duration = .seconds(60)
+    controlReloader: @escaping @Sendable () -> Void = {}
   ) throws {
     root = FileManager.default.temporaryDirectory.appendingPathComponent(
       UUID().uuidString,
@@ -607,7 +605,8 @@ private struct CaptureFixture {
       activityManager: activityManager,
       backgroundTaskManager: backgroundTaskManager,
       controlReloader: controlReloader,
-      heartbeatInterval: heartbeatInterval
+      heartbeatInterval: Self.heartbeatInterval,
+      clock: clock
     )
   }
 

@@ -159,7 +159,9 @@ final class VoiceInputModelLibraryModelTest: XCTestCase {
 
     model.download(entry)
     XCTAssertEqual(model.downloads[entry.packageID], 0)
-    try await waitUntil { model.downloads.isEmpty && model.activeASRModel != nil }
+    try await waitUntil("the download to settle") {
+      model.downloads.isEmpty && model.activeASRModel != nil
+    }
 
     XCTAssertEqual(model.activeASRModel?.package.packageID, entry.packageID)
     XCTAssertEqual(model.activeASRModel?.publisherVerified, true)
@@ -182,7 +184,7 @@ final class VoiceInputModelLibraryModelTest: XCTestCase {
     )
 
     model.download(entry)
-    try await waitUntil { model.downloads.isEmpty }
+    try await waitUntil("the download to settle") { model.downloads.isEmpty }
 
     XCTAssertEqual(
       model.errorMessage,
@@ -190,18 +192,6 @@ final class VoiceInputModelLibraryModelTest: XCTestCase {
     )
     let installed = try await library.registry.installedPackages()
     XCTAssertEqual(installed, [])
-  }
-
-  @MainActor
-  private func waitUntil(_ condition: @MainActor () -> Bool) async throws {
-    let deadline = ContinuousClock.now + .seconds(10)
-    while !condition() {
-      guard ContinuousClock.now < deadline else {
-        XCTFail("Timed out waiting for the download to settle.")
-        throw CancellationError()
-      }
-      try await Task.sleep(for: .milliseconds(10))
-    }
   }
 
   private func temporaryDirectory() -> URL {

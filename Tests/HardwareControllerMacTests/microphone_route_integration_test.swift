@@ -5,6 +5,8 @@ import Testing
 
 @testable import HardwareControllerMac
 
+/// Opt-in real-device suite: it sleeps and bounds real time because device
+/// latency is what it measures.
 struct MicrophoneRouteIntegrationTest {
   /// Verifies idle and active capture across a real input reconfiguration.
   @Test(

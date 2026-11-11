@@ -30,6 +30,18 @@ enum VoiceHistoryDatabaseRecovery {
       )
     }
     defer { sqlite3_close(database) }
+    // A previous history's retention write or closing checkpoint can still
+    // hold the lock, so inspection waits like every other connection.
+    guard
+      sqlite3_busy_timeout(
+        database,
+        sqliteVoiceHistoryCoordinationTimeoutMilliseconds
+      ) == SQLITE_OK
+    else {
+      throw VoiceSessionHistoryError.storageUnavailable(
+        "Voice History could not inspect its local database."
+      )
+    }
 
     var statement: OpaquePointer?
     let prepareResult = sqlite3_prepare_v2(
