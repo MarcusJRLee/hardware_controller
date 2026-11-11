@@ -13,4 +13,4 @@ Committed work is one `<slug>.md` per outcome here; the generated, gitignored
 | Idea | Trigger |
 | --- | --- |
 | Remote providers for Local AI or speech. | A new privacy decision approves a remote-capable provider ([Local-only boundary](../decisions/local_only_boundary.md)). |
-| Build Android, Windows, or Linux apps on the Rust core. | `portable_rust_boundary` lands and a platform is chosen. |
+| Build Android, Windows, or Linux apps on the Rust core. | A platform is chosen ([seams](../decisions/portable_voice_engine.md#platform-seams)). |

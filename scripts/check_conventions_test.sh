@@ -19,6 +19,10 @@ make_fixture() {
   print 'let s = URLSession.shared' > Sources/HardwareControllerMac/ollama_local_ai_refiner.swift
   print 'Sources/HardwareControllerMac/ollama_local_ai_refiner.swift | Adapter.' \
     >> Tests/untested_sources.txt
+  mkdir -p crates/core/src crates/core/include
+  print '#include <stdint.h>' > crates/core/include/core.h
+  print 'pub const AVERAGE_UINT: u8 = 0; // Validates audio.caf bytes.' > crates/core/src/lib.rs
+  print 'name = "block-buffer"' > Cargo.lock
   git init -q && git add -A
 }
 
@@ -44,6 +48,11 @@ expect fail "a stale exemption" 'print > Tests/Suite/values_test.swift'
 expect fail "an exemption for a deleted file" 'rm Sources/HardwareControllerCore/values.swift'
 expect fail "an exemption citing a missing test" 'perl -pi -e "s/tested_test/ghost_test/" Tests/untested_sources.txt'
 expect fail "a framework import in the domain" 'print "import AppKit" >> Sources/HardwareControllerCore/tested.swift'
+expect fail "an Apple header in the C header" 'print "#include <CoreFoundation/CoreFoundation.h>" >> crates/core/include/core.h'
+expect fail "an Apple type in a crate" 'print "type S = CFStringRef;" >> crates/core/src/lib.rs'
+expect fail "an Apple target gate in a crate" 'print "#[cfg(target_os = \"ios\")]" >> crates/core/src/lib.rs'
+expect fail "an Apple path in a crate" 'print "// ~/Library/Application Support" >> crates/core/src/lib.rs'
+expect fail "an Apple binding crate in the lockfile" 'print "name = \"objc2\"" >> Cargo.lock'
 expect fail "a network API outside the Ollama adapter" 'print "URLSession.shared" >> Sources/HardwareControllerCore/tested.swift'
 expect fail "web content outside the Gemini panel" 'print "import WebKit" >> Sources/HardwareControllerMac/ollama_local_ai_refiner.swift'
 expect fail "the Xcode-bundled formatter in a script" 'mkdir scripts && print "swift format lint x" > scripts/lint.sh'

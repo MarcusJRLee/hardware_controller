@@ -1,7 +1,7 @@
 # Portable Voice engine
 
 - **Status:** Accepted
-- **Updated:** 2026-11-03
+- **Updated:** 2026-11-10 (portability check and platform seams)
 - **Replaces:** 0035, 0039, 0057
 
 ## Context
@@ -49,10 +49,32 @@ adapters later, without a local service or a binding runtime in the hot path.
   and settings validation; unknown statuses fail as `portablePolicyFailure`.
 - Rust admits bounded portable artifacts. Swift owns Apple file access,
   compatibility migration, SQLite, audio custody, and presentation.
+- No Apple framework, type, target gate, link kind, path, or binding crate
+  enters `crates/` or `Cargo.lock`, and the header includes only `<stddef.h>`
+  and `<stdint.h>`; `scripts/check_conventions.sh` enforces it. Archive V1's
+  `audio.caf` is a fixed file name whose bytes Rust only hashes, not an Apple
+  API.
 - Streaming ASR, formatting inference, cancellation, and runtime handles need
   their own versioned ownership design; they are not forced through this
   synchronous shape. Reconsider UniFFI if the interface becomes object-heavy or
   async and its Swift 6 support meets these gates.
+
+## Platform seams
+
+Each platform links the same static library and header and supplies the rest.
+None is built; Apple is today's implementation.
+
+| Seam | Apple (built) | Android | Windows | Linux |
+| --- | --- | --- | --- | --- |
+| Binding | Swift adapter; SwiftPM or XCFramework | Kotlin over JNI; per-ABI NDK archive | C/C++ or C# P/Invoke; MSVC archive | C/C++; the C17 smoke test already links it |
+| Audio capture | `AVAudioEngine`; CAF | `AudioRecord` or AAudio | WASAPI | PipeWire or ALSA |
+| File access | Sandbox URL → UTF-8 path | Copy SAF content into app-private storage, then pass its path | UTF-8 path; non-UTF-8 returns `INVALID_UTF8_PATH` | Same as Windows |
+| Model storage | Application Support or app container; Swift fetcher | `noBackupFilesDir`; Kotlin fetcher | `%LOCALAPPDATA%`; native fetcher | `$XDG_DATA_HOME`; native fetcher |
+| Text delivery | Accessibility and `CGEvent`; iOS keyboard | `InputMethodService` | UI Automation or `SendInput` | AT-SPI, IBus, or Wayland input method |
+
+Every fetcher stages a package and passes it to Rust validation before use. A
+platform that cannot write CAF needs a versioned archive V2, not a
+platform-specific branch in Rust.
 
 ## Consequences
 
