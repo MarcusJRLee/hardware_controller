@@ -2,8 +2,8 @@
 
 Each journey names its contract and the automated tests that prove it. A
 change to a journey updates this table, its tests, and its decision in the
-same PR. Gaps that need a signed device or physical hardware are tracked in the
-[game plan](game_plan.md#open-evidence).
+same PR. Gaps that need a signed device or physical hardware are `executor: human`
+items in the [roadmap](roadmap/README.md).
 
 ## How journeys are proven
 

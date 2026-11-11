@@ -64,7 +64,8 @@ Voice Input (`swift tools/app_icons/render_app_icons.swift`). Details:
 | [Product brief](docs/product_brief.md) | Scope, canonical language, approved boundaries. |
 | [Architecture](docs/architecture.md) | Components, data flow, concurrency, persistence, security. |
 | [Voice journeys](docs/voice_cujs.md) | Every critical user journey and the test that proves it. |
-| [Game plan](docs/game_plan.md) | Quality gates, open evidence, risks. |
+| [Game plan](docs/game_plan.md) | Quality gates and risks. |
+| [Roadmap](docs/roadmap/README.md) | Committed work, one file per outcome, and uncommitted ideas. |
 | [UX specification](docs/ux_spec.md) | Visual and accessibility contract. |
 | [Contributing](docs/CONTRIBUTING.md) | Workflow, source map, test placement, Drivers. |
 | [Decisions](docs/decisions/) | One current decision record per topic. |
