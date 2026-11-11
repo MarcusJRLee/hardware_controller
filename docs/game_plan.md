@@ -25,33 +25,9 @@ Shipped behavior per journey is in [voice_cujs.md](voice_cujs.md).
 Local AI measurements: [local_ai_model_evaluation.md](local_ai_model_evaluation.md).
 Reference-Mac results do not establish lower-tier support.
 
-## Open evidence
+## Open work
 
-| Check | Needed |
-| --- | --- |
-| Physical Dictation handoff | Switch Dictation Actions, disconnect while active, switch Profiles, sleep/wake; one cleanup each. |
-| External apps | Native, web, Terminal, Cursor, focus/caret changes, secure-field rejection, both Dictation Actions. |
-| Lower-tier Macs | Apple and Ollama quality, latency, and memory on the lowest supported Mac. |
-| macOS 15–25 | Permissions, legacy recognition, insertion, lifecycle; Local AI via Ollama only. |
-| Accessibility | Keyboard, VoiceOver, contrast, reduced motion, large text. |
-| Ask Gemini in games | Panel over exclusive full-screen games; game keeps input; Gemini page changes caught by the fallback. |
-| Device lifecycle | Long holds, simultaneous Controls, hub reconnect, logout/login. |
-| iOS physical | Kill/suspend/upgrade, system surfaces, host rejection, interruption, live-decoding thermals and energy, Parakeet memory. |
-| Clean account | Install, permissions, Ollama setup, update, removal. |
-| Public release | Developer ID and notarization ([public_distribution.md](public_distribution.md)). |
-| Ownership | Longdevity LLC formation and copyright assignment, by separate decision. |
-
-## Next work
-
-- macOS speech: pause-cut live decoding so Parakeet text arrives while
-  speaking; Parakeet contextual biasing for Dictionary terms; a Moonshine
-  streaming measurement; HID soak during a live service crash; your
-  real-speech comparison against Apple (the 0060 gate).
-- Portability: keep Apple types out of the Rust boundary; document Android,
-  Windows, and Linux seams without building them. Remote providers need a new
-  privacy decision first.
-- Formatting on iOS: a small local model (0.8B class) or Apple Foundation
-  Models, benchmarked against the deterministic fallback.
+Open evidence and next work are roadmap items in [`roadmap/`](roadmap/README.md).
 
 ## Risks
 

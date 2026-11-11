@@ -106,6 +106,6 @@ Synthetic speech measures cost, not real dictation quality.
 - Every signed install runs `scripts/check_speech_engine.sh`; ad-hoc builds
   cannot load the service, so CI covers it with unit and protocol tests.
 - With transcribe.cpp, macOS 15–25 need no Speech Recognition permission.
-- Next work: macOS pause-cut live decoding, then a Moonshine streaming
-  comparison. On iOS, concurrent recorder and engine input, thermal, and energy
-  cost need physical measurement.
+- Open gates and next work are roadmap items: `macos_live_decoding`,
+  `speech_service_gates`, `real_speech_comparison`, `moonshine_streaming_comparison`,
+  and `ios_physical_evidence`.
