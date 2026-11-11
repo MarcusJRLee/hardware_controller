@@ -92,8 +92,15 @@ Recognizers return "P R forty-four" for "PR 44". Five fixes were compared:
   nonempty output, length, controls, and protected numbers, URLs, emails,
   paths, code tokens, and Dictionary terms on the rendered document.
 - Formatting has its own three-second deadline. Provider, schema, semantic,
-  deadline, or focus failure delivers deterministic Edited text once, if still
-  safe; late output is discarded. Raw and refined text stay available for copy.
+  deadline, output-limit, or focus failure delivers deterministic Edited text
+  once, if still safe; late output is discarded. Raw and refined text stay
+  available for copy.
+- Every provider request carries one output budget,
+  `min(2048, max(128, characters / 2 + 128))` tokens (Ollama `num_predict`,
+  Apple `maximumResponseTokens`). Ollama otherwise generates without bound,
+  shifting its context, so a repetition loop ran into the 15-second transport
+  timeout. Reaching the budget is the typed `outputLimitReached` failure; a
+  transport timeout is the typed `timedOut` failure.
 - The 19-case semantic gate allows at most 15% semantic and 10% provider
   failures and zero casing, protected-token, or structure failures.
 

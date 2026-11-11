@@ -6,6 +6,21 @@ import Testing
 
 struct LocalAIRefinementTests {
   @Test
+  func outputBudgetIsBoundedAndScalesWithInput() {
+    #expect(LocalAIOutputTokenBudget.maximumTokens(for: "a") == 128)
+    #expect(
+      LocalAIOutputTokenBudget.maximumTokens(
+        for: String(repeating: "a", count: 1_000)
+      ) == 628
+    )
+    #expect(
+      LocalAIOutputTokenBudget.maximumTokens(
+        for: String(repeating: "a", count: 10_000)
+      ) == 2_048
+    )
+  }
+
+  @Test
   func promptCarriesTypedCasingAndListIntent() throws {
     let request = LocalAIRefinementRequest(
       sessionID: UUID(),

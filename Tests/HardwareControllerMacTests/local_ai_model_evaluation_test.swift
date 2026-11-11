@@ -7,6 +7,10 @@ import Testing
 /// Opt-in model evaluation: it bounds real time because provider latency is
 /// what it measures.
 struct LocalAIModelEvaluationTest {
+  /// Six corpus rounds give 114 warm samples, so p95 and p99 are not the maximum.
+  private static let warmRounds = 6
+  private static let coldSamples = 20
+
   @Test(
     .enabled(
       if:
@@ -112,136 +116,144 @@ struct LocalAIModelEvaluationTest {
     var generatedTokens = 0
     var tokenGenerationNanoseconds: UInt64 = 0
 
-    for evaluationCase in LocalAIEvaluationCorpus.cases {
-      let source = applier.apply(
-        evaluationCase.dictionary,
-        to: evaluationCase.transcript
-      )
-      let request = LocalAIRefinementRequest(
-        sessionID: UUID(),
-        transcript: source,
-        context: LocalAITargetContext(
-          localeIdentifier:
-            evaluationCase.category == "multilingual"
-            ? "es_ES" : "en_US",
-          profileName: "Evaluation",
-          applicationName: "Evaluation Target",
-          applicationBundleIdentifier: "local.evaluation",
-          targetRole: "AXTextArea",
-          supportsMultilineText: evaluationCase.supportsMultiline,
-          nearbyText: evaluationCase.nearbyText
-        ),
-        dictionary: evaluationCase.dictionary,
-        additionalInstructions: evaluationCase.additionalInstructions,
-        casingPolicy: evaluationCase.casingPolicy
-      )
-      let start = MonotonicClock.nowNanoseconds()
-      do {
-        let response = try await refiner.refine(
-          request,
-          settings: settings
+    for round in 1...Self.warmRounds {
+      for evaluationCase in LocalAIEvaluationCorpus.cases {
+        let source = applier.apply(
+          evaluationCase.dictionary,
+          to: evaluationCase.transcript
         )
-        let latency = elapsed(since: start)
-        latencies.append(latency)
-        if let load = response.modelLoadNanoseconds {
-          modelLoadNanoseconds.append(load)
-        }
-        generatedTokens += response.generatedTokenCount ?? 0
-        tokenGenerationNanoseconds +=
-          response.tokenGenerationNanoseconds ?? 0
-
-        let normalized = normalizer.normalize(
-          response.output,
+        let request = LocalAIRefinementRequest(
+          sessionID: UUID(),
           transcript: source,
-          intent: request.listIntent
+          context: LocalAITargetContext(
+            localeIdentifier:
+              evaluationCase.category == "multilingual"
+              ? "es_ES" : "en_US",
+            profileName: "Evaluation",
+            applicationName: "Evaluation Target",
+            applicationBundleIdentifier: "local.evaluation",
+            targetRole: "AXTextArea",
+            supportsMultilineText: evaluationCase.supportsMultiline,
+            nearbyText: evaluationCase.nearbyText
+          ),
+          dictionary: evaluationCase.dictionary,
+          additionalInstructions: evaluationCase.additionalInstructions,
+          casingPolicy: evaluationCase.casingPolicy
         )
-        let polished = polisher.polish(
-          normalized,
-          preserving: source,
-          style: request.style
-        )
-        let cased = casingTransformer.apply(
-          request.casingPolicy,
-          to: polished,
-          preserving: source,
-          dictionary: request.dictionary
-        )
-        let document = try builder.build(
-          output: cased,
-          rawText: source,
-          style: request.style,
-          provider: response.provider,
-          modelIdentifier: response.modelIdentifier,
-          promptRevision: VersionedLocalAIPromptBuilder.currentRevision
-        )
-        let output = try renderer.render(
-          document,
-          supportsMultiline: evaluationCase.supportsMultiline
-        )
-        var failureKinds: Set<LocalAIEvaluationFailureKind> = []
-        var semanticFailure: String?
-        let actualBlockKinds = Set(cased.blocks.map(\.kind))
-        if !evaluationCase.requiredBlockKinds.isSubset(
-          of: actualBlockKinds
-        ) {
-          failureKinds.insert(.structure)
-        }
-        let expectedCasing = casingTransformer.apply(
-          request.casingPolicy,
-          to: cased,
-          preserving: source,
-          dictionary: request.dictionary
-        )
-        if expectedCasing != cased {
-          failureKinds.insert(.casing)
-        }
-        if evaluationCase.protectedTokens.contains(where: {
-          !output.contains($0)
-        }) {
-          failureKinds.insert(.protectedToken)
-        }
+        let start = MonotonicClock.nowNanoseconds()
         do {
-          _ = try validator.validate(
-            output,
+          let response = try await refiner.refine(
+            request,
+            settings: settings
+          )
+          let latency = elapsed(since: start)
+          latencies.append(latency)
+          if let load = response.modelLoadNanoseconds {
+            modelLoadNanoseconds.append(load)
+          }
+          generatedTokens += response.generatedTokenCount ?? 0
+          tokenGenerationNanoseconds +=
+            response.tokenGenerationNanoseconds ?? 0
+
+          let normalized = normalizer.normalize(
+            response.output,
+            transcript: source,
+            intent: request.listIntent
+          )
+          let polished = polisher.polish(
+            normalized,
             preserving: source,
-            dictionary: evaluationCase.dictionary,
-            supportsMultiline: evaluationCase.supportsMultiline,
-            context: request.context
+            style: request.style
           )
-          semanticFailure = nil
+          let cased = casingTransformer.apply(
+            request.casingPolicy,
+            to: polished,
+            preserving: source,
+            dictionary: request.dictionary
+          )
+          let document = try builder.build(
+            output: cased,
+            rawText: source,
+            style: request.style,
+            provider: response.provider,
+            modelIdentifier: response.modelIdentifier,
+            promptRevision: VersionedLocalAIPromptBuilder.currentRevision
+          )
+          let output = try renderer.render(
+            document,
+            supportsMultiline: evaluationCase.supportsMultiline
+          )
+          var failureKinds: Set<LocalAIEvaluationFailureKind> = []
+          var semanticFailure: String?
+          let actualBlockKinds = Set(cased.blocks.map(\.kind))
+          if !evaluationCase.requiredBlockKinds.isSubset(
+            of: actualBlockKinds
+          ) {
+            failureKinds.insert(.structure)
+          }
+          let expectedCasing = casingTransformer.apply(
+            request.casingPolicy,
+            to: cased,
+            preserving: source,
+            dictionary: request.dictionary
+          )
+          if expectedCasing != cased {
+            failureKinds.insert(.casing)
+          }
+          if evaluationCase.protectedTokens.contains(where: {
+            !output.contains($0)
+          }) {
+            failureKinds.insert(.protectedToken)
+          }
+          do {
+            _ = try validator.validate(
+              output,
+              preserving: source,
+              dictionary: evaluationCase.dictionary,
+              supportsMultiline: evaluationCase.supportsMultiline,
+              context: request.context
+            )
+            semanticFailure = nil
+          } catch {
+            semanticFailure = String(describing: error)
+            failureKinds.insert(.semantic)
+          }
+          outcomes.append(
+            EvaluationOutcome(
+              id: evaluationCase.id,
+              round: round,
+              output: output,
+              exactQualityPass: evaluationCase.acceptedOutputs.contains(
+                output
+              ),
+              failureKinds: failureKinds.sorted {
+                $0.rawValue < $1.rawValue
+              },
+              semanticFailure: semanticFailure,
+              latencyNanoseconds: latency,
+              promptTokenCount: response.promptTokenCount,
+              generatedTokenCount: response.generatedTokenCount,
+              error: nil
+            )
+          )
         } catch {
-          semanticFailure = String(describing: error)
-          failureKinds.insert(.semantic)
+          let latency = elapsed(since: start)
+          latencies.append(latency)
+          outcomes.append(
+            EvaluationOutcome(
+              id: evaluationCase.id,
+              round: round,
+              output: nil,
+              exactQualityPass: false,
+              failureKinds: [],
+              semanticFailure: nil,
+              latencyNanoseconds: latency,
+              promptTokenCount: nil,
+              generatedTokenCount: nil,
+              error: String(describing: error)
+            )
+          )
         }
-        outcomes.append(
-          EvaluationOutcome(
-            id: evaluationCase.id,
-            output: output,
-            exactQualityPass: evaluationCase.acceptedOutputs.contains(
-              output
-            ),
-            failureKinds: failureKinds.sorted {
-              $0.rawValue < $1.rawValue
-            },
-            semanticFailure: semanticFailure,
-            latencyNanoseconds: latency,
-            error: nil
-          )
-        )
-      } catch {
-        let latency = elapsed(since: start)
-        latencies.append(latency)
-        outcomes.append(
-          EvaluationOutcome(
-            id: evaluationCase.id,
-            output: nil,
-            exactQualityPass: false,
-            failureKinds: [],
-            semanticFailure: nil,
-            latencyNanoseconds: latency,
-            error: String(describing: error)
-          )
-        )
       }
     }
 
@@ -300,7 +312,7 @@ struct LocalAIModelEvaluationTest {
       }
     }
     var samples: [UInt64] = []
-    for _ in 0..<5 {
+    for _ in 0..<Self.coldSamples {
       let refiner = makeRefiner(candidate)
       let readiness = await refiner.readiness(
         settings: settings,
@@ -445,11 +457,14 @@ private struct EvaluationReport: Codable {
 
 private struct EvaluationOutcome: Codable {
   let id: String
+  let round: Int
   let output: String?
   let exactQualityPass: Bool
   let failureKinds: [LocalAIEvaluationFailureKind]
   let semanticFailure: String?
   let latencyNanoseconds: UInt64
+  let promptTokenCount: Int?
+  let generatedTokenCount: Int?
   let error: String?
 }
 

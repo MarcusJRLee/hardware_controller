@@ -197,7 +197,7 @@ public actor OllamaLocalAIRefiner: TranscriptRefining {
       stream: false,
       think: nil,
       format: nil,
-      options: Self.deterministicOptions,
+      options: Self.options(maximumOutputTokens: nil),
       keepAlive: keepAlive(for: settings.modelRetention)
     )
     let _: OllamaGenerateResponse = try await post(
@@ -237,7 +237,11 @@ public actor OllamaLocalAIRefiner: TranscriptRefining {
         stream: false,
         think: false,
         format: .voiceBlocks,
-        options: Self.deterministicOptions,
+        options: Self.options(
+          maximumOutputTokens: LocalAIOutputTokenBudget.maximumTokens(
+            for: request.transcript
+          )
+        ),
         keepAlive: keepAlive(for: settings.modelRetention)
       )
     )
@@ -248,6 +252,9 @@ public actor OllamaLocalAIRefiner: TranscriptRefining {
       throw LocalAIRefinementFailure.invalidResponse(
         "Ollama did not finish the local response."
       )
+    }
+    guard response.doneReason != Self.outputLimitDoneReason else {
+      throw LocalAIRefinementFailure.outputLimitReached
     }
     guard let data = response.response.data(using: .utf8) else {
       throw LocalAIRefinementFailure.invalidResponse(
@@ -271,6 +278,8 @@ public actor OllamaLocalAIRefiner: TranscriptRefining {
       modelIdentifier: "\(selected.name)@\(selected.digest)",
       modelLoadNanoseconds: response.loadDuration,
       generationNanoseconds: response.totalDuration,
+      promptTokenCount: response.promptEvaluationCount,
+      promptEvaluationNanoseconds: response.promptEvaluationDuration,
       generatedTokenCount: response.evaluationCount,
       tokenGenerationNanoseconds: response.evaluationDuration
     )
@@ -454,6 +463,8 @@ public actor OllamaLocalAIRefiner: TranscriptRefining {
       response = try await transport.send(request)
     } catch is CancellationError {
       throw CancellationError()
+    } catch let error as URLError where error.code == .timedOut {
+      throw LocalAIRefinementFailure.timedOut
     } catch {
       throw LocalAIRefinementFailure.providerUnavailable(
         "Ollama did not respond on the fixed local endpoint."
@@ -505,10 +516,20 @@ public actor OllamaLocalAIRefiner: TranscriptRefining {
     retention == .processLifetime ? .indefinitely : .duration("5m")
   }
 
-  private static let deterministicOptions = OllamaGenerationOptions(
-    temperature: 0,
-    contextWindow: 2_048
-  )
+  /// Every request shares one context window, because Ollama reloads the
+  /// model when it changes. Without an output cap Ollama's default is
+  /// unbounded generation with context shifting.
+  private static func options(
+    maximumOutputTokens: Int?
+  ) -> OllamaGenerationOptions {
+    OllamaGenerationOptions(
+      temperature: 0,
+      contextWindow: 2_048,
+      maximumOutputTokens: maximumOutputTokens
+    )
+  }
+
+  private static let outputLimitDoneReason = "length"
 
   private static let loopbackBaseURL: URL = {
     var components = URLComponents()
@@ -545,10 +566,12 @@ private struct OllamaModelResponse: Decodable, Sendable {
 private struct OllamaGenerationOptions: Encodable {
   let temperature: Int
   let contextWindow: Int
+  let maximumOutputTokens: Int?
 
   enum CodingKeys: String, CodingKey {
     case temperature
     case contextWindow = "num_ctx"
+    case maximumOutputTokens = "num_predict"
   }
 }
 
@@ -695,16 +718,22 @@ private struct OllamaRunningModelResponse: Decodable, Sendable {
 private struct OllamaGenerateResponse: Decodable, Sendable {
   let response: String
   let done: Bool
+  let doneReason: String?
   let totalDuration: UInt64?
   let loadDuration: UInt64?
+  let promptEvaluationCount: Int?
+  let promptEvaluationDuration: UInt64?
   let evaluationCount: Int?
   let evaluationDuration: UInt64?
 
   enum CodingKeys: String, CodingKey {
     case response
     case done
+    case doneReason = "done_reason"
     case totalDuration = "total_duration"
     case loadDuration = "load_duration"
+    case promptEvaluationCount = "prompt_eval_count"
+    case promptEvaluationDuration = "prompt_eval_duration"
     case evaluationCount = "eval_count"
     case evaluationDuration = "eval_duration"
   }

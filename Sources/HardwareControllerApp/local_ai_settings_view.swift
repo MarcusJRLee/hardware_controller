@@ -583,7 +583,9 @@ extension LocalAIRefinementFailure {
     case .modelDigestChanged:
       "The model digest changed. Select it again."
     case .timedOut:
-      "The three-second deadline expired."
+      "The model did not finish before its deadline."
+    case .outputLimitReached:
+      "The model exceeded its output limit."
     case .requestTooLarge:
       "The local test request was too large."
     }
