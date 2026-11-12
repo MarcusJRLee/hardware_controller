@@ -83,14 +83,17 @@ passed locally and failed only in CI.
   the kit's tools: `mise trust && mise install` and `lefthook install` once per
   clone.
 - `.mjrlee_repo_setup/repo.toml` declares no quiet hours (`windows = []`).
+- Its `guard_pr_body` hook denies an agent PR description without a decision
+  matrix of the alternatives weighed, or a `No alternatives: <why>` line.
 - `scripts/check_fast.sh` runs the kit's Markdown placement, Docker label,
   roadmap, test ownership, and `repo.toml` gates, so CI installs the kit's tools
   through mise (`.github/actions/mise`), at the versions the kit pins. Kit-only
   changes take the fast lane.
-- The kit's `test_ownership.py` wants a test beside each source, which Swift
-  test targets cannot have, so `.mjrlee_repo_setup/test_exemptions.toml` hands
-  Swift to `scripts/check_conventions.sh` and lists each other exemption by
-  path.
+- The kit's `test_ownership.py` owns test ownership for every language. It
+  finds SwiftPM `Tests/` and Rust `#[cfg(test)]` itself;
+  `.mjrlee_repo_setup/test_ownership.toml` maps Voice Input to its Xcode test
+  targets and lists each differently named owner and exemption by path. This
+  replaced the repo's own Swift check and `Tests/untested_sources.txt`.
 - Markdown lives under `docs/`, in `README.md` files, skill trees, or
   `.github/`; `CONTRIBUTING.md` and `SECURITY.md` live in `docs/`, where GitHub
   also reads them.

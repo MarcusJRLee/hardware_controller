@@ -49,7 +49,3 @@ tmp/
 
 # Roadmap view rendered by roadmap.py; never committed.
 docs/roadmap/index.md
-
-# Worktrees made before the kit moved them to ~/.worktrees/<repo>/; delete
-# once none remain in the main checkout. Anchored so kit sync keeps it.
-/.worktrees/

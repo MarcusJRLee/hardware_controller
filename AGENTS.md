@@ -6,8 +6,10 @@
 - Choose the most technically correct design despite upfront cost: modular,
   reused rather than duplicated, clear, maintainable, forward-compatible,
   delivered iteratively, and shaped to eliminate drift.
-- Compare options with a decision matrix (options as columns, criteria as rows),
-  never a pros/cons list.
+- Compare options with a decision matrix (options as columns, criteria as rows,
+  🟢🟡🟠🔴 cells with a few-word reason, then a one-line recommendation), never
+  a pros/cons list. Every PR description carries one for the alternatives it
+  weighed, or a `No alternatives: <why>` line.
 - Write strongly typed code. Never silence a type error with `as any`,
   `as never`, or a double cast (`x as never as T`); fix the root cause, and fix
   resolver/schema mismatches at the declaration, not the call site.
@@ -110,13 +112,14 @@
   Keychain access and verify there before asking the user to reauthenticate;
   never copy the token into an env file or plaintext config.
 - [Testing] Logic whose failure would ship a defect or block a release needs a
-  concise colocated `FILENAME_test.EXT`. Thin wrappers, re-exports, constants,
-  styles, declarations, generated files, one-shot operator scripts, and
-  vendoring tools are exempt; `test_ownership.py` enforces each exemption by
-  path (such as `scripts/data/` or `vendor_*`) or header marker, not by an
-  agent's judgment. A config's invariants are usually better enforced by
-  validation in the module that owns the rule (run by lint or at load) than by
-  testing the config itself.
+  concise colocated `FILENAME_test.EXT`, or a same-stem test where its toolchain
+  mandates (SwiftPM, Cargo, Xcode test targets). Thin wrappers, re-exports,
+  constants, styles, declarations, generated files, test support, one-shot
+  operator scripts, and vendoring tools are exempt; `test_ownership.py` enforces
+  each exemption by path (such as `scripts/data/` or `vendor_*`) or a header
+  marker naming its kind, not by an agent's judgment. A config's invariants are
+  usually better enforced by validation in the module that owns the rule (run by
+  lint or at load) than by testing the config itself.
 - [Testing] Keep tests as concise as full coverage allows, sharing setup so each
   test function stays scannable.
 - [Testing] Run tests and type checks on every line you change before finishing.

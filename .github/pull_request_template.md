@@ -2,6 +2,16 @@
 
 - Describe the problem and the smallest complete change.
 
+## Alternatives
+
+| Criterion | Option A | Option B |
+| --- | --- | --- |
+| Correctness | 🟢 Few-word reason | 🟠 Few-word reason |
+
+Recommendation: Option A, because …
+
+Or one line: `No alternatives: <why>`.
+
 ## Verification
 
 - [ ] `scripts/check.sh`
