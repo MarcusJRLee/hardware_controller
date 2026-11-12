@@ -1,5 +1,5 @@
 {
-  "kit_version": "1d415e6df7a89add",
+  "kit_version": "f6bae71ad8445fdb",
   "units": {
     "file:.mjrlee_repo_setup/hooks/default_branch_rule.py": "b7f677ba552a7536e40e9b3c59fa8adf8147836544045d0d80c9c7b12f975bc7",
     "file:.mjrlee_repo_setup/hooks/docker_labels.py": "2f0ad0482683b780f13b2455529291aed8a51087b2a38215f7b6befe6cda730f",
