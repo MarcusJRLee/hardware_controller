@@ -1,9 +1,9 @@
 """Git post-checkout hook: where checkouts live and what the main one holds.
 
 Git runs this inside each new worktree, so the verdict uses its real path: no
-command parsing. A worktree outside the main checkout's allowed dirs
-(`git_queries.ALLOWED_WORKTREE_DIRS`: `.worktrees/`, plus Claude desktop's
-`.claude/worktrees/`) is removed again and `git worktree add` fails.
+command parsing. A worktree outside the repo's worktree home
+(`worktree_home.py`: `~/.worktrees/<repo>/`), or in a home another repository
+already uses, is removed again and `git worktree add` fails.
 
 The main checkout stays on the default branch, since repos may run live code
 from it: a switch elsewhere is switched back and the command fails. Rebase and
@@ -16,26 +16,51 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
 import git_queries
+import worktree_home
 
 # Git state dirs or files present while an operation detaches HEAD on purpose.
 DETACHING_OPERATIONS: Final = ("rebase-merge", "rebase-apply", "BISECT_START")
 
 
-def check(cwd: Path, previous: str, flag: str) -> Path | None:
-    """Return this checkout's root when it is a stray worktree to remove."""
+@dataclass(frozen=True)
+class Stray:
+    """A new worktree to remove, and why."""
+
+    path: Path
+    main: Path
+    reason: str
+
+
+def check(cwd: Path, previous: str, flag: str) -> Stray | None:
+    """Return this checkout when it is a stray worktree to remove."""
 
     # Only `git worktree add` (and clone) check out from the null commit.
     if not git_queries.is_null_sha(previous) or flag != "1":
         return None
     top = git_queries.repo_root(cwd)
-    main = git_queries.main_checkout(cwd)
-    if top is None or main is None or not git_queries.is_linked_worktree(cwd):
+    repo = worktree_home.locate(cwd)
+    if top is None or repo is None or not git_queries.is_linked_worktree(cwd):
         return None
-    return None if git_queries.is_allowed_worktree(top, main) else top
+    try:
+        reason = worktree_home.refusal(top, repo)
+    except worktree_home.WorktreeHomeError as error:
+        reason = str(error)
+    return None if reason is None else Stray(top, repo.main, reason)
+
+
+def add_hint(cwd: Path, branch: str) -> str:
+    """Return the command that makes a worktree where it belongs."""
+
+    try:
+        home = worktree_home.home(cwd)
+    except worktree_home.WorktreeHomeError:
+        home = Path("~/.worktrees/<repo>")
+    return f"git worktree add -b <branch> {home}/<name> origin/{branch}"
 
 
 def home_branch(cwd: Path, flag: str) -> str | None:
@@ -76,8 +101,7 @@ def return_home(cwd: Path, branch: str) -> int:
     )
     print(
         f"Blocked: the main checkout stays on `{branch}` ({outcome}). Work in "
-        f"a worktree: `git worktree add -b <branch> .worktrees/<name> "
-        f"origin/{branch}`.",
+        f"a worktree: `{add_hint(cwd, branch)}`.",
         file=sys.stderr,
     )
     return 1
@@ -93,14 +117,11 @@ def main(argv: Sequence[str]) -> int:
     stray = check(cwd, argv[0], argv[2])
     if stray is None:
         return 0
-    home = git_queries.worktree_dir(stray)
-    if home is not None:
-        git_queries.run_git(
-            home.parent, "worktree", "remove", "--force", str(stray)
-        )
+    git_queries.run_git(
+        stray.main, "worktree", "remove", "--force", str(stray.path)
+    )
     print(
-        f"Blocked: removed worktree {stray}. Create worktrees only as "
-        f"`{home}/<name>`.",
+        f"Blocked: removed worktree {stray.path}: {stray.reason}.",
         file=sys.stderr,
     )
     return 1

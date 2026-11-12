@@ -1,8 +1,8 @@
 """The repo's own settings for what the kit drives, from `repo.toml`.
 
 `.mjrlee_repo_setup/repo.toml` belongs to the repo, never the kit. Every repo
-has one, since `[launch]` is required; the other tables are needed only where
-the repo's workflow differs from the defaults:
+has one, since `[launch]` and `[quiet_hours]` are required; the other tables
+are needed only where the repo's workflow differs from the defaults:
 
     [checkout]
     # Run in order from a new checkout's root to make it ready to build, test,
@@ -21,7 +21,18 @@ the repo's workflow differs from the defaults:
     # interrupt service; every pushed commit names its flag (`launch_rule.py`).
     phase = "public"
 
-Check it from the repo root (exit 1 on an error or an undeclared phase):
+    [quiet_hours]
+    # Required, even as `windows = []`, which needs no `timezone`. Inside a window no commit is created
+    # or pushed and agents make no GitHub writes (`quiet_hours.py`). Times are
+    # wall-clock in `timezone`; `end` may be "24:00", and a window whose end
+    # is not after its start runs past midnight from each of its `days`.
+    timezone = "America/New_York"
+    windows = [
+      { days = ["mon", "tue", "wed", "thu", "fri"], start = "09:00", end = "17:00" },
+    ]
+
+Check it from the repo root (exit 1 on an error, an undeclared phase, or
+undeclared quiet hours):
 
     uv run --no-project python .mjrlee_repo_setup/hooks/repo_config.py
 """
@@ -36,6 +47,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Final
 
+from quiet_hours import QuietHours, QuietHoursError, parse
+
 CONFIG: Final = PurePosixPath(".mjrlee_repo_setup/repo.toml")
 # Lockfile → frozen install; the first match wins.
 INSTALLS: Final = (
@@ -48,6 +61,7 @@ _TABLES: Final[Mapping[str, frozenset[str] | None]] = {
     "checkout": frozenset({"setup"}),
     "replace": None,
     "launch": frozenset({"phase"}),
+    "quiet_hours": frozenset({"timezone", "windows"}),
 }
 PHASES: Final = ("pre_launch", "public")
 _WORD: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]*")
@@ -59,6 +73,12 @@ class RepoConfigError(ValueError):
     """`repo.toml` is malformed; the message names the field."""
 
 
+def _words_pattern(words: Sequence[str]) -> re.Pattern[str]:
+    # Textual, like guard_git's bypasses: whole words, any whitespace.
+    body = r"\s+".join(re.escape(w) for w in words)
+    return re.compile(rf"(?<![\w./-]){body}(?![\w-])")
+
+
 @dataclass(frozen=True)
 class Replacement:
     """A command agents must not run, and what they run instead."""
@@ -68,9 +88,15 @@ class Replacement:
 
     @property
     def pattern(self) -> re.Pattern[str]:
-        # Textual, like guard_git's bypasses: whole words, any whitespace.
-        body = r"\s+".join(re.escape(w) for w in self.words)
-        return re.compile(rf"(?<![\w./-]){body}(?![\w-])")
+        return _words_pattern(self.words)
+
+    @property
+    def instead_pattern(self) -> re.Pattern[str]:
+        """Match the replacement's own leading words, before any `<arg>`."""
+
+        words = self.instead.split()
+        cut = next((n for n, w in enumerate(words) if w.startswith("<")), None)
+        return _words_pattern(words[:cut] or words)
 
 
 @dataclass(frozen=True)
@@ -79,6 +105,9 @@ class RepoConfig:
     replacements: tuple[Replacement, ...]
     # None: undeclared, which verify and the push rule refuse.
     phase: str | None = None
+    # None: undeclared, which verify refuses; hooks then block nothing, so a
+    # kit update never stops a repo that has yet to answer.
+    quiet_hours: QuietHours | None = None
 
     @property
     def public(self) -> bool:
@@ -142,6 +171,19 @@ def _phase(table: object) -> str | None:
 UNDECLARED: Final = (
     f'{CONFIG} must declare `[launch] phase = "pre_launch"` or `"public"`'
 )
+QUIET_UNDECLARED: Final = (
+    f"{CONFIG} must declare `[quiet_hours]` with `windows`"
+    " (`windows = []` for none)"
+)
+
+
+def _quiet_hours(table: object) -> QuietHours | None:
+    if table is None:
+        return None
+    try:
+        return parse(table, str(CONFIG))
+    except QuietHoursError as error:
+        raise RepoConfigError(str(error)) from error
 
 
 def _check_keys(document: Mapping[str, object]) -> None:
@@ -178,6 +220,7 @@ def load(root: Path) -> RepoConfig:
         ),
         replacements=_replacements(document.get("replace", {})),
         phase=_phase(document.get("launch")),
+        quiet_hours=_quiet_hours(document.get("quiet_hours")),
     )
 
 
@@ -187,10 +230,17 @@ def main() -> int:
     except RepoConfigError as error:
         print(error, file=sys.stderr)
         return 1
-    if config.phase is None:
-        print(UNDECLARED, file=sys.stderr)
-        return 1
-    return 0
+    missing = [
+        message
+        for message, absent in (
+            (UNDECLARED, config.phase is None),
+            (QUIET_UNDECLARED, config.quiet_hours is None),
+        )
+        if absent
+    ]
+    for message in missing:
+        print(message, file=sys.stderr)
+    return 1 if missing else 0
 
 
 if __name__ == "__main__":

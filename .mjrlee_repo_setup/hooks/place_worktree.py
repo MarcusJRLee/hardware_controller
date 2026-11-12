@@ -1,11 +1,12 @@
-"""WorktreeCreate/WorktreeRemove hook: keep Claude Code's worktrees in `.worktrees/`.
+"""WorktreeCreate/WorktreeRemove hook: Claude Code's worktrees in the home.
 
-With this hook, Claude Code calls it instead of running git itself for
-`--worktree`, the EnterWorktree tool, and subagent worktree isolation. Create
-prints the new worktree's path as the only stdout line; any failure exits
-non-zero, which fails the creation rather than falling back to
-`.claude/worktrees/`. Claude Code then skips `.worktreeinclude`, and never
-deletes hook-made branches itself, so removal deletes them here.
+The home is `~/.worktrees/<repo>/` (`worktree_home.py`). With this hook,
+Claude Code calls it instead of running git itself for `--worktree`, the
+EnterWorktree tool, and subagent worktree isolation. Create prints the new
+worktree's path as the only stdout line; any failure exits non-zero, which
+fails the creation rather than falling back to `.claude/worktrees/`. Claude
+Code then skips `.worktreeinclude`, and never deletes hook-made branches
+itself, so removal deletes them here.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from pathlib import Path
 from typing import Final
 
 import git_queries
+import worktree_home
 from hook_event import WorktreeEvent, parse_worktree_event
 
 # Claude Code names worktrees like `bold-oak-a3f2`; a name is one path segment.
@@ -66,10 +68,10 @@ def create(event: WorktreeEvent) -> Path:
             f"worktree name `{name}` must be one path segment of [A-Za-z0-9._-]"
         )
         raise WorktreeError(msg)
-    home = git_queries.worktree_dir(event.cwd)
-    if home is None:
-        msg = f"{event.cwd} is not inside a git repository"
-        raise WorktreeError(msg)
+    try:
+        home = worktree_home.home(event.cwd)
+    except worktree_home.WorktreeHomeError as error:
+        raise WorktreeError(str(error)) from error
     path = home / name
     if (path / ".git").exists():
         return path

@@ -18,9 +18,11 @@ opening the package in Xcode, run `scripts/build_rust_ffi.sh` once.
 
 - One reason to change per PR, on a branch from `main`, squash-merged.
 - Colocated `FILENAME_test.EXT` for every file with behavioral logic.
-  `scripts/check_conventions.sh` enforces it; a file without logic needs a
-  reasoned line in `Tests/untested_sources.txt`. The same check rejects
-  dashed paths, non-Foundation imports in the domain, and network APIs outside
+  `scripts/check_conventions.sh` enforces it for Swift; a Swift file without
+  logic needs a reasoned line in `Tests/untested_sources.txt`. The kit's
+  `test_ownership.py` covers every other language; exempt a file by path in
+  `.mjrlee_repo_setup/test_exemptions.toml`. `check_conventions.sh` also
+  rejects dashed paths, non-Foundation imports in the domain, and network APIs outside
   the Ollama adapter. `.swift-format` rejects force unwraps, `try!`, and
   implicitly unwrapped optionals.
 - Format with `scripts/swift_format.sh format --in-place --recursive Sources Tests`.

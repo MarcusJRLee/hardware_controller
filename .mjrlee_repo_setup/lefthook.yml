@@ -14,6 +14,13 @@ pre-push:
     "mjrlee_launch_rule.sh":
       runner: sh
       use_stdin: true
+    "mjrlee_quiet_hours.sh":
+      runner: sh
+      use_stdin: true
+pre-commit:
+  scripts:
+    "mjrlee_quiet_hours.sh":
+      runner: sh
 post-checkout:
   scripts:
     "mjrlee_worktree_rules.sh":

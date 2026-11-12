@@ -50,8 +50,6 @@ tmp/
 # Roadmap view rendered by roadmap.py; never committed.
 docs/roadmap/index.md
 
-# Agent worktrees (see AGENTS.md); nested checkouts.
-.worktrees/
-
-# Claude desktop's default worktree dir; nested checkouts.
-.claude/worktrees/
+# Worktrees made before the kit moved them to ~/.worktrees/<repo>/; delete
+# once none remain in the main checkout. Anchored so kit sync keeps it.
+/.worktrees/

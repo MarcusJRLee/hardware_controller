@@ -24,3 +24,5 @@ scripts/check_docs.sh
 uv run --no-project python .mjrlee_repo_setup/hooks/markdown_placement.py
 uv run --no-project python .mjrlee_repo_setup/hooks/docker_labels.py
 uv run --no-project python .mjrlee_repo_setup/tools/roadmap.py check
+uv run --no-project python .mjrlee_repo_setup/hooks/test_ownership.py
+uv run --no-project python .mjrlee_repo_setup/hooks/repo_config.py

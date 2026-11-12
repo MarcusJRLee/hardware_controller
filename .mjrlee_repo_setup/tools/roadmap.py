@@ -4,6 +4,7 @@
     ... roadmap.py list --offline             # Claims from fetched refs only.
     ... roadmap.py next                       # Top ready, unclaimed agent item.
     ... roadmap.py claim [<slug>]             # Claim it (default: `next`'s).
+    ... roadmap.py claim <slug> --base origin/<branch>  # Stack on an open PR.
     ... roadmap.py new <slug> --title T [--priority P2] [--executor human]
                           [--before <slug> | --after <slug>]
     ... roadmap.py move <slug> (--before <slug> | --after <slug>)
@@ -16,9 +17,13 @@ items, so the PR that finishes one deletes its file and its slug from every
 `depends_on`. Order is ready first, then priority, then `rank`, a base-36 key
 that `new` and `move` write into the one file they touch, so parallel branches
 never conflict over order. A pushed `roadmap/<slug>` branch claims an item;
-`claim` creates it in `.worktrees/<slug>` from the default branch, where the
-kit's post-checkout hook sets it up (the pre-push gate needs that), then pushes
-it create-only, so of two racing claims exactly one succeeds.
+`claim` creates it in `~/.worktrees/<repo>/<slug>` (the kit's
+`hooks/worktree_home.py`) from the default branch (or
+`--base`), where the kit's post-checkout hook sets it up (the pre-push gate
+needs that), then pushes it create-only, so of two racing claims exactly one
+succeeds. A claim is all or nothing: it checks the item and its specs exist at
+the base before creating anything, and any later failure undoes every step,
+the pushed branch included.
 
 Every command except `check` rewrites the gitignored `docs/roadmap/index.md`
 view, which therefore never goes stale in a commit; a run in any worktree also
@@ -34,7 +39,7 @@ import os
 import re
 import subprocess
 import sys
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -351,24 +356,139 @@ def _cell(text: str) -> str:
     return text.replace("|", r"\|")
 
 
-# Mirrors `WORKTREE_DIR` in `hooks/git_queries.py`, which a module in another
-# directory may not import (agents_boundary_test); a test pins the copy.
-WORKTREE_DIR: Final = ".worktrees"
+# The kit's one worktree path resolver. A module in another directory may not
+# import it (agents_boundary_test), so `claim` runs it; the layout is the same
+# in the kit and in every repo's `.mjrlee_repo_setup/`.
+WORKTREE_HOME: Final = (
+    Path(__file__).resolve().parents[1] / "hooks" / "worktree_home.py"
+)
 # Seconds for git calls that use the network or run hooks.
 SLOW_GIT: Final = 300
 
 
-def claim(root: Path, items: Sequence[Item], slug: str | None) -> str:
-    """Claim an item: branch and worktree from the default branch, then push.
+# An undo step: reverts one effect of a claim, returning None when it did, or
+# the command that finishes it by hand.
+Undo = Callable[[], str | None]
 
-    `git worktree add` runs the kit's post-checkout setup
-    (`hooks/setup_checkout.py`) before the push, because the pre-push gate
-    checks the worktree. The push is the atomic claim: it wins only if it
-    created the branch (porcelain flag `*`). Git reports pushing a commit the
-    branch already points at as up to date, without checking a lease, so the
-    flag is what catches a racing claim at the same commit; the empty lease
-    keeps a claim from moving another claimant's branch. Any failure removes
-    the worktree and branch it made.
+
+class Rollback:
+    """A claim's undo steps, run newest first when any later step fails."""
+
+    def __init__(self) -> None:
+        self._steps: list[Undo] = []
+
+    def add(self, undo: Undo) -> None:
+        self._steps.append(undo)
+
+    def run(self) -> list[str]:
+        """Undo every step; return the commands for those that failed."""
+
+        left = [hint for undo in reversed(self._steps) if (hint := undo())]
+        self._steps.clear()
+        return left
+
+
+def _undo_worktree(root: Path, worktree: Path, branch: str) -> Undo:
+    def undo() -> str | None:
+        left: list[str] = []
+        if worktree.exists() and (
+            _git(root, "worktree", "remove", "--force", str(worktree)) is None
+        ):
+            left.append(f"git worktree remove --force {worktree}")
+        ref = f"refs/heads/{branch}"
+        if (
+            _git(root, "rev-parse", "--verify", "--quiet", ref) is not None
+            and _git(root, "branch", "-D", branch) is None
+        ):
+            left.append(f"git branch -D {branch}")
+        return "; ".join(left) or None
+
+    return undo
+
+
+def _undo_push(worktree: Path, branch: str, sha: str) -> Undo:
+    """Delete the claim branch, leased on the commit the claim pushed.
+
+    Runs from the claim's worktree, whose setup the pre-push gate passed. The
+    lease keeps it from deleting a branch someone has since moved.
+    """
+
+    def undo() -> str | None:
+        ref = f"refs/heads/{branch}"
+        deleted = _git(
+            worktree,
+            "push",
+            "--porcelain",
+            f"--force-with-lease={ref}:{sha}",
+            "origin",
+            f":{ref}",
+            timeout=SLOW_GIT,
+        )
+        if deleted is None:
+            return (
+                f"git push origin --delete {branch}  # once `{branch}` on "
+                "origin is confirmed to be this claim's"
+            )
+        return None
+
+    return undo
+
+
+def _preflight(
+    root: Path, item: Item, base: str, branch: str, worktree: Path
+) -> str:
+    """Check everything a claim needs before it creates anything.
+
+    Returns the base commit. Items load from the checkout the command runs in,
+    but the worktree is cut from `base`, so the item file and its specs must
+    exist there too.
+    """
+
+    if worktree.exists():
+        raise RoadmapError(f"{worktree} already exists")
+    if (
+        _git(root, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}")
+        is not None
+    ):
+        raise RoadmapError(
+            f"local branch `{branch}` already exists; finish or delete it first"
+        )
+    sha = _git(root, "rev-parse", "--verify", "--quiet", f"{base}^{{commit}}")
+    if sha is None:
+        raise RoadmapError(f"`{base}` is not a commit")
+    rel = f"{ROADMAP_DIR.as_posix()}/{item.slug}.md"
+    missing = [
+        path
+        for path in (rel, *item.specs)
+        if _git(root, "cat-file", "-e", f"{sha.strip()}:{path}") is None
+    ]
+    if missing:
+        raise RoadmapError(
+            f"{', '.join(f'`{m}`' for m in missing)} not on `{base}`; merge "
+            "the PR that adds it, or stack the claim on that PR's branch with "
+            "`--base origin/<branch>`"
+        )
+    return sha.strip()
+
+
+def claim(
+    root: Path,
+    items: Sequence[Item],
+    slug: str | None,
+    base: str | None = None,
+) -> str:
+    """Claim an item completely, or leave nothing behind, origin included.
+
+    After the fetch, `_preflight` checks everything before any effect. Then
+    each step registers its undo once it can have taken effect, and any
+    failure, an interrupt included, runs them newest first: the worktree add
+    (whose post-checkout setup, `hooks/setup_checkout.py`, the pre-push gate
+    needs), the create-only push, and the index refresh. The push is the
+    atomic claim: it wins only if it created the branch (porcelain flag `*`).
+    Git reports pushing a commit the branch already points at as up to date,
+    without checking a lease, so the flag is what catches a racing claim at
+    the same commit; the empty lease keeps a claim from moving another
+    claimant's branch, and only a branch this claim created is deleted.
     """
 
     claimed = claims(root)
@@ -377,27 +497,50 @@ def claim(root: Path, items: Sequence[Item], slug: str | None) -> str:
         if top is None:
             raise RoadmapError("no ready, unclaimed agent item")
         slug = top.slug
-    if slug not in {i.slug for i in items}:
+    item = next((i for i in items if i.slug == slug), None)
+    if item is None:
         raise RoadmapError(f"no open item `{slug}`")
     if slug in claimed:
         raise RoadmapError(f"`{slug}` is already claimed by `{claimed[slug]}`")
-    worktree = main_checkout(root) / WORKTREE_DIR / slug
-    if worktree.exists():
-        raise RoadmapError(f"{worktree} already exists")
     if _git(root, "fetch", "--quiet", "origin", timeout=SLOW_GIT) is None:
         raise RoadmapError("`git fetch origin` failed; claims need origin")
-    head = _git(root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
-    if head is None:
-        raise RoadmapError(
-            "origin/HEAD is unset; run `git remote set-head origin --auto`"
-        )
+    if base is None:
+        head = _git(root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+        if head is None:
+            raise RoadmapError(
+                "origin/HEAD is unset; run `git remote set-head origin --auto`"
+            )
+        base = head.strip()
     branch = f"{CLAIM_PREFIX}{slug}"
+    worktree = worktree_home(root) / slug
+    sha = _preflight(root, item, base, branch, worktree)
+    rollback = Rollback()
+    try:
+        _claim_steps(root, rollback, branch, worktree, sha, slug)
+    except BaseException as error:
+        left = rollback.run()
+        tail = (
+            f"; undo the rest by hand: {'; '.join(left)}"
+            if left
+            else "; nothing was claimed"
+        )
+        if isinstance(error, Exception):
+            raise RoadmapError(f"{error}{tail}") from error
+        # An interrupt still stops the run, after saying what is left.
+        print(f"claim interrupted{tail}", file=sys.stderr)
+        raise
+    return f"claimed {slug} on {branch}; work in {worktree}"
 
-    def undo(reason: str) -> RoadmapError:
-        _git(root, "worktree", "remove", "--force", str(worktree))
-        _git(root, "branch", "-D", branch)
-        return RoadmapError(f"{reason}; nothing was claimed")
 
+def _claim_steps(
+    root: Path,
+    rollback: Rollback,
+    branch: str,
+    worktree: Path,
+    sha: str,
+    slug: str,
+) -> None:
+    rollback.add(_undo_worktree(root, worktree, branch))
     added = _run_git(
         root,
         "worktree",
@@ -406,16 +549,11 @@ def claim(root: Path, items: Sequence[Item], slug: str | None) -> str:
         "-b",
         branch,
         str(worktree),
-        head.strip(),
+        sha,
         timeout=SLOW_GIT,
     )
     if added is None or added.returncode != 0:
-        why = f"`git worktree add` failed: {_tail(added, 300)}"
-        # Only a failing post-checkout setup leaves a worktree behind; any
-        # earlier failure made nothing, and its branch may predate this claim.
-        if worktree.exists():
-            raise undo(why)
-        raise RoadmapError(why)
+        raise RoadmapError(f"`git worktree add` failed: {_tail(added, 300)}")
     ref = f"refs/heads/{branch}"
     pushed = _run_git(
         worktree,
@@ -427,21 +565,19 @@ def claim(root: Path, items: Sequence[Item], slug: str | None) -> str:
         branch,
         timeout=SLOW_GIT,
     )
-    created = (
-        pushed is not None
-        and pushed.returncode == 0
-        and any(
-            line.split("\t")[:2] == ["*", f"{ref}:{ref}"]
-            for line in pushed.stdout.splitlines()
-        )
+    created = pushed is not None and any(
+        line.split("\t")[:2] == ["*", f"{ref}:{ref}"]
+        for line in pushed.stdout.splitlines()
     )
-    if not created:
+    if created:
+        rollback.add(_undo_push(worktree, branch, sha))
+    if not created or pushed is None or pushed.returncode != 0:
         # Re-read origin: a rejection may be a racing claim or a failed hook.
-        winner = claims(root).get(slug)
+        winner = None if created else claims(root).get(slug)
         if winner is not None:
-            raise undo(f"`{winner}` claimed `{slug}` first")
-        raise undo(f"pushing `{branch}` failed: {_tail(pushed, 600)}")
-    return f"claimed {slug} on {branch}; work in {worktree}"
+            raise RoadmapError(f"`{winner}` claimed `{slug}` first")
+        raise RoadmapError(f"pushing `{branch}` failed: {_tail(pushed, 600)}")
+    refresh(root, offline=False)
 
 
 GITHUB_REMOTE: Final = re.compile(
@@ -469,6 +605,24 @@ def _worktrees(root: Path) -> list[tuple[Path, str | None]]:
         elif line.startswith("branch refs/heads/") and found:
             found[-1] = (found[-1][0], line.removeprefix("branch refs/heads/"))
     return found
+
+
+def worktree_home(root: Path) -> Path:
+    """Return where new worktrees of `root`'s repo go, from the kit's resolver."""
+
+    try:
+        result = subprocess.run(  # noqa: S603 - Fixed argv, no shell.
+            [sys.executable, str(WORKTREE_HOME)],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as error:
+        raise RoadmapError(f"{WORKTREE_HOME} could not run: {error}") from error
+    if result.returncode != 0 or not result.stdout.strip():
+        raise RoadmapError(result.stderr.strip() or f"{WORKTREE_HOME} failed")
+    return Path(result.stdout.strip())
 
 
 def main_checkout(root: Path) -> Path:
@@ -535,11 +689,7 @@ def locate(
         pick = (on_claim or edited or [None])[0]
         rel = f"{ROADMAP_DIR.as_posix()}/{slug}.md"
         if pick is not None:
-            name = (
-                os.path.relpath(pick.worktree, main)
-                if pick.worktree != main
-                else "main"
-            )
+            name = "main" if pick.worktree == main else pick.worktree.name
             found[slug] = Location(
                 Path(os.path.relpath(pick.path, folder)).as_posix(),
                 branch or f"edited in {name}",
@@ -615,6 +765,20 @@ def write_index(root: Path, *, offline: bool) -> str:
     return index
 
 
+def refresh(root: Path, *, offline: bool) -> str:
+    """Write `root`'s index and the main checkout's; return `root`'s.
+
+    The main checkout's view is the one people open; refresh it from any
+    worktree, so work there shows up without a pull in main.
+    """
+
+    index = write_index(root, offline=offline)
+    main = main_checkout(root)
+    if main != root.resolve() and (main / ROADMAP_DIR).is_dir():
+        write_index(main, offline=offline)
+    return index
+
+
 def item_text(title: str, priority: str, rank: str, executor: str) -> str:
     return (
         f"---\ntitle: {title}\npriority: {priority}\nrank: {rank}\n"
@@ -649,7 +813,9 @@ def run(root: Path, argv: Sequence[str]) -> str:
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("list").add_argument("--offline", action="store_true")
     sub.add_parser("next")
-    sub.add_parser("claim").add_argument("slug", nargs="?")
+    claim_parser = sub.add_parser("claim")
+    claim_parser.add_argument("slug", nargs="?")
+    claim_parser.add_argument("--base", help="commit to cut from")
     sub.add_parser("check")
     for name in ("new", "move"):
         p = sub.add_parser(name)
@@ -697,15 +863,16 @@ def run(root: Path, argv: Sequence[str]) -> str:
             output = f"moved {slug} to {priority} rank {rank}"
         items, errors = load(root)
     if command == "claim":
-        output = claim(root, items, str(args.slug) if args.slug else None)
+        # The claim refreshes the indexes itself, as its last undoable step.
+        return claim(
+            root,
+            items,
+            str(args.slug) if args.slug else None,
+            str(args.base) if args.base else None,
+        )
     offline = bool(getattr(args, "offline", False))
     claimed = claims(root, offline=offline)
-    index = write_index(root, offline=offline)
-    # The main checkout's view is the one people open; refresh it from any
-    # worktree, so work there shows up without a pull in main.
-    main = main_checkout(root)
-    if main != root.resolve() and (main / ROADMAP_DIR).is_dir():
-        write_index(main, offline=offline)
+    index = refresh(root, offline=offline)
     if command == "next":
         top = next_ready(items, claimed)
         if top is None:

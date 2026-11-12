@@ -4,18 +4,9 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
-
-# Where agents and people create worktrees, so every one is findable from the
-# repo; place_worktree.py routes Claude Code's own worktrees here too.
-WORKTREE_DIR: Final = Path(".worktrees")
-# Claude desktop's in-project worktree dir. Its settings offer only this or a
-# folder outside every repo, so the kit allows it rather than fight the app.
-DESKTOP_WORKTREE_DIR: Final = Path(".claude") / "worktrees"
-# Every dir, relative to the main checkout, whose children may be worktrees.
-ALLOWED_WORKTREE_DIRS: Final = (WORKTREE_DIR, DESKTOP_WORKTREE_DIR)
-
 
 # The rule every push block cites; it mirrors the [Git] rule in AGENTS.md.
 PR_RULE: Final = (
@@ -65,6 +56,34 @@ def main_checkout(cwd: Path) -> Path | None:
     return Path(common).resolve().parent if common else None
 
 
+# What each marker in a worktree's own git dir means: an operation that
+# checks out commits is unfinished there.
+IN_PROGRESS: Final = (
+    ("rebase-merge", "a rebase"),
+    ("rebase-apply", "a rebase or `git am`"),
+    ("MERGE_HEAD", "a merge"),
+    ("CHERRY_PICK_HEAD", "a cherry-pick"),
+    ("REVERT_HEAD", "a revert"),
+    ("sequencer", "a cherry-pick or revert sequence"),
+)
+
+
+def operation_in_progress(cwd: Path) -> str | None:
+    """Return the unfinished rebase, merge, pick, or revert here, or None.
+
+    Reads the worktree's own git dir, so one linked worktree's rebase never
+    counts against another or the main checkout.
+    """
+
+    git_dir = run_git(cwd, "rev-parse", "--absolute-git-dir")
+    if git_dir is None:
+        return None
+    return next(
+        (what for name, what in IN_PROGRESS if (Path(git_dir) / name).exists()),
+        None,
+    )
+
+
 def is_linked_worktree(cwd: Path) -> bool | None:
     """Return True in a linked worktree, False in the main checkout, else None."""
 
@@ -93,23 +112,23 @@ def pushed_commits(lines: Iterable[str], cwd: Path) -> list[str]:
     return found
 
 
-def worktree_dir(cwd: Path) -> Path | None:
-    """Return the dir new worktrees go in, from any worktree of the repo."""
+@dataclass(frozen=True)
+class CommitDates:
+    sha: str
+    # Unix seconds; git stores both with their own offset, which no rule uses.
+    authored: int
+    committed: int
 
-    main = main_checkout(cwd)
-    return main / WORKTREE_DIR if main else None
 
+def commit_dates(cwd: Path, *log_args: str) -> list[CommitDates]:
+    """Return each commit `git log <log_args>` lists, with its two dates."""
 
-def is_allowed_worktree(path: Path, main: Path) -> bool:
-    """Return True when `path` is `<main>/<allowed dir>/<name>`.
-
-    Both sides are resolved, so a symlinked parent cannot disguise a stray
-    path, and a nested path such as `.worktrees/a/b` is never allowed.
-    """
-
-    parent = path.resolve().parent
-    root = main.resolve()
-    return any(parent == root / d for d in ALLOWED_WORKTREE_DIRS)
+    out = run_git(cwd, "log", "--format=%H %at %ct", *log_args)
+    found: list[CommitDates] = []
+    for line in (out or "").splitlines():
+        sha, authored, committed = line.split()
+        found.append(CommitDates(sha, int(authored), int(committed)))
+    return found
 
 
 def current_branch(cwd: Path) -> str | None:
