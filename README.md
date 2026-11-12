@@ -31,7 +31,8 @@ scripts/check.sh      # Everything the Verify CI job runs.
 | Prepare an extra iOS model package | `scripts/prepare_ios_asr_model_package.sh <dir>` | Network during preparation only |
 | Benchmark ASR models | `scripts/benchmark_asr.sh [--model m.gguf] [--manifest m.tsv]` | — |
 
-Signing values live in the ignored `.env.local` (copy `.env.example`).
+Signing values live in the ignored `.env.local` (copy `.env.example`); a
+`.worktrees/` checkout without one reads the main checkout's.
 `install_app.sh` is the only install path: it refuses ad-hoc or expired
 identities, verifies Team, entitlements, hardened runtime, Apple-only
 libraries, and unchanged version metadata, replaces the one
