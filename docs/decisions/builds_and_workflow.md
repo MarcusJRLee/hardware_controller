@@ -79,12 +79,18 @@ passed locally and failed only in CI.
   `lefthook.yml`'s `extends`). Update it by re-running the skill, never by hand.
 - Its git hooks refuse pushes to or deleting `main` and any force push to it,
   warn when `main` changed the files a branch changes, and keep worktrees in
-  `.worktrees/<name>`. They need the kit's tools: `mise trust && mise install`
-  and `lefthook install` once per clone.
-- `scripts/check_fast.sh` runs the kit's Markdown placement, Docker label, and
-  roadmap gates, so CI installs the kit's tools through mise
-  (`.github/actions/mise`), at the versions the kit pins. Kit-only changes take
-  the fast lane.
+  `~/.worktrees/hardware_controller/<name>`, outside the checkout. They need
+  the kit's tools: `mise trust && mise install` and `lefthook install` once per
+  clone.
+- `.mjrlee_repo_setup/repo.toml` declares no quiet hours (`windows = []`).
+- `scripts/check_fast.sh` runs the kit's Markdown placement, Docker label,
+  roadmap, test ownership, and `repo.toml` gates, so CI installs the kit's tools
+  through mise (`.github/actions/mise`), at the versions the kit pins. Kit-only
+  changes take the fast lane.
+- The kit's `test_ownership.py` wants a test beside each source, which Swift
+  test targets cannot have, so `.mjrlee_repo_setup/test_exemptions.toml` hands
+  Swift to `scripts/check_conventions.sh` and lists each other exemption by
+  path.
 - Markdown lives under `docs/`, in `README.md` files, skill trees, or
   `.github/`; `CONTRIBUTING.md` and `SECURITY.md` live in `docs/`, where GitHub
   also reads them.

@@ -2,6 +2,8 @@
 
 The rule lives in `markdown_placement`. Only files new to git are checked, so
 editing an existing file never warns; the repo-wide check catches the rest.
+
+test_exempt: thin hook over markdown_placement, which its test covers.
 """
 
 from __future__ import annotations

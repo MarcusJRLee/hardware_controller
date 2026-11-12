@@ -1,0 +1,119 @@
+# Sources test_ownership.py accepts without a colocated `<stem>_test.<ext>`;
+# format in .mjrlee_repo_setup/hooks/test_ownership.py.
+
+# Swift Package Manager and the iOS project keep tests in separate test
+# targets, so a Swift test can never sit beside its source.
+# scripts/check_conventions.sh owns Swift test ownership instead: every source
+# needs a same-named `<stem>_test(s).swift` in a test target or a reasoned line
+# in Tests/untested_sources.txt.
+[[exempt]]
+path = "Sources/*.swift"
+reason = "Swift test targets; scripts/check_conventions.sh enforces name-matched tests."
+
+[[exempt]]
+path = "apps/ios/*.swift"
+reason = "iOS test targets; scripts/check_conventions.sh enforces name-matched tests."
+
+[[exempt]]
+path = "Tests/*.swift"
+reason = "Swift test targets: `*_tests.swift` suites, fixtures, and shared test support."
+
+[[exempt]]
+path = "*Package.swift"
+reason = "SwiftPM manifests; declarations only."
+
+[[exempt]]
+path = "tools/app_icons/render_app_icons.swift"
+reason = "Renders committed icon art; review the rendered images."
+
+# Rust crate roots only declare modules and re-exports.
+[[exempt]]
+path = "crates/voice_archive/src/lib.rs"
+reason = "Crate root; module declarations and re-exports."
+
+[[exempt]]
+path = "crates/voice_core/src/lib.rs"
+reason = "Crate root; module declarations and re-exports."
+
+[[exempt]]
+path = "crates/voice_models/src/lib.rs"
+reason = "Crate root; module declarations and re-exports."
+
+[[exempt]]
+path = "crates/voice_models/src/model_package_test_support.rs"
+reason = "Test support for model_package_test.rs."
+
+# Gates and build entry points: CI or an install runs each one, and a broken
+# one fails that run.
+[[exempt]]
+path = "scripts/check.sh"
+reason = "Gate entry point; runs other checks."
+
+[[exempt]]
+path = "scripts/check_fast.sh"
+reason = "Gate entry point; runs other checks."
+
+[[exempt]]
+path = "scripts/check_ios.sh"
+reason = "Gate entry point; runs the iOS build and tests."
+
+[[exempt]]
+path = "scripts/check_rust.sh"
+reason = "Gate entry point; runs cargo checks."
+
+[[exempt]]
+path = "scripts/check_voice_asr_bridge.sh"
+reason = "Gate entry point; builds and runs the ASR bridge tests."
+
+[[exempt]]
+path = "scripts/check_ios_local_only.sh"
+reason = "Gate over iOS sources; check_ios.sh runs it."
+
+[[exempt]]
+path = "scripts/check_ios_system_capture_metadata.sh"
+reason = "Gate over iOS metadata; check_ios.sh runs it."
+
+[[exempt]]
+path = "scripts/check_speech_engine.sh"
+reason = "Device check run on installs; it is the test."
+
+[[exempt]]
+path = "scripts/build_app.sh"
+reason = "Build entry point; CI and install_app.sh run it."
+
+[[exempt]]
+path = "scripts/build_ios_device.sh"
+reason = "Build entry point; run on device installs."
+
+[[exempt]]
+path = "scripts/build_ios_rust_ffi.sh"
+reason = "Build entry point; prepare_ios_build_inputs.sh runs it."
+
+[[exempt]]
+path = "scripts/build_rust_ffi.sh"
+reason = "Build entry point; check_rust.sh and build_app.sh run it."
+
+[[exempt]]
+path = "scripts/generate_ios_project.sh"
+reason = "Thin XcodeGen wrapper."
+
+[[exempt]]
+path = "scripts/prepare_ios_build_inputs.sh"
+reason = "Thin wrapper over the build scripts."
+
+[[exempt]]
+path = "scripts/fetch_asr_runtime.sh"
+reason = "Vendoring tool; pins and verifies checksums."
+
+[[exempt]]
+path = "scripts/fetch_asr_test_assets.sh"
+reason = "Vendoring tool; pins and verifies checksums."
+
+# Operator scripts.
+[[exempt]]
+path = "scripts/benchmark_asr.sh"
+reason = "Opt-in benchmark run by hand."
+
+[[exempt]]
+path = "scripts/run_demo.sh"
+reason = "Launches the demo app by hand."

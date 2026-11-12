@@ -985,4 +985,4 @@ const fn status(error: RetentionError) -> u32 {
 }
 
 #[cfg(test)]
-mod ffi_test;
+mod lib_test;

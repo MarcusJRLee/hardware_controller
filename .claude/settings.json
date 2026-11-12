@@ -69,9 +69,27 @@
             "type": "command",
             "command": "f=\"$CLAUDE_PROJECT_DIR/.mjrlee_repo_setup/hooks/expand_skill_mentions.py\"; [ -f \"$f\" ] || { echo \"missing hook: $f\" >&2; exit 1; }; uv run --no-project python \"$f\" || { rc=$?; echo \"hook failed (exit $rc): $f\" >&2; exit 1; }",
             "timeout": 60
+          },
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.mjrlee_repo_setup/hooks/quiet_hours_notice.py\"; [ -f \"$f\" ] || { echo \"missing hook: $f\" >&2; exit 1; }; uv run --no-project python \"$f\" || { rc=$?; echo \"hook failed (exit $rc): $f\" >&2; exit 1; }",
+            "timeout": 60
           }
         ]
       }
+    ]
+  },
+  "sandbox": {
+    "filesystem": {
+      "allowWrite": [
+        "~/.worktrees/hardware_controller"
+      ]
+    }
+  },
+  "permissions": {
+    "allow": [
+      "Read(~/.worktrees/hardware_controller/**)",
+      "Edit(~/.worktrees/hardware_controller/**)"
     ]
   }
 }

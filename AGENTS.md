@@ -1,143 +1,127 @@
 <!-- mjrlee-repo-kit:rules:begin (managed; edit the kit) -->
 
-- Be extremely concise (unless I ask you to explain something), technical,
-  accurate.
-- Optimizing user experience, agent developer experience, and human developer
-  experience is very important. All three should improve continuously; no change
-  may degrade any of them.
-- Favor modularity, reuse over duplication, iteration.
-- Design for maintainability, clarity, forward-compatibility.
-- Prefer to make the most technically correct decisions despite upfront cost.
-- Where possible, prefer designs that eliminate or minimize risk of drift or
-  other issues.
-- Never use pros/cons lists - instead use decision matrices when required
-  (options = columns, criteria = rows).
-- Always write strongly typed code. For example, never use `as never`, `as any`,
-  or double-casts (`x as never as T`) to suppress TypeScript errors — diagnose
-  and fix the root cause instead. Resolver/schema type mismatches must be fixed
-  at the declaration site, not silenced at the call site.
-- Decompose by responsibility and reason to change. File length is diagnostic,
-  not an acceptance criterion. Split mixed workflows, transport, persistence,
-  orchestration, and rendering only at behavior-owned boundaries.
-- Comments explain intent, invariants, security boundaries, and non-obvious
-  constraints. Do not comment trivial functions or restate readable code.
-- Comments should always be sentences and end with punctuation.
+- Be extremely concise (unless I ask you to explain), technical, and accurate.
+- User, agent-developer, and human-developer experience should all improve
+  continuously, and no change may degrade any of them.
+- Choose the most technically correct design despite upfront cost: modular,
+  reused rather than duplicated, clear, maintainable, forward-compatible,
+  delivered iteratively, and shaped to eliminate drift.
+- Compare options with a decision matrix (options as columns, criteria as rows),
+  never a pros/cons list.
+- Write strongly typed code. Never silence a type error with `as any`,
+  `as never`, or a double cast (`x as never as T`); fix the root cause, and fix
+  resolver/schema mismatches at the declaration, not the call site.
+- Decompose by responsibility and reason to change; file length is a symptom,
+  not a goal. Split mixed workflows, transport, persistence, orchestration, and
+  rendering only at behavior-owned boundaries.
+- Comments are punctuated sentences that explain intent, invariants, security
+  boundaries, and non-obvious constraints; never restate readable code or
+  comment trivial functions.
 - Handle edge cases explicitly.
-- Leave no vestiges. Once a one-time migration, compatibility shim, or
-  transition step has run everywhere it must, delete it along with its tests,
-  docs, ignore entries, and comments about the old state.
-- Files & dirs: lowercase_with_underscores. Never use dashes for files & dirs,
-  except inside skill trees (`skills/<name>/`, whose spec requires dashes) and
-  for names a tool mandates (e.g. `pnpm-lock.yaml`, git's hook names in
-  `.lefthook/<hook>/`).
-- Ensure README.md and other docs prioritise human readability. Lead with the
-  bash commands a reader needs to get going. Use tables for things like
-  path→meaning. Trim every sentence — if removing it doesn't lose signal, delete
-  it. This file follows the same rule: every rule earns its place.
-- Don't go editing files outside of the current working directory without
-  explicit permission. Ask first.
+- Leave no vestiges: once a migration, shim, or transition step has run
+  everywhere it must, delete it with its tests, docs, ignore entries, and
+  comments about the old state.
+- Name files and dirs lowercase_with_underscores, never dashes, except inside
+  skill trees (`skills/<name>/`, whose spec requires dashes) and where a tool
+  mandates a name (`pnpm-lock.yaml`, `.lefthook/<hook>/`).
+- Write docs for humans: lead with the bash commands a reader needs, use tables
+  for mappings like path→meaning, and cut every sentence that carries no signal.
+  This block follows the same rule.
+- Ask before editing files outside the current working directory, except in the
+  repo's own worktree home, `~/.worktrees/<repo>/`.
 - Config as code: the repo is the source of truth for anything hand-curated and
-  small (roughly under 20 MB), both the settings of external systems (GitHub,
-  DNS, launchd, app preferences) and data (like a list of household
-  automations). Keep it in a commented, source-controlled file that a committed
-  script applies. Never change it only through a UI, console, or database. Copy
-  any change made outside back into the file.
-- Update source-controlled documentation in the same change as behavior. Work is
-  incomplete while architecture, runbooks, state, or acceptance docs describe
-  obsolete behavior.
+  small (under ~20 MB), whether an external system's settings (GitHub, DNS,
+  launchd, app preferences) or data (a list of household automations). Keep it
+  in a commented, committed file that a committed script applies; never change
+  it only through a UI, console, or database, and copy any outside change back.
+- Update docs in the same change as behavior; work is incomplete while
+  architecture, runbooks, state, or acceptance docs describe the old behavior.
+  Durable knowledge (runbooks, gotchas, decisions, project state) lives in the
+  repo, in the owning module's README or `AGENTS.md` for repo-wide rules, never
+  in provider-specific agent memory.
 - A repo is self-contained: a fresh clone on any machine builds, tests, and
-  passes its checks with only what the repo commits and pins, offline once its
-  tools are installed. Never make a check depend on another repo, a sibling
-  checkout, or one machine's paths; an extra that reads them must do nothing
-  when they are absent.
-- Keep durable knowledge (runbooks, gotchas, decisions, project state) in the
-  repo, where any agent or human finds it: the owning module's README, or
-  AGENTS.md for repo-wide rules. Never in provider-specific agent memory.
+  passes its checks with only what it commits and pins, offline once its tools
+  are installed. No check may read another repo, a sibling checkout, or one
+  machine's paths; an extra that does must do nothing when they are absent.
 - Markdown lives under `docs/` or as a directory's `README.md`, one place per
-  kind of information; skill trees and `.github/` (layouts a tool fixes) are
-  allowed too. Any other location is listed with its reason in
-  `.mjrlee_repo_setup/markdown_paths.toml`, and the entry is deleted with the
-  file.
-- Anything an agent starts or creates on the machine (containers, images,
-  volumes, servers, background processes, caches, worktrees, temp files) must be
-  torn down or bounded before finishing, so repeated work does not exhaust disk,
-  memory, or CPU over time.
+  kind of information; skill trees and `.github/` are allowed too. List any
+  other path with its reason in `.mjrlee_repo_setup/markdown_paths.toml`, and
+  delete the entry with the file.
+- Before finishing, tear down or bound anything you started or created on the
+  machine (containers, images, volumes, servers, background processes, caches,
+  worktrees, temp files), so repeated work cannot exhaust disk, memory, or CPU.
 - [Docker] Label every container, image, volume, and network a repo creates with
-  `mjrlee.owner` (`repo/module`), `mjrlee.purpose` (one sentence), and
-  `mjrlee.lifetime`: `ephemeral` (delete once unused), `cache` (rebuildable;
-  delete to reclaim space), or `persistent` (holds state; delete only with the
-  owner's approval). Compose files set `labels` on each service and its `build`;
-  label a named volume only when first adding it, since Compose offers to delete
-  an existing volume whose labels change. Audit or clean up with
-  `uv run --no-project python .mjrlee_repo_setup/hooks/docker_resources.py`
-  (`--help` for commands).
-- [UI] UIs should be simple, clean, and beautiful - not cluttered or hectic.
-  There should be an intentional and pronounced style that is documented in the
-  root README.md of the repo - if not present ask for one and place it there.
-  There should be prosidy - all choices should be intentional and directed
-  toward the central purpose and style. Default to no colors and no borders then
-  add borders and colors in minimally only where necessary.
-- [Roadmap] Committed work lives in `docs/roadmap/<slug>.md`, one file per
-  outcome; ideas without a commitment go in `docs/roadmap/README.md` with the
-  event that would trigger them. Run
-  `uv run --no-project python .mjrlee_repo_setup/tools/roadmap.py` (`--help` for
-  commands); it renders the gitignored `docs/roadmap/index.md`. With no task
-  named, run `roadmap.py claim`: it pushes branch `roadmap/<slug>` (the claim)
-  and sets up `.worktrees/<slug>` to work in. The PR that finishes an item
-  deletes its file and its slug from every `depends_on`. Record an external
-  blocker as an `executor: human` item that others depend on.
-- [Launch] Every repo declares `[launch] phase` in
-  `.mjrlee_repo_setup/repo.toml`: `pre_launch` or `public`, never a default.
-  Before launch, build the best foundation: tearing down, wiping data, and
-  service interruptions are fine. After launch, never interrupt service: every
-  behavior change ships behind a flag (each commit carries `Flag: <name>` or
-  `Flag: none (<reason>)`; a hook enforces it), schema changes expand before
-  they contract and only move forward, rollouts are staged, and every
+  `mjrlee.owner`, `mjrlee.purpose`, and `mjrlee.lifetime`, so anyone can tell
+  what may be deleted; `.mjrlee_repo_setup/hooks/docker_labels.py` defines them
+  and gates compose files. Delete a `persistent` resource only with the owner's
+  approval, and never relabel an existing named volume: Compose offers to delete
+  it. Audit or clean up with
+  `uv run --no-project python .mjrlee_repo_setup/hooks/docker_resources.py`.
+- [UI] UIs are simple, clean, and beautiful, never cluttered. The root README.md
+  documents one intentional, pronounced style (ask for one if it is missing),
+  and every choice serves it and the product's purpose. Start with no color and
+  no borders; add them minimally, only where needed.
+- [Roadmap] Committed work is one `docs/roadmap/<slug>.md` per outcome; ideas
+  without a commitment go in `docs/roadmap/README.md` with the event that would
+  trigger them. Manage items with
+  `uv run --no-project python .mjrlee_repo_setup/tools/roadmap.py` (`--help`);
+  with no task named, `roadmap.py claim` claims the next one and sets up
+  `~/.worktrees/<repo>/<slug>`. The PR that finishes an item deletes its file
+  and its slug from every `depends_on`. An external blocker is an
+  `executor: human` item that others depend on.
+- [Launch] Every repo declares `[launch] phase` (`pre_launch` or `public`, no
+  default) in `.mjrlee_repo_setup/repo.toml`. Before launch, build the best
+  foundation; teardowns, data wipes, and outages are fine. After launch, never
+  interrupt service: every behavior change ships behind a flag (each commit
+  carries `Flag: <name>` or `Flag: none (<reason>)`), schema changes expand
+  before they contract and only move forward, rollouts are staged, and every
   user-facing surface has a kill switch.
-- [Flags] Every flag lives in the repo's one flag catalog, with its owner, the
-  binary it gates, its default, its rules per environment, the metrics that
-  judge it, and a removal date the catalog's lint enforces. A flag provider
-  holds only an applied copy, and a drift check fails on dashboard edits.
-  Evaluate at runtime where the repo has a backend, so a merged flag change
-  reaches users within the hour without a release; otherwise evaluate at build
-  time and roll out through staged releases.
-- [Metrics] Each rollout or experiment names its primary and guardrail metrics
-  in the flag catalog. Dashboards are code; agents read metrics through an API
-  or CLI.
-- [Git] Make all repository changes on a dedicated branch and deliver them
-  through a pull request; modify the default branch or use any non-PR workflow
-  only when the user explicitly requests and approves that exception.
-- [Git] A PR that needs an unmerged PR's work may stack on its branch. Once the
-  base squash-merges, run `git rebase --onto origin/main <old base tip>` and
+- [Quiet hours] Every repo declares `[quiet_hours]` in
+  `.mjrlee_repo_setup/repo.toml`: weekly windows, or `windows = []` for none.
+  Inside a window, work only locally: create or push no commit and make no
+  GitHub write, since each leaves a dated record; hooks deny them. Never set or
+  rewrite a commit's dates. Check with
+  `uv run --no-project python .mjrlee_repo_setup/hooks/quiet_hours_rule.py`.
+- [Flags] Every flag lives in the repo's one flag catalog with its owner, the
+  binary it gates, its default, its rules per environment, its primary and
+  guardrail metrics, and a removal date the catalog's lint enforces. A flag
+  provider holds only an applied copy; a drift check fails on dashboard edits.
+  Evaluate at runtime where the repo has a backend, so a merged change reaches
+  users within the hour without a release; otherwise evaluate at build time and
+  roll out through staged releases.
+- [Metrics] Dashboards are code; agents read metrics through an API or CLI.
+- [Git] Deliver every change through a PR from a dedicated branch; touch the
+  default branch or skip the PR only when the user explicitly approves.
+- [Git] A PR may stack on an unmerged PR's branch. Once the base squash-merges,
+  run `git rebase --onto origin/main <old base tip>` and
   `git push --force-with-lease`; the pre-push hook allows force pushes only to
   unprotected branches whose remote tip the branch already held.
-- [Git] Create worktrees only as `.worktrees/<name>` in the main checkout (a
-  hook blocks other paths, except Claude desktop's fixed `.claude/worktrees/`,
-  and routes Claude Code's own worktrees to `.worktrees/`), and remove each one
-  with its local branch once its PR merges. The main checkout stays on the
-  default branch; a hook switches it back.
-- [Git] A new worktree sets itself up: the post-checkout hook runs
+- [Git] Create worktrees only as `~/.worktrees/<repo>/<name>`, `<repo>` being
+  the main checkout's directory name, so nothing that watches or indexes the
+  checkout covers them; remove each with its local branch once its PR merges.
+  The main checkout stays on the default branch. Hooks block other worktree
+  paths and switch the main checkout back.
+- [Git] A new worktree sets itself up: its post-checkout hook runs
   `[checkout] setup` from `.mjrlee_repo_setup/repo.toml`, else the lockfile's
-  install. Where that file's `[replace]` names a command, such as `gh pr merge`,
-  run its replacement instead; a hook denies the original.
-- [GitHub] GitHub CLI credentials live in the macOS Keychain. Sandboxed `gh`
-  commands cannot read them and may falsely report an invalid token. Run `gh`
-  with scoped Keychain access and verify there before asking the user to
-  reauthenticate. Never copy the token into an environment file or plaintext
-  GitHub config.
-- [Testing] Modules with behavioral logic deserve a concise colocated
-  `FILENAME_test.EXT`. Files without logic usually don't: thin wrappers,
-  re-exports, declarations, styles, generated code, and config or data files.
-  Use judgment; a config's invariants are usually better enforced by validation
-  in the module that owns the rule (run by lint or at load) than by testing the
-  config itself.
-- [Testing] Test logic should be as concise as possible while still getting full
-  test coverage. This means using shared logic sensibly to keep actual test
-  functions scanable.
-- [Testing] Always run tests and type checks on any lines of code you change
-  before finishing.
-- [Testing] Put verification pages and screenshots in the gitignored `tmp/`.
-  After the user reviews them, delete the files the thread created.
+  install. Where that file's `[replace]` maps a command, such as `gh pr merge`,
+  run the replacement; a hook denies the original.
+- [GitHub] `gh` credentials live in the macOS Keychain, which sandboxed commands
+  cannot read, so they may falsely report an invalid token. Run `gh` with scoped
+  Keychain access and verify there before asking the user to reauthenticate;
+  never copy the token into an env file or plaintext config.
+- [Testing] Logic whose failure would ship a defect or block a release needs a
+  concise colocated `FILENAME_test.EXT`. Thin wrappers, re-exports, constants,
+  styles, declarations, generated files, one-shot operator scripts, and
+  vendoring tools are exempt; `test_ownership.py` enforces each exemption by
+  path (such as `scripts/data/` or `vendor_*`) or header marker, not by an
+  agent's judgment. A config's invariants are usually better enforced by
+  validation in the module that owns the rule (run by lint or at load) than by
+  testing the config itself.
+- [Testing] Keep tests as concise as full coverage allows, sharing setup so each
+  test function stays scannable.
+- [Testing] Run tests and type checks on every line you change before finishing.
+- [Testing] Put verification pages and screenshots in the gitignored `tmp/`, and
+  delete the ones you made once the user has reviewed them.
 - Begin every reply by addressing me as "Ser".
 
 <!-- mjrlee-repo-kit:rules:end -->

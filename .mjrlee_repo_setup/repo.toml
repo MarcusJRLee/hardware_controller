@@ -3,3 +3,7 @@
 
 [launch]
 phase = "pre_launch"
+
+[quiet_hours]
+# No windows: commits, pushes, and agent GitHub writes are never blocked.
+windows = []

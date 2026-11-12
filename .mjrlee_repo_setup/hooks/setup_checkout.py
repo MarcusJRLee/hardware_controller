@@ -4,8 +4,10 @@ Git's post-checkout hook runs this in each new linked worktree, so every
 creator gets it: `git worktree add`, Claude Code (`place_worktree.py`),
 `roadmap.py claim`, and a repo's own scripts. A fresh clone runs it by hand.
 The steps are `[checkout] setup` in `repo.toml` (`repo_config.py`), else the
-lockfile's frozen install. A failed step fails `git worktree add` and leaves
-the worktree in place to fix and re-run:
+lockfile's frozen install. Setup never runs mid-rebase, -merge, -pick, or
+-revert, whose continue step would refuse the files it generates: the hook
+skips with a one-line note, and a by-hand run refuses. A failed step fails `git worktree add` and
+leaves the worktree in place to fix and re-run:
 
     uv run --no-project python .mjrlee_repo_setup/hooks/setup_checkout.py
 
@@ -22,6 +24,7 @@ from pathlib import Path
 from typing import Final
 
 import git_queries
+import worktree_home
 from repo_config import RepoConfigError, load
 
 RERUN: Final = (
@@ -38,13 +41,17 @@ def is_new_worktree(cwd: Path, previous: str, flag: str) -> bool:
     if not git_queries.is_null_sha(previous) or flag != "1":
         return False
     top = git_queries.repo_root(cwd)
-    main = git_queries.main_checkout(cwd)
-    return (
-        top is not None
-        and main is not None
-        and git_queries.is_linked_worktree(cwd) is True
-        and git_queries.is_allowed_worktree(top, main)
-    )
+    repo = worktree_home.locate(cwd)
+    if (
+        top is None
+        or repo is None
+        or git_queries.is_linked_worktree(cwd) is not True
+    ):
+        return False
+    try:
+        return worktree_home.refusal(top, repo) is None
+    except worktree_home.WorktreeHomeError:
+        return False
 
 
 def setup(root: Path) -> int:
@@ -85,7 +92,25 @@ def main(argv: Sequence[str]) -> int:
     if root is None:
         print(f"setup_checkout: {cwd} is not a git checkout", file=sys.stderr)
         return 1
-    return setup(root)
+    busy = git_queries.operation_in_progress(root)
+    if busy is None:
+        return setup(root)
+    if argv:
+        # Said, not silent: a lockfile the operation brings in still needs
+        # installing once it finishes.
+        print(
+            f"setup_checkout: setup skipped: {busy} in progress; run "
+            f"`{RERUN}` after it finishes.",
+            file=sys.stderr,
+        )
+        return 0
+    print(
+        f"setup_checkout: {busy} is in progress in {root}, and setup's files "
+        "would stop it from continuing. Finish it (`--continue`) or stop it "
+        f"(`--abort`), then run `{RERUN}`.",
+        file=sys.stderr,
+    )
+    return 1
 
 
 if __name__ == "__main__":
