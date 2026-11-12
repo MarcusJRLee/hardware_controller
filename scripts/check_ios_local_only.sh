@@ -7,7 +7,7 @@ set -euo pipefail
 # Sources/hardware_controller_model_download (docs/decisions/model_packages.md), which only the
 # containing app links; the extensions never do.
 
-repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+repo_root="${HC_IOS_LOCAL_ONLY_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 cd "$repo_root"
 
 command -v rg >/dev/null || {
@@ -28,14 +28,22 @@ targets=(
 source_pattern='\b(URLSession|URLRequest|NWConnection|NWListener|NWPathMonitor)\b|^import Network$|Network\.framework'
 capability_pattern='NSAppTransportSecurity|aps-environment|com\.apple\.developer\.(associated-domains|icloud|networking)'
 
+# rg exits 1 for no match; anything else (such as a missing target) must fail
+# rather than read as a clean tree.
 if rg -n --glob '*.swift' --glob '*.yml' "$source_pattern" "$targets[@]"; then
   print -u2 "iOS local-only check failed: network source or linkage found."
+  exit 1
+elif (( $? != 1 )); then
+  print -u2 "iOS local-only check failed: could not search $targets"
   exit 1
 fi
 
 if rg -n --glob '*.entitlements' --glob '*.plist' --glob '*.yml' \
   "$capability_pattern" "$targets[@]"; then
   print -u2 "iOS local-only check failed: network or cloud capability found."
+  exit 1
+elif (( $? != 1 )); then
+  print -u2 "iOS local-only check failed: could not search $targets"
   exit 1
 fi
 

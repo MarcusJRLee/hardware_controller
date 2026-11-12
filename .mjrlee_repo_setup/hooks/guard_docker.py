@@ -11,14 +11,13 @@ audit tool instead. Text inside quotes (`sh -c "docker run …"`) is not parsed.
 
 from __future__ import annotations
 
-import re
-import shlex
 import sys
-from collections.abc import Iterator, Sequence
+from collections.abc import Sequence
 from typing import Final
 
 from docker_labels import GUIDANCE, label_problems
 from hook_event import deny_output, parse_event
+from shell_split import command_args, simple_commands
 
 # Subcommand paths that create a labelable resource.
 CREATORS: Final = frozenset(
@@ -39,38 +38,6 @@ CREATORS: Final = frozenset(
 _GLOBAL_VALUE_OPTIONS: Final = frozenset(
     {"-c", "--context", "-H", "--host", "--config", "-l", "--log-level"}
 )
-_SEPARATORS: Final = frozenset({";", "&&", "||", "|", "&", "(", ")"})
-# Words that may precede the command word without being it.
-_WRAPPERS: Final = frozenset(
-    {"sudo", "env", "command", "exec", "time", "nohup"}
-)
-_ASSIGNMENT: Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
-
-
-def _simple_commands(command: str) -> Iterator[list[str]]:
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()")
-    lexer.whitespace_split = True
-    lexer.commenters = ""
-    current: list[str] = []
-    for token in lexer:
-        if token in _SEPARATORS:
-            yield current
-            current = []
-        else:
-            current.append(token)
-    yield current
-
-
-def _docker_args(words: Sequence[str]) -> tuple[str, ...] | None:
-    """Return the arguments after `docker` in one simple command, or None."""
-
-    for index, word in enumerate(words):
-        if _ASSIGNMENT.match(word) or word in _WRAPPERS or word[:1] == "-":
-            continue
-        if word.rsplit("/", 1)[-1] == "docker":
-            return tuple(words[index + 1 :])
-        return None
-    return None
 
 
 def _split_subcommand(args: Sequence[str]) -> tuple[tuple[str, ...], list[str]]:
@@ -110,11 +77,11 @@ def find_problem(command: str) -> str | None:
     """Return why `command` would create an unlabeled resource, or None."""
 
     try:
-        commands = list(_simple_commands(command))
+        commands = list(simple_commands(command))
     except ValueError:
         return None  # Unbalanced quotes: the shell itself will refuse it.
     for words in commands:
-        args = _docker_args(words)
+        args = command_args(words, "docker")
         if args is None:
             continue
         path, options = _split_subcommand(args)

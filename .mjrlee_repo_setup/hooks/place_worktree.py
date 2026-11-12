@@ -7,10 +7,16 @@ worktree's path as the only stdout line; any failure exits non-zero, which
 fails the creation rather than falling back to `.claude/worktrees/`. Claude
 Code then skips `.worktreeinclude`, and never deletes hook-made branches
 itself, so removal deletes them here.
+
+The desktop app runs this hook from the main checkout, whose files go stale
+whenever PRs merge on GitHub; a stale copy would place worktrees by an old
+rule. Create therefore fast-forwards a clean main checkout first and, when
+that moves it, reruns the refreshed copy of this hook once.
 """
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -29,6 +35,8 @@ from hook_event import (
 _NAME: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 # Claude Code's own branch naming, so only branches made here are deleted.
 BRANCH_PREFIX: Final = "worktree-"
+# Set on the rerun so a refreshed hook never refreshes and reruns again.
+REFRESHED_ENV: Final = "MJRLEE_PLACE_WORKTREE_REFRESHED"
 
 
 class WorktreeError(Exception):
@@ -63,6 +71,52 @@ def _base(cwd: Path) -> str:
         cwd, "rev-parse", "--verify", "--quiet", remote
     )
     return remote if verified else "HEAD"
+
+
+def refresh_main_checkout(cwd: Path) -> bool:
+    """Fast-forward the main checkout to origin's default branch.
+
+    Only a main checkout on the default branch, with no tracked changes and no
+    rebase or merge underway, is touched; anything else, or a failed fetch or
+    merge, leaves it as it is. Returns True when HEAD moved.
+    """
+
+    main = git_queries.main_checkout(cwd)
+    default = git_queries.default_branch(cwd)
+    if (
+        main is None
+        or default is None
+        or git_queries.current_branch(main) != default
+        or git_queries.operation_in_progress(main) is not None
+        or git_queries.run_git(
+            main, "status", "--porcelain", "--untracked-files=no"
+        )
+        != ""
+    ):
+        return False
+    before = git_queries.run_git(main, "rev-parse", "HEAD")
+    git_queries.run_git(main, "fetch", "--quiet", "origin", default)
+    try:
+        _git(main, "merge", "--ff-only", "--quiet", f"origin/{default}")
+    except WorktreeError:
+        return False
+    return git_queries.run_git(main, "rev-parse", "HEAD") != before
+
+
+def _rerun(payload: str) -> int:
+    """Run this hook's refreshed copy on the same payload; relay its result."""
+
+    result = subprocess.run(  # noqa: S603 - This interpreter and script.
+        [sys.executable, str(Path(__file__).resolve())],
+        input=payload,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, REFRESHED_ENV: "1"},
+    )
+    sys.stderr.write(result.stderr)
+    sys.stdout.write(result.stdout)
+    return result.returncode
 
 
 def create(event: WorktreeEvent) -> Path:
@@ -114,8 +168,13 @@ def remove(event: WorktreeEvent) -> None:
 
 def main() -> int:
     try:
-        event = parse_worktree_event(read_stdin_document())
+        payload = read_stdin_document()
+        event = parse_worktree_event(payload)
         if event.event_name == "WorktreeCreate":
+            if REFRESHED_ENV not in os.environ and refresh_main_checkout(
+                event.cwd
+            ):
+                return _rerun(payload)
             print(create(event))
         else:
             remove(event)

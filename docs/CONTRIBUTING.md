@@ -17,13 +17,15 @@ opening the package in Xcode, run `scripts/build_rust_ffi.sh` once.
 ## Pull requests
 
 - One reason to change per PR, on a branch from `main`, squash-merged.
-- Colocated `FILENAME_test.EXT` for every file with behavioral logic.
-  `scripts/check_conventions.sh` enforces it for Swift; a Swift file without
-  logic needs a reasoned line in `Tests/untested_sources.txt`. The kit's
-  `test_ownership.py` covers every other language; exempt a file by path in
-  `.mjrlee_repo_setup/test_exemptions.toml`. `check_conventions.sh` also
-  rejects dashed paths, non-Foundation imports in the domain, and network APIs outside
-  the Ollama adapter. `.swift-format` rejects force unwraps, `try!`, and
+- The description carries a decision matrix of the alternatives weighed
+  (`AGENTS.md`), or a `No alternatives: <why>` line.
+- A same-stem test for every file with behavioral logic: colocated
+  `FILENAME_test.EXT`, `<stem>_test(s).swift` in a SwiftPM or Voice Input test
+  target, or Rust `#[cfg(test)]`. The kit's `test_ownership.py` enforces it;
+  `.mjrlee_repo_setup/test_ownership.toml` names a differently named owning
+  test (`[[owner]]`) or an exemption kind (`[[exempt]]`) for the rest.
+  `scripts/check_conventions.sh` rejects dashed paths, non-Foundation imports
+  in the domain, and network APIs outside the Ollama adapter. `.swift-format` rejects force unwraps, `try!`, and
   implicitly unwrapped optionals.
 - Format with `scripts/swift_format.sh format --in-place --recursive Sources Tests`.
   It runs the swift-format pinned in `tools/swift_format/`, not Xcode's, so
