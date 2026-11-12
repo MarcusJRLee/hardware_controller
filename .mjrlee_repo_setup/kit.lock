@@ -1,5 +1,5 @@
 {
-  "kit_version": "b31937e0d1a7e47f",
+  "kit_version": "28389c72fa15c26d",
   "units": {
     "file:.mjrlee_repo_setup/hooks/default_branch_rule.py": "b7f677ba552a7536e40e9b3c59fa8adf8147836544045d0d80c9c7b12f975bc7",
     "file:.mjrlee_repo_setup/hooks/docker_labels.py": "2f0ad0482683b780f13b2455529291aed8a51087b2a38215f7b6befe6cda730f",
@@ -9,12 +9,12 @@
     "file:.mjrlee_repo_setup/hooks/git_queries.py": "d2b22e95e352e5e0e1ad685765b1cee288cb7421b2d16bbc6d174ca8b2f04f89",
     "file:.mjrlee_repo_setup/hooks/guard_docker.py": "ad61a35e4f7d435813f56218c7e293bdfeba8f513338165c2eafc3c17345534c",
     "file:.mjrlee_repo_setup/hooks/guard_git.py": "480ef29c8f2d78a6fdbd21922f02e36a82a4d6ce4a8ee820f1a7d251472cccd7",
-    "file:.mjrlee_repo_setup/hooks/hook_event.py": "31913ff8f9ec095f0eb594c0c51c8c141a403330d8965ea7d89884f84ca4f75f",
+    "file:.mjrlee_repo_setup/hooks/hook_event.py": "9a53be7450b22340eface88c79a53da075d4dacff50b127ee986b5f0e2330c40",
     "file:.mjrlee_repo_setup/hooks/launch_rule.py": "b17353f1dcd15249b1cb7103f0627c5088301bb025adc80df6afb1dff1029aa9",
     "file:.mjrlee_repo_setup/hooks/main_overlap.py": "bb48dd57b6ec20de5eafef257f16902c22565e8613c992578c784a3a6258ab9f",
     "file:.mjrlee_repo_setup/hooks/markdown_placement.py": "4b0d12142782fbfe599a1ef9757515ed17748cc93591f05587c8fc6fb4acdd6e",
     "file:.mjrlee_repo_setup/hooks/path_conventions.py": "b7267adf86b6f74b7199379763c14ee71986e45ed0ec26bce774b4ca1e103cb4",
-    "file:.mjrlee_repo_setup/hooks/place_worktree.py": "724791f5c1b21c2d459aa589896ec78ad67afce1f5886cf80a73296546415682",
+    "file:.mjrlee_repo_setup/hooks/place_worktree.py": "4f660c554eff81c8f4e88193a2b8c47002e8c02f88bd491bea7e1da4ef580718",
     "file:.mjrlee_repo_setup/hooks/push_rules.py": "dba15292c439511eb0aa30a13f363f1b2002d0520cecc94a1a24dd185288b6c5",
     "file:.mjrlee_repo_setup/hooks/quiet_commands.py": "3de807599dad9187eafc2a8859557db23ae5badef4d5bf70d2d8dd4c8328de40",
     "file:.mjrlee_repo_setup/hooks/quiet_hours.py": "d58abbaffdd1a2dd71277fb3e1272d587d286649550b1068a1fcd9a563192afc",

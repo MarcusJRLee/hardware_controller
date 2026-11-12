@@ -19,7 +19,11 @@ from typing import Final
 
 import git_queries
 import worktree_home
-from hook_event import WorktreeEvent, parse_worktree_event
+from hook_event import (
+    WorktreeEvent,
+    parse_worktree_event,
+    read_stdin_document,
+)
 
 # Claude Code names worktrees like `bold-oak-a3f2`; a name is one path segment.
 _NAME: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -110,7 +114,7 @@ def remove(event: WorktreeEvent) -> None:
 
 def main() -> int:
     try:
-        event = parse_worktree_event(sys.stdin.read())
+        event = parse_worktree_event(read_stdin_document())
         if event.event_name == "WorktreeCreate":
             print(create(event))
         else:

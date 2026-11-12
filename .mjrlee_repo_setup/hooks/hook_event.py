@@ -8,6 +8,9 @@ Both agents send a JSON object on stdin. Claude Code reports file edits as
 from __future__ import annotations
 
 import json
+import os
+import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -126,6 +129,36 @@ class WorktreeEvent:
     name: str | None
     # WorktreeRemove: the worktree to remove; None for WorktreeCreate.
     worktree_path: Path | None
+
+
+def read_json_document(read_chunk: Callable[[], bytes]) -> str:
+    """Return one JSON document from a byte stream without waiting for EOF.
+
+    The Claude desktop app runs WorktreeCreate and WorktreeRemove itself and
+    leaves the hook's stdin open after writing the payload, so reading to EOF
+    blocks until the hook times out. No proper prefix of a JSON object parses,
+    so the first complete parse is the whole payload. If the stream ends first,
+    the partial text is returned for the caller's parser to reject.
+    """
+
+    data = b""
+    while chunk := read_chunk():
+        data += chunk
+        try:
+            text = data.decode()
+            json.loads(text)
+        # A chunk can end mid-character or mid-object; read on.
+        except ValueError:
+            continue
+        return text
+    return data.decode(errors="replace")
+
+
+def read_stdin_document() -> str:
+    """Read one JSON payload from stdin; see `read_json_document`."""
+
+    fd = sys.stdin.fileno()
+    return read_json_document(lambda: os.read(fd, 65536))
 
 
 def parse_worktree_event(raw: str) -> WorktreeEvent:
