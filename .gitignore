@@ -49,3 +49,6 @@ tmp/
 
 # Roadmap view rendered by roadmap.py; never committed.
 docs/roadmap/index.md
+
+# Bytecode Python writes beside the kit's hooks and tools.
+__pycache__/

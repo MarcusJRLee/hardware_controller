@@ -1,5 +1,5 @@
 {
-  "kit_version": "f7b8d8510ad83196",
+  "kit_version": "1d415e6df7a89add",
   "units": {
     "file:.mjrlee_repo_setup/hooks/default_branch_rule.py": "b7f677ba552a7536e40e9b3c59fa8adf8147836544045d0d80c9c7b12f975bc7",
     "file:.mjrlee_repo_setup/hooks/docker_labels.py": "2f0ad0482683b780f13b2455529291aed8a51087b2a38215f7b6befe6cda730f",
@@ -45,7 +45,7 @@
     "file:.codex/hooks.json": "122761843440bafda4e8eb1fd96c06b6ca5e596fb2dc72c05d775841a52f0fac",
     "block:AGENTS.md#rules": "3389bec39873b9b03ed8981ef119dd767875e9548b25954517246bc21776f1db",
     "symlink:CLAUDE.md": "343aa72d3e62ce112e77d36c5f47ef60a01e8f81754e53ff63bf7f996d04799b",
-    "lines:.gitignore": "23aae6d8a3104a5f72651b9b60b86d547254a4a416dc2db67dc64b9f8b759e80",
+    "lines:.gitignore": "5d2a0093e4abbcfb5a0bd558c192be774f5ac0035b5c5b0526ebc481687dce4d",
     "lines:lefthook.yml#extends": "ef238a97b59aaa465d7e73990f69354cbd56434a8a6836066af5cdebdd1a01d3"
   }
 }
