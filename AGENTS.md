@@ -70,7 +70,9 @@
   with no task named, `roadmap.py claim` claims the next one and sets up
   `~/.worktrees/<repo>/<slug>`. The PR that finishes an item deletes its file
   and its slug from every `depends_on`. An external blocker is an
-  `executor: human` item that others depend on.
+  `executor: human` item that others depend on. In a repo of several apps, give
+  each app's items `area: <dir>`; `--area <dir>` narrows `list`, `next`, and
+  `claim` to that area plus the repo-wide items.
 - [Launch] Every repo declares `[launch] phase` (`pre_launch` or `public`, no
   default) in `.mjrlee_repo_setup/repo.toml`. Before launch, build the best
   foundation; teardowns, data wipes, and outages are fine. After launch, never
