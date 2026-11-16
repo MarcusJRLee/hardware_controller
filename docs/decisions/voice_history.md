@@ -57,8 +57,11 @@ iOS must share the same semantics without sharing a database layout.
   settings change, on actors outside hardware callbacks, targeting, and
   insertion. On iOS a post-commit maintenance failure is shown but never
   invalidates the commit. SQLite connections, including startup's read-only
-  corruption check, share a five-second contention bound, so a closing or
-  still-maintaining connection delays startup instead of failing it.
+  corruption check, share one `SQLiteVoiceHistoryContention`: SQLite's own
+  `sqlite3_busy_timeout` backoff with a five-second bound, installed as a busy
+  handler that reports each wait. A closing or still-maintaining connection
+  delays startup instead of failing it, and tests release a held lock from
+  that report rather than racing a timer.
 - The policy itself is the single Rust planner
   ([portable_voice_engine](portable_voice_engine.md)).
 

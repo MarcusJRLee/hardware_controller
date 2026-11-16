@@ -3,21 +3,6 @@ import Foundation
 import HardwareControllerCore
 import SQLite3
 
-/// Bounds transient writer contention outside the input-to-action hot path.
-let sqliteVoiceHistoryCoordinationTimeoutMilliseconds: Int32 = 5_000
-
-private final class SQLiteDatabaseHandle: @unchecked Sendable {
-  let pointer: OpaquePointer
-
-  init(_ pointer: OpaquePointer) {
-    self.pointer = pointer
-  }
-
-  deinit {
-    sqlite3_close(pointer)
-  }
-}
-
 struct SQLiteVoiceHistoryRecoveryDescriptor: Sendable {
   let id: UUID
   let audioFilename: String?
@@ -32,7 +17,7 @@ actor SQLiteVoiceSessionStore {
     to: sqlite3_destructor_type.self
   )
 
-  private let handle: SQLiteDatabaseHandle
+  private let handle: SQLiteVoiceHistoryDatabaseHandle
   private let audioDirectory: URL
   private var didBackfillResults = false
   private var isBackfillingResults = false
@@ -42,7 +27,8 @@ actor SQLiteVoiceSessionStore {
 
   init(
     databaseURL: URL,
-    audioDirectory: URL
+    audioDirectory: URL,
+    contention: SQLiteVoiceHistoryContention = .standard
   ) throws {
     var opened: OpaquePointer?
     let result = sqlite3_open_v2(
@@ -59,14 +45,9 @@ actor SQLiteVoiceSessionStore {
         "Voice History could not open its local database."
       )
     }
-    handle = SQLiteDatabaseHandle(opened)
+    handle = SQLiteVoiceHistoryDatabaseHandle(opened, contention: contention)
     self.audioDirectory = audioDirectory
-    guard
-      sqlite3_busy_timeout(
-        opened,
-        sqliteVoiceHistoryCoordinationTimeoutMilliseconds
-      ) == SQLITE_OK
-    else {
+    guard handle.coordinate() else {
       throw VoiceSessionHistoryError.storageUnavailable(
         "Voice History could not configure database coordination."
       )

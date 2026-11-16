@@ -3,20 +3,6 @@ import HardwareControllerCore
 import HardwareControllerVoiceFFI
 import SQLite3
 
-private final class SQLiteVoiceHistoryRetentionDatabaseHandle:
-  @unchecked Sendable
-{
-  let pointer: OpaquePointer
-
-  init(_ pointer: OpaquePointer) {
-    self.pointer = pointer
-  }
-
-  deinit {
-    sqlite3_close(pointer)
-  }
-}
-
 /// Owns automatic Voice audio selection, expiration evidence, and file removal.
 actor SQLiteVoiceHistoryRetentionStore {
   static let lowDiskReserveBytes: Int64 = 1_024 * 1_024 * 1_024
@@ -37,7 +23,7 @@ actor SQLiteVoiceHistoryRetentionStore {
     to: sqlite3_destructor_type.self
   )
 
-  private let handle: SQLiteVoiceHistoryRetentionDatabaseHandle
+  private let handle: SQLiteVoiceHistoryDatabaseHandle
   private let audioDirectory: URL
   private let artifactSize: @Sendable (URL) throws -> Int64
   private let availableCapacity: @Sendable (URL) throws -> Int64?
@@ -59,7 +45,8 @@ actor SQLiteVoiceHistoryRetentionStore {
       url in
       try url.resourceValues(forKeys: [.volumeAvailableCapacityKey])
         .volumeAvailableCapacity.map(Int64.init)
-    }
+    },
+    contention: SQLiteVoiceHistoryContention = .standard
   ) throws {
     var opened: OpaquePointer?
     let result = sqlite3_open_v2(
@@ -76,16 +63,11 @@ actor SQLiteVoiceHistoryRetentionStore {
         "Voice History could not open retention storage."
       )
     }
-    handle = SQLiteVoiceHistoryRetentionDatabaseHandle(opened)
+    handle = SQLiteVoiceHistoryDatabaseHandle(opened, contention: contention)
     self.audioDirectory = audioDirectory
     self.artifactSize = artifactSize
     self.availableCapacity = availableCapacity
-    guard
-      sqlite3_busy_timeout(
-        opened,
-        sqliteVoiceHistoryCoordinationTimeoutMilliseconds
-      ) == SQLITE_OK
-    else {
+    guard handle.coordinate() else {
       throw VoiceSessionHistoryError.storageUnavailable(
         "Voice History could not coordinate retention storage."
       )

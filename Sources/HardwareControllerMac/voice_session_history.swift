@@ -354,22 +354,24 @@ public final class SQLiteVoiceSessionHistory:
     rootDirectory: URL,
     retentionSettings: VoiceHistoryRetentionSettings
   ) throws {
+    // Naming the default selects the designated initializer, not this one.
     try self.init(
       rootDirectory: rootDirectory,
       retentionSettings: retentionSettings,
-      recorderFactory: { sessionID, audioDirectory in
-        VoiceAudioArtifactRecorder(
-          sessionID: sessionID,
-          audioDirectory: audioDirectory
-        )
-      }
+      contention: .standard
     )
   }
 
   init(
     rootDirectory: URL,
     retentionSettings: VoiceHistoryRetentionSettings,
-    recorderFactory: @escaping RecorderFactory
+    recorderFactory: @escaping RecorderFactory = { sessionID, audioDirectory in
+      VoiceAudioArtifactRecorder(
+        sessionID: sessionID,
+        audioDirectory: audioDirectory
+      )
+    },
+    contention: SQLiteVoiceHistoryContention = .standard
   ) throws {
     let retentionSettings = try retentionSettings.validated()
     retentionState = Mutex(
@@ -402,15 +404,18 @@ public final class SQLiteVoiceSessionHistory:
       self.audioDirectory = audioDirectory
       let databaseURL = rootDirectory.appending(path: "history.sqlite3")
       let preservedDatabase = try VoiceHistoryDatabaseRecovery.prepare(
-        databaseURL: databaseURL
+        databaseURL: databaseURL,
+        contention: contention
       )
       store = try SQLiteVoiceSessionStore(
         databaseURL: databaseURL,
-        audioDirectory: audioDirectory
+        audioDirectory: audioDirectory,
+        contention: contention
       )
       retentionStore = try SQLiteVoiceHistoryRetentionStore(
         databaseURL: databaseURL,
-        audioDirectory: audioDirectory
+        audioDirectory: audioDirectory,
+        contention: contention
       )
       reconciler = VoiceHistoryReconciler(
         store: store,

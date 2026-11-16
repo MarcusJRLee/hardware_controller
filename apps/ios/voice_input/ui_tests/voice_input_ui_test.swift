@@ -5,6 +5,8 @@ final class VoiceInputUITest: XCTestCase {
   /// as soon as its condition holds, so only failures pay this deadline.
   private static let timeout: TimeInterval = 60
   private static let jfkPhrase = "ask not what your country can do for you"
+  /// Titles of the phases a dictation can end in: Ready, Failed, Interrupted.
+  private static let finishedTitles = ["Done", "Didn't finish", "Stopped"]
 
   override func setUp() {
     continueAfterFailure = false
@@ -17,18 +19,11 @@ final class VoiceInputUITest: XCTestCase {
   func testFreshInstallDictatesIntoSearchableHistory() throws {
     let app = try launch(reset: true, fixture: true)
 
-    let start = app.buttons["start_capture"]
-    XCTAssertTrue(start.waitForExistence(timeout: Self.timeout))
-    wait(for: start, toBe: "isEnabled == true")
-    start.tap()
-    let stop = app.buttons["stop_capture"]
-    XCTAssertTrue(stop.waitForExistence(timeout: Self.timeout))
-    stop.tap()
+    try dictate(in: app)
 
     let result = app.staticTexts["dictation_result"]
     XCTAssertTrue(result.waitForExistence(timeout: Self.timeout))
     XCTAssertTrue(result.label.localizedCaseInsensitiveContains(Self.jfkPhrase), result.label)
-    XCTAssertEqual(app.staticTexts["dictation_title"].label, "Done")
     XCTAssertTrue(app.buttons["dictation_copy"].isHittable)
     attachScreenshot(app, named: "dictation_result")
 
@@ -169,6 +164,8 @@ final class VoiceInputUITest: XCTestCase {
     return app
   }
 
+  /// Each wait names the state its tap must produce. A dictation that ends
+  /// anywhere but Done fails as soon as it ends, with the reason on screen.
   @MainActor
   private func dictate(in app: XCUIApplication) throws {
     app.tabBars.buttons["Dictate"].tap()
@@ -180,7 +177,8 @@ final class VoiceInputUITest: XCTestCase {
     XCTAssertTrue(stop.waitForExistence(timeout: Self.timeout))
     stop.tap()
     let title = app.staticTexts["dictation_title"]
-    wait(for: title, toBe: "label == 'Done'")
+    wait(for: title, toMatch: NSPredicate(format: "label IN %@", Self.finishedTitles))
+    XCTAssertEqual(title.label, "Done", app.staticTexts["dictation_detail"].label)
   }
 
   @MainActor
@@ -191,7 +189,12 @@ final class VoiceInputUITest: XCTestCase {
 
   @MainActor
   private func wait(for element: XCUIElement, toBe predicate: String) {
-    expectation(for: NSPredicate(format: predicate), evaluatedWith: element)
+    wait(for: element, toMatch: NSPredicate(format: predicate))
+  }
+
+  @MainActor
+  private func wait(for element: XCUIElement, toMatch predicate: NSPredicate) {
+    expectation(for: predicate, evaluatedWith: element)
     waitForExpectations(timeout: Self.timeout)
   }
 

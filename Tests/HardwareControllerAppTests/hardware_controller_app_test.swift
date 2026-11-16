@@ -15,6 +15,7 @@ struct HardwareControllerAppTests {
 
     configureApplicationWindow(window)
 
+    #expect(window.title == "Hardware Controller")
     #expect(window.styleMask.contains(.titled))
     #expect(!window.styleMask.contains(.fullSizeContentView))
     #expect(window.titleVisibility == .hidden)
@@ -54,9 +55,10 @@ struct HardwareControllerAppTests {
     window.orderFront(nil)
     defer { window.close() }
 
-    try await waitUntil("the Hardware Controller window title") {
-      window.title == "Hardware Controller"
-    }
+    // Whether SwiftUI replaces the configured title before any navigation
+    // differs by macOS release and render timing, so only titles a navigation
+    // produces are awaited; `applicationWindowUsesNativeTitleBar` checks the
+    // configured one.
     navigation.select(.profiles)
     try await waitUntil("the Profiles window title") { window.title == "Profiles" }
     navigation.select(.history)

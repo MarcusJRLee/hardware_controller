@@ -1,7 +1,7 @@
 # iOS capture and system surfaces
 
 - **Status:** Accepted
-- **Updated:** 2026-11-03
+- **Updated:** 2026-11-16
 - **Replaces:** 0040, 0046, 0050
 
 ## Context
@@ -56,6 +56,9 @@ resume on its own.
   keyboard stop the keyboard Style. No system path infers a target.
 - Completed output commits to History before Ready. Keyboard-free delivery is an
   explicit History copy or share.
+- Ready, Stopped, and Didn't finish publish before the session releases its
+  audio session and Live Activity, and each offers Start, so a Start in that
+  window waits for the release instead of being rejected.
 
 **Lifecycle**
 
@@ -64,15 +67,18 @@ resume on its own.
 - Stop for interruptions, real input-route swaps, media-service loss, critical
   thermal pressure, and background-finalization expiry. Category and override
   changes, Low Power Mode, and serious thermal pressure continue with an
-  advisory. Never resume automatically.
+  advisory. Never resume automatically. These events govern capture only:
+  after Stop the audio is complete, so Transcribing ends only in Ready, a
+  failure, or background-finalization expiry.
 - Record into one lowercase `<session>.partial` in protected, backup-excluded
   storage. Before releasing capture, commit interrupted audio as a Recovery
   session with a typed reason.
 - Transcribing after Stop gets one bounded background task; expiry invalidates
   the result and keeps the partial as `backgroundExecutionExpired` recovery.
-- On activation, if nothing owns a recorder or finalizer, end orphaned Live
-  Activities and mark stale Recording or Transcribing snapshots Interrupted,
-  leaving partial audio for History to adopt.
+- On activation, if nothing owns a recorder or finalizer, mark stale Recording
+  or Transcribing snapshots Interrupted, then end orphaned Live Activities;
+  marking first means a Start during that sweep keeps its own snapshot. Partial
+  audio stays for History to adopt.
 - At first History access, adopt only readable, nonempty, exact lowercase
   partial or unreferenced CAF files; leave every other file untouched. A partial
   sharing a committed session's ID is removed only if its digest matches;

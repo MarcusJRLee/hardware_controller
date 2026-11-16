@@ -3,17 +3,23 @@ import SQLite3
 
 /// Preserves a physically corrupt SQLite family before creating clean storage.
 enum VoiceHistoryDatabaseRecovery {
-  static func prepare(databaseURL: URL) throws -> String? {
+  static func prepare(
+    databaseURL: URL,
+    contention: SQLiteVoiceHistoryContention = .standard
+  ) throws -> String? {
     guard FileManager.default.fileExists(atPath: databaseURL.path) else {
       return nil
     }
-    guard try databaseIsCorrupt(databaseURL) else {
+    guard try databaseIsCorrupt(databaseURL, contention: contention) else {
       return nil
     }
     return try preserveDatabaseFamily(databaseURL)
   }
 
-  private static func databaseIsCorrupt(_ url: URL) throws -> Bool {
+  private static func databaseIsCorrupt(
+    _ url: URL,
+    contention: SQLiteVoiceHistoryContention
+  ) throws -> Bool {
     var database: OpaquePointer?
     let openResult = sqlite3_open_v2(
       url.path,
@@ -29,15 +35,11 @@ enum VoiceHistoryDatabaseRecovery {
         "Voice History could not inspect its local database."
       )
     }
+    // `contention` is a parameter, so it outlives this close.
     defer { sqlite3_close(database) }
     // A previous history's retention write or closing checkpoint can still
     // hold the lock, so inspection waits like every other connection.
-    guard
-      sqlite3_busy_timeout(
-        database,
-        sqliteVoiceHistoryCoordinationTimeoutMilliseconds
-      ) == SQLITE_OK
-    else {
+    guard contention.install(on: database) else {
       throw VoiceSessionHistoryError.storageUnavailable(
         "Voice History could not inspect its local database."
       )

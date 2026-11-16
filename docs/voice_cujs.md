@@ -61,7 +61,7 @@ events.
 | I4 | Type without Full Access | Letters, numbers, symbols, auto-capitals, and double-space period work; voice explains what it needs. | `voice_input_keyboard_policy_test`, `voice_input_keyboard_layout_test` |
 | I5 | Respect unsupported fields | Constrained or sensitive fields disable voice only. | `voice_input_host_field_policy_test`, `voice_input_delivery_target_policy_test` |
 | I6 | Choose a Style | Keyboard Style travels with its exact session. | `voice_input_style_test`, `voice_input_style_mapping_test`, `voice_input_style_preference_test`, `testStyleMenuOffersEveryCanonicalStyle` |
-| I7 | Survive interruptions | Typed lifecycle policy; no auto-resume; partial audio recovered. | `voice_input_lifecycle_policy_test`, `voice_input_lifecycle_notification_mapper_test`, `voice_input_capture_service_test` |
+| I7 | Survive interruptions | Typed lifecycle policy; no auto-resume; partial audio recovered; a finished recording always finishes Transcribing. | `voice_input_lifecycle_policy_test`, `voice_input_lifecycle_notification_mapper_test`, `voice_input_capture_service_test` |
 | I8 | Detect a stale service | Heartbeats expire within 3 s; stale state cannot revive delivery. | `voice_input_keychain_store_test`, `voice_input_keyboard_policy_test` |
 | I9 | Recover failed insertion | One retry or a ten-minute local copy, only for the exact result and field. | `voice_input_insertion_recovery_policy_test` |
 | I10 | Stay offline within limits | No network code; age, bytes, count, reserve; Models never evicted implicitly. | `voice_input_history_repository_test`, `voice_input_history_retention_preferences_test`, `scripts/check_ios_local_only.sh`, `testSettingsShowTheVerifiedModelSetupAndStorage` |

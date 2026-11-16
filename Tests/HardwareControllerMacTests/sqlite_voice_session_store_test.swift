@@ -410,32 +410,19 @@ struct SQLiteVoiceSessionStoreTest {
     let rootDirectory = FileManager.default.temporaryDirectory
       .appending(path: "voice_history_writer_\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: rootDirectory) }
-    let history = try SQLiteVoiceSessionHistory(rootDirectory: rootDirectory)
+    let lock = SQLiteTestWriteLock()
+    let history = try SQLiteVoiceSessionHistory(
+      rootDirectory: rootDirectory,
+      retentionSettings: .unlimited,
+      contention: lock.contention()
+    )
     let document = try historyDocument(sessionID: UUID())
-    var database: OpaquePointer?
-    #expect(
-      sqlite3_open(
-        rootDirectory.appending(path: "history.sqlite3").path,
-        &database
-      ) == SQLITE_OK
-    )
-    let opened = try #require(database)
-    #expect(
-      sqlite3_exec(opened, "BEGIN IMMEDIATE;", nil, nil, nil) == SQLITE_OK
-    )
+    try lock.hold(databaseURL: rootDirectory.appending(path: "history.sqlite3"))
 
-    let completion = Task {
-      try await history.complete(document)
-    }
-    // SQLite's busy handler waits on real time, which is what this tests. The
-    // hold is far below the coordination timeout, so a stalled runner only
-    // releases later (or before the write starts) and never fails the test.
-    try await Task.sleep(for: .milliseconds(100))
-    #expect(sqlite3_exec(opened, "COMMIT;", nil, nil, nil) == SQLITE_OK)
-    sqlite3_close(opened)
-    database = nil
-    try await completion.value
+    try await history.complete(document)
 
+    #expect(lock.waitCount > 0)
+    #expect(!lock.releaseFailed)
     #expect(try await history.session(id: document.id) != nil)
   }
 
@@ -1026,24 +1013,22 @@ struct SQLiteVoiceSessionStoreTest {
   func finalizationWaitsThroughTransientDatabaseContention() async throws {
     let rootDirectory = temporaryRoot("retention_contention")
     defer { try? FileManager.default.removeItem(at: rootDirectory) }
+    let lock = SQLiteTestWriteLock()
+    // Opt-in because SQLite's backoff really sleeps: the holder releases once
+    // the waiter reports two seconds spent, which still lands within the bound.
     let history = try SQLiteVoiceSessionHistory(
       rootDirectory: rootDirectory,
-      retentionSettings: .unlimited
+      retentionSettings: .unlimited,
+      contention: lock.contention(releasingAfter: .seconds(2))
     )
     let document = retentionDocument(sessionID: UUID())
     history.begin(sessionID: document.id, startedAt: document.startedAt)
     history.append(try makeVoiceAudioFixture())
-    let lock = try SQLiteTestWriteLock(
-      databaseURL: rootDirectory.appending(path: "history.sqlite3")
-    )
+    try lock.hold(databaseURL: rootDirectory.appending(path: "history.sqlite3"))
 
-    async let completion: Void = history.complete(document)
-    // Opt-in because SQLite's busy handler waits on real time, which is what
-    // this tests: a hold past two seconds still lands within the bound.
-    try await Task.sleep(for: .milliseconds(2_250))
-    try lock.release()
-    try await completion
+    try await history.complete(document)
 
+    #expect(!lock.releaseFailed)
     let stored = try #require(try await history.session(id: document.id))
     #expect(stored.id == document.id)
     #expect(stored.rawText == document.rawText)
@@ -1205,48 +1190,5 @@ struct SQLiteVoiceSessionStoreTest {
     )
     history.append(try makeVoiceAudioFixture())
     try await history.complete(document)
-  }
-}
-
-private final class SQLiteTestWriteLock {
-  private let database: OpaquePointer
-  private var isReleased = false
-
-  init(databaseURL: URL) throws {
-    var opened: OpaquePointer?
-    guard sqlite3_open(databaseURL.path, &opened) == SQLITE_OK,
-      let opened
-    else {
-      throw VoiceSessionHistoryError.storageUnavailable(
-        "The test database could not be opened."
-      )
-    }
-    database = opened
-    guard sqlite3_exec(database, "BEGIN IMMEDIATE;", nil, nil, nil) == SQLITE_OK
-    else {
-      sqlite3_close(database)
-      throw VoiceSessionHistoryError.storageUnavailable(
-        "The test database could not acquire its write lock."
-      )
-    }
-  }
-
-  func release() throws {
-    guard !isReleased else {
-      return
-    }
-    guard sqlite3_exec(database, "COMMIT;", nil, nil, nil) == SQLITE_OK else {
-      throw VoiceSessionHistoryError.storageUnavailable(
-        "The test database could not release its write lock."
-      )
-    }
-    isReleased = true
-  }
-
-  deinit {
-    if !isReleased {
-      sqlite3_exec(database, "ROLLBACK;", nil, nil, nil)
-    }
-    sqlite3_close(database)
   }
 }
