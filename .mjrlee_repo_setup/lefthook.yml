@@ -3,6 +3,11 @@
 # skips a pre-push command or job when the push changes no files (even with
 # `files:`), a script never. The mjrlee-repo-setup skill's
 # scripts/lefthook_contract_test.py pins this against real lefthook.
+#
+# Every installed git hook sources `rc` before running lefthook; the kit's times
+# the whole pre-push hook and reports load (hooks/gate_report.py). A repo's own
+# `rc:` would replace it, which verify_repo_kit.py reports.
+rc: .mjrlee_repo_setup/hooks/lefthook_rc.sh
 pre-push:
   scripts:
     "mjrlee_push_rules.sh":
