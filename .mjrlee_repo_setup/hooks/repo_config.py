@@ -31,6 +31,11 @@ are needed only where the repo's workflow differs from the defaults:
       { days = ["mon", "tue", "wed", "thu", "fri"], start = "09:00", end = "17:00" },
     ]
 
+    [pre_push]
+    # Soft: the whole pre-push hook's wall-clock seconds, past which
+    # `gate_report.py` warns; it never blocks a push. Default: 300.
+    budget_seconds = 600
+
 Check it from the repo root (exit 1 on an error, an undeclared phase, or
 undeclared quiet hours):
 
@@ -62,8 +67,12 @@ _TABLES: Final[Mapping[str, frozenset[str] | None]] = {
     "replace": None,
     "launch": frozenset({"phase"}),
     "quiet_hours": frozenset({"timezone", "windows"}),
+    "pre_push": frozenset({"budget_seconds"}),
 }
 PHASES: Final = ("pre_launch", "public")
+# Five minutes: half the 10-minute cap on an agent's foreground shell command,
+# so a gate within budget still finishes in one call when load doubles it.
+DEFAULT_PRE_PUSH_BUDGET: Final = 300
 _WORD: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]*")
 
 Argv = tuple[str, ...]
@@ -108,6 +117,8 @@ class RepoConfig:
     # None: undeclared, which verify refuses; hooks then block nothing, so a
     # kit update never stops a repo that has yet to answer.
     quiet_hours: QuietHours | None = None
+    # Soft wall-clock budget for the whole pre-push hook, in seconds.
+    pre_push_budget: int = DEFAULT_PRE_PUSH_BUDGET
 
     @property
     def public(self) -> bool:
@@ -186,6 +197,15 @@ def _quiet_hours(table: object) -> QuietHours | None:
         raise RepoConfigError(str(error)) from error
 
 
+def _budget(table: Mapping[str, object]) -> int:
+    value = table.get("budget_seconds", DEFAULT_PRE_PUSH_BUDGET)
+    # TOML booleans parse as Python bools, which are ints.
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        msg = f"{CONFIG}: `pre_push.budget_seconds` must be a positive integer"
+        raise RepoConfigError(msg)
+    return value
+
+
 def _check_keys(document: Mapping[str, object]) -> None:
     for table, value in document.items():
         if table not in _TABLES:
@@ -221,6 +241,7 @@ def load(root: Path) -> RepoConfig:
         replacements=_replacements(document.get("replace", {})),
         phase=_phase(document.get("launch")),
         quiet_hours=_quiet_hours(document.get("quiet_hours")),
+        pre_push_budget=_budget(document.get("pre_push", {})),
     )
 
 
