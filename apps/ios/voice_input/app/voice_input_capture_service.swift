@@ -66,7 +66,13 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
   private var sessionID: UUID?
   private var sessionStartedAt: Date?
   private var activeCaptureURL: URL?
+  /// Set from Stop until release: the recording is complete, so lifecycle
+  /// events that end capture no longer apply to this session.
+  private var isFinalizing = false
+  /// Set while the previous session releases its audio session and Live
+  /// Activity; Start waits for it so the two never interleave.
   private var isTearingDown = false
+  private var teardownWaiters: [CheckedContinuation<Void, Never>] = []
   private var lastControlRecordingState: Bool?
   private var sequence: UInt64
 
@@ -118,7 +124,15 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
     guard sessionID == nil, recorder == nil, !isTearingDown else {
       return
     }
+    // Mark the stale snapshot before the first suspension: a Start may claim
+    // capture while the Live Activity sweep is suspended, and its Recording
+    // snapshot must survive the sweep.
+    let marking = Result { try markOrphanedSnapshotInterrupted() }
     await activityManager.endOrphanedActivities(at: now())
+    try marking.get()
+  }
+
+  private func markOrphanedSnapshotInterrupted() throws {
     let snapshot = try store.readSnapshot()
     guard
       snapshot.schemaRevision == VoiceInputSnapshot.schemaRevision,
@@ -139,7 +153,10 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
   }
 
   func start(sessionID requestedSessionID: UUID = UUID()) async throws {
-    guard recorder == nil, sessionID == nil, !isTearingDown else {
+    // Ready, Stopped, and Didn't finish are published before the previous
+    // session's release finishes, and each offers Start: wait, never reject.
+    await waitForTeardown()
+    guard recorder == nil, sessionID == nil else {
       throw VoiceInputCaptureError.alreadyRecording
     }
     sessionID = requestedSessionID
@@ -232,6 +249,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
     }
     recorder.stop()
     self.recorder = nil
+    isFinalizing = true
     let sessionEndedAt = now()
     await drainLiveFeed()
     let backgroundTask = await backgroundTaskManager.begin(
@@ -360,9 +378,11 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
   func handleLifecycleEvent(
     _ event: VoiceInputLifecycleEvent
   ) async -> VoiceInputLifecycleDecision {
+    // Lifecycle events govern capture. After Stop the audio file is complete,
+    // so only completion, failure, or background-task expiry ends Transcribing.
     let decision = lifecyclePolicy.decision(
       for: event,
-      captureOwned: sessionID != nil,
+      captureOwned: sessionID != nil && !isFinalizing,
       liveActivityOwned: activityID != nil
     )
     switch decision {
@@ -473,6 +493,7 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
     sessionID = nil
     sessionStartedAt = nil
     activeCaptureURL = nil
+    isFinalizing = false
     endingRecorder?.stop()
     await cancelLiveFeed()
     await activityManager.end(
@@ -481,7 +502,22 @@ actor VoiceInputCaptureService: VoiceInputCapturing {
       at: now()
     )
     try? audioSession.deactivateAfterRecording()
+    finishTeardown()
+  }
+
+  private func waitForTeardown() async {
+    while isTearingDown {
+      await withCheckedContinuation { teardownWaiters.append($0) }
+    }
+  }
+
+  private func finishTeardown() {
     isTearingDown = false
+    let waiters = teardownWaiters
+    teardownWaiters = []
+    for waiter in waiters {
+      waiter.resume()
+    }
   }
 
   /// Starts live decoding beside the durable recorder. Any failure here only

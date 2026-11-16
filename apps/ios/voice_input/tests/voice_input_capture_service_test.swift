@@ -299,7 +299,9 @@ final class VoiceInputCaptureServiceTest: XCTestCase {
     XCTAssertEqual(endedActivityIDs, ["activity"])
   }
 
-  func testCaptureOwnershipClearsBeforeLiveActivityEndSuspends() async throws {
+  /// Stopped is published before the Live Activity ends, and it offers Start;
+  /// that Start must wait for the release instead of being dropped.
+  func testStartDuringTeardownWaitsForTheAudioSessionRelease() async throws {
     let entered = AsyncStream<Void>.makeStream()
     let release = AsyncStream<Void>.makeStream()
     let activityManager = BlockingLiveActivityManager(
@@ -313,24 +315,100 @@ final class VoiceInputCaptureServiceTest: XCTestCase {
       await harness.service.interrupt(reason: .audioInterruption)
     }
     for await _ in entered.stream.prefix(1) {}
-
     let lateDecision = await harness.service.handleLifecycleEvent(
       .thermalStateChanged(.critical)
     )
-    do {
-      try await harness.service.start(sessionID: UUID())
-      XCTFail("A new capture must wait for audio-session teardown.")
-    } catch {
-      XCTAssertEqual(error as? VoiceInputCaptureError, .alreadyRecording)
+    let publishedDuringTeardown = try harness.store.readSnapshot()
+    // The command path consumes its command and calls Start in one actor turn,
+    // so an empty slot proves Start ran while teardown was suspended.
+    let nextSessionID = UUID()
+    try harness.store.writeCommand(.start(sessionID: nextSessionID, issuedAt: .now))
+    let starting = Task { try await harness.service.processPendingCommand() }
+    try await waitUntil("Start consumes its command") {
+      try harness.store.readCommand() == nil
     }
+
     release.continuation.finish()
     await interrupting.value
+    try await starting.value
 
     XCTAssertEqual(lateDecision, .ignore)
+    XCTAssertEqual(publishedDuringTeardown.phase, .interrupted)
     XCTAssertEqual(harness.recoveryStore.calls.count, 1)
+    XCTAssertEqual(
+      harness.audioSession.events,
+      [.activate, .deactivate, .activate]
+    )
+    XCTAssertEqual(try harness.store.readSnapshot().sessionID, nextSessionID)
+    XCTAssertEqual(try harness.store.readSnapshot().phase, .recording)
   }
 
-  func testInterruptionAfterHistoryCommitDoesNotDowngradeReadyResult() async throws {
+  /// The activation sweep suspends while ending orphaned Live Activities; a
+  /// Start in that window must not be marked Interrupted when the sweep resumes.
+  func testStartDuringOrphanSweepKeepsItsRecordingSnapshot() async throws {
+    let entered = AsyncStream<Void>.makeStream()
+    let release = AsyncStream<Void>.makeStream()
+    let harness = try CaptureHarness(
+      activityManager: BlockingLiveActivityManager(
+        orphansEntered: entered.continuation,
+        orphansRelease: release.stream
+      )
+    )
+    addTeardownBlock { try harness.remove() }
+    let reconciling = Task { try await harness.service.reconcileOnActivation() }
+    for await _ in entered.stream.prefix(1) {}
+    let sessionID = UUID()
+
+    try await harness.service.start(sessionID: sessionID)
+    release.continuation.finish()
+    try await reconciling.value
+
+    XCTAssertEqual(try harness.store.readSnapshot().sessionID, sessionID)
+    XCTAssertEqual(try harness.store.readSnapshot().phase, .recording)
+  }
+
+  /// Capture events arriving after Stop cannot discard the finished recording.
+  func testCaptureLifecycleEventsLeaveFinalizationRunning() async throws {
+    let entered = AsyncStream<Void>.makeStream()
+    let release = AsyncStream<Void>.makeStream()
+    let committed = AsyncStream<Void>.makeStream()
+    let immediateCommit = AsyncStream<Void>.makeStream()
+    immediateCommit.continuation.finish()
+    let fixture = try CaptureFixture(
+      liveActivityID: nil,
+      transcriber: BlockingFinalizationTranscriber(
+        entered: entered.continuation,
+        release: release.stream
+      ),
+      history: CommitBlockingHistoryStore(
+        committed: committed.continuation,
+        release: immediateCommit.stream
+      )
+    )
+    addTeardownBlock { try fixture.remove() }
+    try await fixture.service.start(sessionID: UUID())
+    let stopping = Task { try await fixture.service.stop(styleKind: .natural) }
+    for await _ in entered.stream.prefix(1) {}
+
+    var decisions: [VoiceInputLifecycleDecision] = []
+    for event: VoiceInputLifecycleEvent in [
+      .audioInterruptionBegan,
+      .audioRouteChanged(.newDeviceAvailable),
+      .mediaServicesUnavailable,
+      .enteredBackground,
+      .thermalStateChanged(.critical),
+    ] {
+      decisions.append(await fixture.service.handleLifecycleEvent(event))
+    }
+    release.continuation.finish()
+    try await stopping.value
+
+    XCTAssertEqual(decisions, Array(repeating: .ignore, count: 5))
+    XCTAssertEqual(try fixture.store.readSnapshot().phase, .ready)
+    XCTAssertEqual(fixture.recoveryStore.calls, [])
+  }
+
+  func testExpiryAfterHistoryCommitDoesNotDowngradeReadyResult() async throws {
     let committed = AsyncStream<Void>.makeStream()
     let release = AsyncStream<Void>.makeStream()
     let history = CommitBlockingHistoryStore(
@@ -343,6 +421,7 @@ final class VoiceInputCaptureServiceTest: XCTestCase {
     )
     addTeardownBlock { try FileManager.default.removeItem(at: root) }
     let store = LockedProbeStore(command: nil)
+    let backgroundTasks = RecordingBackgroundTaskManager()
     let service = VoiceInputCaptureService(
       store: store,
       captureDirectoryURL: root,
@@ -356,20 +435,17 @@ final class VoiceInputCaptureServiceTest: XCTestCase {
       audioSession: RecordingAudioSession(),
       recorderFactory: RecordingAudioRecorderFactory(),
       activityManager: RecordingLiveActivityManager(startedID: "activity"),
-      backgroundTaskManager: RecordingBackgroundTaskManager(),
+      backgroundTaskManager: backgroundTasks,
       clock: ManualClock()
     )
     try await service.start(sessionID: UUID())
     let stopping = Task { try await service.stop(styleKind: .natural) }
     for await _ in committed.stream.prefix(1) {}
 
-    let decision = await service.handleLifecycleEvent(
-      .thermalStateChanged(.critical)
-    )
+    await backgroundTasks.expire()
     release.continuation.finish()
     try await stopping.value
 
-    XCTAssertEqual(decision, .ignore)
     XCTAssertEqual(try store.readSnapshot().phase, .ready)
     XCTAssertEqual(
       try store.readSnapshot().text,
@@ -382,6 +458,7 @@ private struct CaptureHarness {
   let root: URL
   let store: LockedProbeStore
   let recoveryStore: RecordingRecoveryStore
+  let audioSession = RecordingAudioSession()
   let service: VoiceInputCaptureService
 
   init(activityManager: any VoiceInputLiveActivityManaging) throws {
@@ -402,7 +479,7 @@ private struct CaptureHarness {
       sessionFinalizer: VoiceInputSessionFinalizer(history: UnusedHistoryStore()),
       recoveryStore: recoveryStore,
       permissionRequester: { true },
-      audioSession: RecordingAudioSession(),
+      audioSession: audioSession,
       recorderFactory: RecordingAudioRecorderFactory(),
       activityManager: activityManager,
       backgroundTaskManager: RecordingBackgroundTaskManager(),
@@ -570,6 +647,7 @@ private struct CaptureFixture {
   init(
     liveActivityID: String?,
     transcriber: any VoiceInputTranscribing = PrewarmingTranscriber(),
+    history: any VoiceInputHistoryStoring = UnusedHistoryStore(),
     liveTranscriber: (any VoiceInputLiveTranscribing)? = nil,
     liveAudioTap: (any VoiceInputLiveAudioTapping)? = nil,
     backgroundTaskManager: any VoiceInputBackgroundTaskManaging =
@@ -596,7 +674,7 @@ private struct CaptureFixture {
       store: store,
       captureDirectoryURL: root,
       asrWorkflow: workflow,
-      sessionFinalizer: VoiceInputSessionFinalizer(history: UnusedHistoryStore()),
+      sessionFinalizer: VoiceInputSessionFinalizer(history: history),
       recoveryStore: recoveryStore,
       permissionRequester: { true },
       audioSession: audioSession,
@@ -695,16 +773,22 @@ private actor CommitBlockingHistoryStore: VoiceInputHistoryStoring,
 }
 
 private final class RecordingAudioSession: VoiceInputAudioSessionControlling, Sendable {
-  private let state = Mutex((activations: 0, deactivations: 0))
+  enum Event: Equatable, Sendable {
+    case activate
+    case deactivate
+  }
 
-  var deactivationCount: Int { state.withLock { $0.deactivations } }
+  private let state = Mutex([Event]())
+
+  var events: [Event] { state.withLock { $0 } }
+  var deactivationCount: Int { events.filter { $0 == .deactivate }.count }
 
   func activateForRecording() throws {
-    state.withLock { $0.activations += 1 }
+    state.withLock { $0.append(.activate) }
   }
 
   func deactivateAfterRecording() throws {
-    state.withLock { $0.deactivations += 1 }
+    state.withLock { $0.append(.deactivate) }
   }
 }
 
@@ -792,18 +876,24 @@ private actor BlockingLiveActivityManager: VoiceInputLiveActivityManaging {
   private let startRelease: AsyncStream<Void>?
   private let endEntered: AsyncStream<Void>.Continuation?
   private let endRelease: AsyncStream<Void>?
+  private let orphansEntered: AsyncStream<Void>.Continuation?
+  private let orphansRelease: AsyncStream<Void>?
   private(set) var endedIDs: [String] = []
 
   init(
     startEntered: AsyncStream<Void>.Continuation? = nil,
     startRelease: AsyncStream<Void>? = nil,
     endEntered: AsyncStream<Void>.Continuation? = nil,
-    endRelease: AsyncStream<Void>? = nil
+    endRelease: AsyncStream<Void>? = nil,
+    orphansEntered: AsyncStream<Void>.Continuation? = nil,
+    orphansRelease: AsyncStream<Void>? = nil
   ) {
     self.startEntered = startEntered
     self.startRelease = startRelease
     self.endEntered = endEntered
     self.endRelease = endRelease
+    self.orphansEntered = orphansEntered
+    self.orphansRelease = orphansRelease
   }
 
   func start(sessionID _: UUID, at _: Date) async -> String? {
@@ -824,6 +914,13 @@ private actor BlockingLiveActivityManager: VoiceInputLiveActivityManaging {
     endEntered?.yield()
     if let endRelease {
       for await _ in endRelease {}
+    }
+  }
+
+  func endOrphanedActivities(at _: Date) async {
+    orphansEntered?.yield()
+    if let orphansRelease {
+      for await _ in orphansRelease {}
     }
   }
 }

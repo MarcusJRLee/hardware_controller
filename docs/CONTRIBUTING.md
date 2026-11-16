@@ -118,8 +118,9 @@ in CI:
   parallel, so a loaded runner stretches both. Drive deadlines with
   `ManualClock` (`waitForSleeper(dueWithin:)`, then `advance(by:)`) and await
   events with `waitUntil`, both in `Tests/hardware_controller_test_support/`.
-  Only opt-in suites and SQLite busy-wait tests use real time, with a comment
-  saying why.
+  Hold SQLite locks with `SQLiteTestWriteLock`, whose `contention()` releases
+  the lock from inside the waiter's busy callback instead of after a sleep.
+  Only opt-in suites use real time, with a comment saying why.
 - Portable policy changes update the shared fixture, Rust test, Swift test,
   header, and decision together. Unsafe code stays in `voice_ffi`.
 
