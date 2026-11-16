@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
+source scripts/local_env.sh
 
 usage() {
   print "Usage: scripts/build_ios_device.sh [--config <development|local_qa>]"
@@ -46,9 +47,10 @@ while (( $# > 0 )); do
   esac
 done
 
-if [[ -f .env.local ]]; then
+env_file="$(local_env_file)"
+if [[ -f "$env_file" ]]; then
   set -a
-  source .env.local
+  source "$env_file"
   set +a
 fi
 

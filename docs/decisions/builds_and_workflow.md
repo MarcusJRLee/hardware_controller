@@ -34,6 +34,9 @@ passed locally and failed only in CI.
   approved Apple Development identity, quits and replaces the single
   `/Applications/Hardware Controller.app`, verifies it, and launches that
   bundle. Ad-hoc signatures are for disposable local builds only.
+- `scripts/local_env.sh` resolves `.env.local`: `HC_ENV_FILE`, else the
+  checkout's own, else the main checkout's, so builds from linked worktrees
+  sign without copying private values.
 - Verification checks version, build, Team (`HC_EXPECTED_TEAM_ID`), hardened
   runtime, entitlements, architecture, candidate-to-installed binary equality,
   and the running path. An iteration is identified by commit, Team, and binary
