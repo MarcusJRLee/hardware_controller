@@ -4,14 +4,20 @@
     ... roadmap.py list --offline             # Claims from fetched refs only.
     ... roadmap.py next                       # Top ready, unclaimed agent item.
     ... roadmap.py claim [<slug>]             # Claim it (default: `next`'s).
+    ... roadmap.py list|next|claim --area apps/mac  # One area plus repo-wide.
     ... roadmap.py claim <slug> --base origin/<branch>  # Stack on an open PR.
     ... roadmap.py new <slug> --title T [--priority P2] [--executor human]
-                          [--before <slug> | --after <slug>]
+                          [--area <dir>] [--before <slug> | --after <slug>]
     ... roadmap.py move <slug> (--before <slug> | --after <slug>)
     ... roadmap.py check                      # Validate; for the repo gate.
 
 Each item opens with frontmatter in a flat YAML subset (`key: value` or
-`key: [a, b]`) holding exactly FIELDS, then `## Outcome` and `## Acceptance`.
+`key: [a, b]`) holding exactly FIELDS plus any of OPTIONAL_FIELDS, then
+`## Outcome` and `## Acceptance`. `area` names the repo directory an item
+belongs to, such as `apps/mac` in a repo of several apps; `--area` then shows
+that area's items plus every item without one, which concerns the whole repo.
+Areas are directories rather than a declared list, so they cannot drift from
+the tree: an item whose area no longer exists fails `check`.
 An item is ready when `depends_on` is empty: dependencies may name only open
 items, so the PR that finishes one deletes its file and its slug from every
 `depends_on`. Order is ready first, then priority, then `rank`, a base-36 key
@@ -52,6 +58,7 @@ MAX_BYTES: Final = 4096
 PRIORITIES: Final = ("P0", "P1", "P2", "P3")
 EXECUTORS: Final = ("agent", "human")
 FIELDS: Final = ("title", "priority", "rank", "executor", "depends_on", "specs")
+OPTIONAL_FIELDS: Final = ("area",)
 LIST_FIELDS: Final = frozenset({"depends_on", "specs"})
 SECTIONS: Final = ("## Outcome", "## Acceptance")
 DIGITS: Final = "0123456789abcdefghijklmnopqrstuvwxyz"
@@ -59,6 +66,8 @@ SLUG: Final = re.compile(r"[a-z0-9]+(?:_[a-z0-9]+)*")
 # Never ending in 0 leaves room to insert before any key.
 RANK: Final = re.compile(r"[0-9a-z]*[1-9a-z]")
 FIELD_LINE: Final = re.compile(r"([a-z_]+):\s*(.*)")
+# A relative directory path: no `..`, no leading `/`, no trailing `/`.
+AREA: Final = re.compile(r"[a-z0-9_-]+(?:/[a-z0-9_-]+)*")
 
 Value = str | tuple[str, ...]
 
@@ -76,10 +85,17 @@ class Item:
     executor: str
     depends_on: tuple[str, ...]
     specs: tuple[str, ...]
+    area: str | None = None
 
     @property
     def ready(self) -> bool:
         return not self.depends_on
+
+    def in_area(self, area: str | None) -> bool:
+        """True when shown under `area`: all items without a filter, else the
+        area's own items plus the repo-wide ones (no area)."""
+
+        return area is None or self.area in (None, area)
 
     def sort_key(self) -> tuple[bool, str, str, str]:
         return (not self.ready, self.priority, self.rank, self.slug)
@@ -143,7 +159,7 @@ def parse_item(slug: str, text: str) -> Item:
         raise RoadmapError(f"exceeds {MAX_BYTES} bytes; link specs instead")
     fields, body = parse_frontmatter(text)
     missing = [f for f in FIELDS if f not in fields]
-    unknown = sorted(set(fields) - set(FIELDS))
+    unknown = sorted(set(fields) - {*FIELDS, *OPTIONAL_FIELDS})
     if missing or unknown:
         raise RoadmapError(f"fields missing: {missing}; unknown: {unknown}")
     for key in LIST_FIELDS:
@@ -152,6 +168,11 @@ def parse_item(slug: str, text: str) -> Item:
     if not RANK.fullmatch(rank):
         raise RoadmapError(
             f"`rank` must be base-36 not ending in 0; got `{rank}`"
+        )
+    area = _text(fields, "area") if "area" in fields else None
+    if area is not None and not AREA.fullmatch(area):
+        raise RoadmapError(
+            f"`area` must be a relative directory like `apps/mac`; got `{area}`"
         )
     for section in SECTIONS:
         if not re.search(rf"^{section}\s*$", body, re.MULTILINE):
@@ -164,6 +185,7 @@ def parse_item(slug: str, text: str) -> Item:
         executor=_text(fields, "executor", EXECUTORS),
         depends_on=_list(fields, "depends_on"),
         specs=_list(fields, "specs"),
+        area=area,
     )
 
 
@@ -195,6 +217,8 @@ def load(root: Path) -> tuple[list[Item], list[str]]:
             for spec in item.specs
             if not (root / spec).exists()
         )
+        if item.area is not None and not (root / item.area).is_dir():
+            errors.append(f"{where}: area `{item.area}` is not a directory")
     errors.extend(_cycles({i.slug: i.depends_on for i in items}))
     return sorted(items, key=Item.sort_key), errors
 
@@ -336,7 +360,7 @@ def claims(root: Path, *, offline: bool = False) -> dict[str, str]:
 
 
 def next_ready(
-    items: Sequence[Item], claimed: Mapping[str, str]
+    items: Sequence[Item], claimed: Mapping[str, str], area: str | None = None
 ) -> Item | None:
     """Return the top ready, unclaimed agent item in queue order."""
 
@@ -344,10 +368,23 @@ def next_ready(
         (
             i
             for i in items
-            if i.ready and i.executor == "agent" and i.slug not in claimed
+            if i.ready
+            and i.executor == "agent"
+            and i.slug not in claimed
+            and i.in_area(area)
         ),
         None,
     )
+
+
+def check_area(root: Path, area: str | None) -> None:
+    """Reject an `--area` that is not a directory, so a typo cannot show an
+    empty, misleading queue."""
+
+    if area is not None and not (
+        AREA.fullmatch(area) and (root / area).is_dir()
+    ):
+        raise RoadmapError(f"--area `{area}` is not a directory in this repo")
 
 
 def _cell(text: str) -> str:
@@ -476,6 +513,7 @@ def claim(
     items: Sequence[Item],
     slug: str | None,
     base: str | None = None,
+    area: str | None = None,
 ) -> str:
     """Claim an item completely, or leave nothing behind, origin included.
 
@@ -493,7 +531,7 @@ def claim(
 
     claimed = claims(root)
     if slug is None:
-        top = next_ready(items, claimed)
+        top = next_ready(items, claimed, area)
         if top is None:
             raise RoadmapError("no ready, unclaimed agent item")
         slug = top.slug
@@ -727,62 +765,74 @@ def render_index(
     items: Sequence[Item],
     locations: Mapping[str, Location],
 ) -> str:
+    # Single-area repos keep the narrower table.
+    areas = any(i.area for i in items)
     rows = []
     for n, i in enumerate(items, start=1):
         at = locations.get(i.slug, Location(f"{i.slug}.md", ""))
         waiting = ", ".join(f"`{dep}`" for dep in i.depends_on)
+        area = f" {i.area or 'repo'} |" if areas else ""
         rows.append(
-            f"| {n} | `{i.slug}` | [{_cell(i.title)}]({at.link}) | {i.priority} | "
-            f"{i.executor} | {_cell(at.where)} | {waiting} |"
+            f"| {n} | `{i.slug}` | [{_cell(i.title)}]({at.link}) |{area} "
+            f"{i.priority} | {i.executor} | {_cell(at.where)} | {waiting} |"
         )
+    head = "| # | ID | Item |" + (" Area |" if areas else "")
+    rule = "| - | -- | ---- |" + (" ---- |" if areas else "")
     return "\n".join(
         [
             "# Roadmap",
             "",
             "Generated by `roadmap.py` and gitignored; edit the items instead.",
             "",
-            "| # | ID | Item | Priority | Executor | In progress | Waiting on |",
-            "| - | -- | ---- | -------- | -------- | ----------- | ---------- |",
+            f"{head} Priority | Executor | In progress | Waiting on |",
+            f"{rule} -------- | -------- | ----------- | ---------- |",
             *rows,
             "",
         ]
     )
 
 
-def write_index(root: Path, *, offline: bool) -> str:
-    """Render and write `root`'s index, drafts from other worktrees included."""
+def write_index(root: Path, *, offline: bool, area: str | None = None) -> str:
+    """Write `root`'s full index, drafts from other worktrees included, and
+    return it narrowed to `area`; the file always lists every area."""
 
     items, _errors = load(root)
     claimed = claims(root, offline=offline)
     drafts = new_elsewhere(root, {i.slug for i in items})
     every = sorted([*items, *drafts], key=Item.sort_key)
-    index = render_index(every, locate(root, [i.slug for i in every], claimed))
+    locations = locate(root, [i.slug for i in every], claimed)
+    index = render_index(every, locations)
     folder = root / ROADMAP_DIR
     if every or folder.is_dir():
         # A draft in another worktree can list before this checkout has items.
         folder.mkdir(parents=True, exist_ok=True)
         (folder / INDEX).write_text(index, "utf-8")
-    return index
+    if area is None:
+        return index
+    return render_index([i for i in every if i.in_area(area)], locations)
 
 
-def refresh(root: Path, *, offline: bool) -> str:
+def refresh(root: Path, *, offline: bool, area: str | None = None) -> str:
     """Write `root`'s index and the main checkout's; return `root`'s.
 
     The main checkout's view is the one people open; refresh it from any
     worktree, so work there shows up without a pull in main.
     """
 
-    index = write_index(root, offline=offline)
+    index = write_index(root, offline=offline, area=area)
     main = main_checkout(root)
     if main != root.resolve() and (main / ROADMAP_DIR).is_dir():
         write_index(main, offline=offline)
     return index
 
 
-def item_text(title: str, priority: str, rank: str, executor: str) -> str:
+def item_text(
+    title: str, priority: str, rank: str, executor: str, area: str | None
+) -> str:
+    area_line = f"area: {area}\n" if area else ""
     return (
         f"---\ntitle: {title}\npriority: {priority}\nrank: {rank}\n"
-        f"executor: {executor}\ndepends_on: []\nspecs: []\n---\n\n"
+        f"executor: {executor}\ndepends_on: []\nspecs: []\n{area_line}---\n\n"
         "## Outcome\n\nTODO: the observable result, in one or two sentences.\n\n"
         "## Acceptance\n\n- TODO: a command that passes, or `Human:` and what they check.\n"
     )
@@ -811,10 +861,15 @@ def run(root: Path, argv: Sequence[str]) -> str:
         prog="roadmap.py", description=__doc__.splitlines()[0]
     )
     sub = parser.add_subparsers(dest="command")
-    sub.add_parser("list").add_argument("--offline", action="store_true")
-    sub.add_parser("next")
+    area_help = "a directory: show its items plus the repo-wide ones"
+    list_parser = sub.add_parser("list")
+    list_parser.add_argument("--offline", action="store_true")
+    list_parser.add_argument("--area", help=area_help)
+    sub.add_parser("next").add_argument("--area", help=area_help)
     claim_parser = sub.add_parser("claim")
-    claim_parser.add_argument("slug", nargs="?")
+    claim_target = claim_parser.add_mutually_exclusive_group()
+    claim_target.add_argument("slug", nargs="?")
+    claim_target.add_argument("--area", help="claim the top item " + area_help)
     claim_parser.add_argument("--base", help="commit to cut from")
     sub.add_parser("check")
     for name in ("new", "move"):
@@ -827,8 +882,11 @@ def run(root: Path, argv: Sequence[str]) -> str:
             p.add_argument("--title", required=True)
             p.add_argument("--priority", choices=PRIORITIES, default="P2")
             p.add_argument("--executor", choices=EXECUTORS, default="agent")
+            p.add_argument("--area", help="the directory the item belongs to")
     args = parser.parse_args(argv)
     command = str(args.command or "list")
+    area = str(args.area) if getattr(args, "area", None) else None
+    check_area(root, area)
     items, errors = load(root)
     if command == "check":
         _require_valid(errors)
@@ -851,7 +909,9 @@ def run(root: Path, argv: Sequence[str]) -> str:
             )
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(
-                item_text(str(args.title), priority, rank, str(args.executor)),
+                item_text(
+                    str(args.title), priority, rank, str(args.executor), area
+                ),
                 "utf-8",
             )
             output = f"created {path.relative_to(root)}; fill in Outcome and Acceptance"
@@ -869,12 +929,15 @@ def run(root: Path, argv: Sequence[str]) -> str:
             items,
             str(args.slug) if args.slug else None,
             str(args.base) if args.base else None,
+            area,
         )
     offline = bool(getattr(args, "offline", False))
     claimed = claims(root, offline=offline)
-    index = refresh(root, offline=offline)
+    # `new` writes the area into the item; only list and next filter by it.
+    view = area if command in ("list", "next") else None
+    index = refresh(root, offline=offline, area=view)
     if command == "next":
-        top = next_ready(items, claimed)
+        top = next_ready(items, claimed, view)
         if top is None:
             return "no ready, unclaimed agent item"
         return (

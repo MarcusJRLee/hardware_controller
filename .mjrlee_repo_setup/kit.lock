@@ -1,5 +1,5 @@
 {
-  "kit_version": "f6bae71ad8445fdb",
+  "kit_version": "90bae504682ff672",
   "units": {
     "file:.mjrlee_repo_setup/hooks/default_branch_rule.py": "b7f677ba552a7536e40e9b3c59fa8adf8147836544045d0d80c9c7b12f975bc7",
     "file:.mjrlee_repo_setup/hooks/docker_labels.py": "2f0ad0482683b780f13b2455529291aed8a51087b2a38215f7b6befe6cda730f",
@@ -31,7 +31,7 @@
     "file:.mjrlee_repo_setup/hooks/warn_markdown_placement.py": "48aaf4e88c228e72814189532378c3538f6108df1f9b6eac51e303bf51a9eed1",
     "file:.mjrlee_repo_setup/hooks/worktree_home.py": "c77c6b22a59ee290fa1c62ceae02cec55af7a6801602895118be6dd92a22c36d",
     "file:.mjrlee_repo_setup/hooks/worktree_rules.py": "5d4a6ff9077f082ec3ce42b29f7b7329ac5bdd5afadeaa8f40b8dbe16065ad93",
-    "file:.mjrlee_repo_setup/tools/roadmap.py": "83b16da0c7bf4790f4341f8f2e7d63b9dd3353f907d72c6051992c20a4318afb",
+    "file:.mjrlee_repo_setup/tools/roadmap.py": "9ff0f2669130734e075c4971eda6d567a49e805c7429c868f9c9973edb22a93d",
     "file:.mjrlee_repo_setup/lefthook.yml": "9c096ee92a929dcd7d27e76c53fd2ad7866ae7e64be9bc37b295adc9192b70d9",
     "file:.lefthook/post-checkout/mjrlee_setup_checkout.sh": "e9731d3280c42fb9246927581be2449726e7a9d83d45c90954ed83242b9657a2",
     "file:.lefthook/post-checkout/mjrlee_worktree_rules.sh": "7c5ae81ecc7e696e6a0a5a9b914b69c247ef3f352afedfbcca416ab43ac8202b",
@@ -43,7 +43,7 @@
     "file:.config/mise/conf.d/mjrlee_kit.toml": "132239157a4932782b996cb54f10eed9eaef5578c4be124402486f799ce84a92",
     "json:.claude/settings.json#hooks": "f14e7d88a4e4a32a77187c7b97456dfe29777d98f0f106e531762cbb13dc0a61",
     "file:.codex/hooks.json": "122761843440bafda4e8eb1fd96c06b6ca5e596fb2dc72c05d775841a52f0fac",
-    "block:AGENTS.md#rules": "3389bec39873b9b03ed8981ef119dd767875e9548b25954517246bc21776f1db",
+    "block:AGENTS.md#rules": "c2525d789d1b22d49e1569fc8756327c4d5091d3269c94ab638abfd612677820",
     "symlink:CLAUDE.md": "343aa72d3e62ce112e77d36c5f47ef60a01e8f81754e53ff63bf7f996d04799b",
     "lines:.gitignore": "5d2a0093e4abbcfb5a0bd558c192be774f5ac0035b5c5b0526ebc481687dce4d",
     "lines:lefthook.yml#extends": "ef238a97b59aaa465d7e73990f69354cbd56434a8a6836066af5cdebdd1a01d3"
