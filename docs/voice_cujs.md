@@ -50,6 +50,18 @@ events.
 | M19 | Ask Gemini without leaving the app | One final question; never touches the focused app; needs no Accessibility; opens a new chat; ⌘W closes one chat and ⌘⇧W the panel; zoom is remembered per site; placement prefers the lock point, then another display; Gemini changes fail to the clipboard. | `ask_gemini_controller_test`, `ask_gemini_panel_layout_test`, `ask_gemini_chat_test`, `coordinated_dictation_dispatcher_tests`, `action_executor_tests`, `application_runtime_test`, `profile_store_tests`, `application_preferences_test` |
 | M18 | Say a numbered term | "P R forty-four" becomes `PR 44` through a `{number}` Dictionary slot; numbers without its words stay spoken; casing and validation keep it. | `personal_dictionary_replacement_applier_test`, `spoken_number_parser_test`, `voice_casing_policy_test`, `local_ai_dictation_tests` |
 
+### On the physical Infinity
+
+Owner runs on the installed build with the Infinity attached. Pass means one
+cleanup, no stuck recording, and no duplicate insertion.
+
+| Handoff while dictating | Journeys | Result |
+| --- | --- | --- |
+| Switch Dictation Actions | H2, M1 | Passed 2026-11-17. |
+| Disconnect the Infinity | H1, H2 | Passed 2026-11-17. |
+| Switch Profiles | H3 | Passed 2026-11-17. |
+| Sleep and wake | H2, M1 | Passed 2026-11-17. |
+
 ## iOS
 
 | ID | Journey | Contract | Proof |

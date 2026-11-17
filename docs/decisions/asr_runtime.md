@@ -1,7 +1,7 @@
 # Speech recognition runtime
 
 - **Status:** Accepted
-- **Updated:** 2026-11-03
+- **Updated:** 2026-11-17
 - **Replaces:** 0042, 0055, 0056, 0060
 
 ## Context
@@ -96,7 +96,7 @@ Synthetic speech measures cost, not real dictation quality.
 | IPC             | Round trip p99 ≤ 10 ms for 30 s of audio. | p99 2.2 ms at 84 s. |
 | Recovery        | Killing the service mid-decode yields Apple text from the same recording. | SIGKILL returns `interrupted`; reload matches. |
 | Memory          | Service exit returns its footprint. | Not yet measured. |
-| Real speech     | Parakeet WER on the owner's recordings no worse than Apple's. | Open; a regression reopens this. |
+| Real speech     | Parakeet no worse than Apple on the owner's real dictation. | Closed 2026-11-17 by the owner's daily use: Apple is worse, so Parakeet stays default. Judged, not WER-measured; a regression reopens this. |
 
 ## Consequences
 
@@ -107,5 +107,5 @@ Synthetic speech measures cost, not real dictation quality.
   cannot load the service, so CI covers it with unit and protocol tests.
 - With transcribe.cpp, macOS 15–25 need no Speech Recognition permission.
 - Open gates and next work are roadmap items: `macos_live_decoding`,
-  `speech_service_gates`, `real_speech_comparison`, `moonshine_streaming_comparison`,
-  and `ios_physical_evidence`.
+  `speech_service_gates`, `moonshine_streaming_comparison`, and
+  `ios_physical_evidence`.
