@@ -13,7 +13,7 @@ Shipped behavior per journey is in [voice_cujs.md](voice_cujs.md).
 | HID dispatch | p50 ≤ 3 ms, p95 ≤ 8 ms, p99 ≤ 15 ms, max ≤ 30 ms over 10,000 transitions (max on dedicated hardware only); no loss or duplication. | p50 0.011, p95 0.016, p99 0.022, max 0.174 ms (`tenThousandTransitionSoakMeetsDispatchBudget`, every check). |
 | Microphone start | Warm max ≤ 250 ms. | p50 48 ms, max 87 ms over five starts. |
 | Local AI end to end | Warm release-to-insertion p95 ≤ 1.5 s. | Qwen 4B p50 1.108 s, p95 1.313 s over 19 samples. |
-| Local AI refinement | Warm final-text-to-refined p95 ≤ 1 s. | **Open:** Qwen 4B p95 15.7 s including one timeout. |
+| Local AI refinement | Warm final-text-to-refined p95 ≤ 1 s. | **Open:** Qwen 4B p95 15.7 s including one timeout; the output-token cap now bounds that case, unmeasured. |
 | Local AI safety | No casing, list, or protected-content violation reaches delivery. | Fixed 19-case corpus passes the typed gate for every provider. |
 | Local AI deadline | Fallback within 3 s after final speech. | Deterministic deadline and late-output tests. |
 | History search | Warm 5,000-session p95 ≤ 250 ms. | p95 2.6 ms. |

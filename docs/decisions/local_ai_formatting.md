@@ -1,7 +1,7 @@
 # Local AI Dictation and formatting
 
 - **Status:** Accepted
-- **Updated:** 2026-11-06
+- **Updated:** 2026-11-16
 - **Replaces:** 0020, 0021, 0053, 0054, 0058
 
 ## Context
@@ -97,9 +97,9 @@ Recognizers return "P R forty-four" for "PR 44". Five fixes were compared:
   available for copy.
 - Every provider request carries one output budget,
   `min(2048, max(128, characters / 2 + 128))` tokens (Ollama `num_predict`,
-  Apple `maximumResponseTokens`). Ollama otherwise generates without bound,
-  shifting its context, so a repetition loop ran into the 15-second transport
-  timeout. Reaching the budget is the typed `outputLimitReached` failure; a
+  Apple `maximumResponseTokens`). Without it Ollama generates without bound,
+  shifting its context; the prompt-6 4B timeout is hypothesized to be such a
+  repetition loop (unmeasured: the model was not re-run). Reaching the budget is the typed `outputLimitReached` failure; a
   transport timeout is the typed `timedOut` failure.
 - The 19-case semantic gate allows at most 15% semantic and 10% provider
   failures and zero casing, protected-token, or structure failures.
