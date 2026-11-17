@@ -70,7 +70,8 @@ Profile the runtime must adopt, or a typed `ProfileEditFailure`. The runtime
 saves atomically, installs the new resolver after cancelling active Actions,
 then publishes. Inactive edits never touch the resolver.
 
-**Local Dictation.** Begin captures the target and starts on-device
+**Local Dictation.** Begin captures the target, waking a browser's page
+accessibility and waiting up to 500 ms for its editor, and starts on-device
 recognition. Stable Accessibility ranges get reversible live text; other
 fields get final text; web and terminal targets get one guarded payload.
 Finalization has a five-second watchdog.

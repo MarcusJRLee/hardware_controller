@@ -215,6 +215,39 @@ struct TerminalTextDeliveryTests {
     #expect(inserter.inserted.isEmpty)
   }
 
+  /// A web caret is revalidated by text marker, because its numeric offset
+  /// also counts page text around the field.
+  @Test
+  func webWriterTrustsAnUnchangedMarkerOverAShiftedOffset() throws {
+    let inserter = TerminalRecordingInserter(
+      selectedRange: FocusedTextRange(location: 38, length: 0),
+      caretMarker: AccessibilityTextMarker("caret" as CFString)
+    )
+    try SafeTranscriptWriter(
+      targeter: TerminalFocusTargeter(isFocused: true),
+      inserter: inserter
+    ).insert("hello", into: webTarget(marker: "caret"))
+
+    #expect(inserter.inserted == ["hello"])
+  }
+
+  @Test
+  func webWriterRejectsAMovedMarkerOrAMissingOne() {
+    for current in [AccessibilityTextMarker("moved" as CFString), nil] {
+      let inserter = TerminalRecordingInserter(
+        selectedRange: FocusedTextRange(location: 10, length: 0),
+        caretMarker: current
+      )
+      #expect(throws: TranscriptionFailure.caretChanged) {
+        try SafeTranscriptWriter(
+          targeter: TerminalFocusTargeter(isFocused: true),
+          inserter: inserter
+        ).insert("hello", into: webTarget(marker: "caret"))
+      }
+      #expect(inserter.inserted.isEmpty)
+    }
+  }
+
   @Test
   func terminalWriterPostsFinalTextAsOneInsertion() throws {
     let inserter = TerminalRecordingInserter(
@@ -266,6 +299,19 @@ struct TerminalTextDeliveryTests {
         destination: .capturedProcess,
         to: processIdentifier
       )
+    )
+  }
+
+  private func webTarget(marker: String) -> FocusedTextTarget {
+    FocusedTextTarget(
+      element: AXUIElementCreateSystemWide(),
+      processIdentifier: 42,
+      applicationName: "Brave Browser",
+      deliveryCapability: .bufferedEvent(
+        anchor: FocusedTextRange(location: 10, length: 0),
+        destination: .focusedForeground
+      ),
+      caretMarker: AccessibilityTextMarker(marker as CFString)
     )
   }
 
@@ -340,10 +386,15 @@ private final class TerminalRecordingInserter:
 {
   private let lock = NSLock()
   private let range: FocusedTextRange
+  private let marker: AccessibilityTextMarker?
   private var storage: [String] = []
 
-  init(selectedRange: FocusedTextRange) {
+  init(
+    selectedRange: FocusedTextRange,
+    caretMarker: AccessibilityTextMarker? = nil
+  ) {
     range = selectedRange
+    marker = caretMarker
   }
 
   var inserted: [String] {
@@ -364,5 +415,11 @@ private final class TerminalRecordingInserter:
     in target: FocusedTextTarget
   ) -> FocusedTextRange? {
     range
+  }
+
+  func caretMarker(
+    in target: FocusedTextTarget
+  ) -> AccessibilityTextMarker? {
+    marker
   }
 }

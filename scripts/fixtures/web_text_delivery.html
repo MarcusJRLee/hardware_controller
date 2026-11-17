@@ -1,0 +1,24 @@
+<!doctype html>
+<!-- A Gemini-shaped prompt field for scripts/check_web_text_delivery.sh: a
+     rich-text contenteditable textbox focused on load. The title turns to
+     "ready" only once the field owns DOM focus, so the check never races the
+     page; window focus comes later, from the check. -->
+<html lang="en">
+<meta charset="utf-8">
+<title>loading</title>
+<div class="ql-editor" contenteditable="true" role="textbox"
+     aria-multiline="true" aria-label="Enter a prompt here"
+     style="min-height: 4em"><p><br></p></div>
+<script>
+  const field = document.querySelector('[role="textbox"]');
+  field.focus();
+  const markReady = () => {
+    if (document.activeElement === field) {
+      document.title = "ready";
+    } else {
+      setTimeout(markReady, 50);
+    }
+  };
+  markReady();
+</script>
+</html>

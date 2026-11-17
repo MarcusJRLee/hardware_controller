@@ -31,6 +31,7 @@ Evidence from a stale bundle is not evidence: rebuild before driving.
 | Launch smoke | `scripts/smoke_app.sh "dist/Hardware Controller.app" --demo` |
 | Installed signed app | `scripts/install_app.sh` (verifies, installs, launches, smokes, checks speech) |
 | Installed speech service | `scripts/check_speech_engine.sh` (load, decode, IPC, crash, recover) |
+| Web text delivery | `scripts/check_web_text_delivery.sh` (first press into a fresh Chromium page; focuses a throwaway window) |
 | iOS simulator | `scripts/check_ios.sh`, then the simulator tools for manual paths |
 
 Demo flags (combine freely):

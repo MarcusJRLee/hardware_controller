@@ -136,6 +136,13 @@ HC_RUN_IOS_ASR_PERFORMANCE=1 scripts/check_voice_asr_bridge.sh
 TEST_RUNNER_HC_RUN_KEYCHAIN_BENCHMARK=1 scripts/check_ios.sh
 ```
 
+First-press Dictation delivery into a Chromium web field (Brave, Chrome,
+Chromium, or Edge; about 4 s; opens and focuses a throwaway browser window):
+
+```bash
+scripts/check_web_text_delivery.sh
+```
+
 Real speech through the macOS recognizer:
 
 ```bash
