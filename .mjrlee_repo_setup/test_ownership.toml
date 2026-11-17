@@ -232,6 +232,10 @@ source = "Sources/HardwareControllerMac/speech_engine_self_check.swift"
 tests = ["Tests/HardwareControllerMacTests/transcribe_cpp_speech_engine_test.swift"]
 
 [[owner]]
+source = "Sources/HardwareControllerMac/focused_text_delivery_self_check.swift"
+tests = ["Tests/HardwareControllerMacTests/focused_text_target_tests.swift"]
+
+[[owner]]
 source = "Sources/hardware_controller_asr_service/main.swift"
 tests = ["Tests/hardware_controller_asr_service_kit_tests/asr_service_core_test.swift"]
 
@@ -322,6 +326,11 @@ reason = "Gate entry point; runs other checks."
 path = "scripts/check_speech_engine.sh"
 kind = "thin wrapper"
 reason = "Runs the installed app's speech self-check, which is the test."
+
+[[exempt]]
+path = "scripts/check_web_text_delivery.sh"
+kind = "thin wrapper"
+reason = "Runs the installed app's web text delivery self-check, which is the test."
 
 [[exempt]]
 path = "scripts/build_app.sh"

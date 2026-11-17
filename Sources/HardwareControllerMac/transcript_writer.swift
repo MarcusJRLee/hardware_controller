@@ -17,9 +17,19 @@ public protocol FocusedTextInserting: Sendable {
     _ range: FocusedTextRange,
     in target: FocusedTextTarget
   ) -> Bool
+
+  func caretMarker(
+    in target: FocusedTextTarget
+  ) -> AccessibilityTextMarker?
 }
 
 extension FocusedTextInserting {
+  public func caretMarker(
+    in target: FocusedTextTarget
+  ) -> AccessibilityTextMarker? {
+    nil
+  }
+
   public func selectedRange(
     in target: FocusedTextTarget
   ) -> FocusedTextRange? {
@@ -300,6 +310,18 @@ public struct AdaptiveFocusedTextInserter:
   ) -> Bool {
     accessibility.select(range, in: target)
   }
+
+  public func caretMarker(
+    in target: FocusedTextTarget
+  ) -> AccessibilityTextMarker? {
+    let operation = {
+      AccessibilityFocusedTextTargeting.caretMarker(of: target.element)
+    }
+    guard target.processIdentifier == getpid(), !Thread.isMainThread else {
+      return operation()
+    }
+    return DispatchQueue.main.sync(execute: operation)
+  }
 }
 
 public protocol TranscriptWriting: Sendable {
@@ -352,7 +374,13 @@ public struct SafeTranscriptWriter<
       target.deliveryCapability
     {
       try validateOwnership(of: target)
-      guard inserter.selectedRange(in: target) == anchor else {
+      let caretIsUnchanged =
+        if let marker = target.caretMarker {
+          inserter.caretMarker(in: target) == marker
+        } else {
+          inserter.selectedRange(in: target) == anchor
+        }
+      guard caretIsUnchanged else {
         throw TranscriptionFailure.caretChanged
       }
       guard inserter.insert(text, into: target) else {

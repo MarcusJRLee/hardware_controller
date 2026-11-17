@@ -61,7 +61,8 @@ struct FocusedTextTargetTests {
       deliveryCapability: .bufferedEvent(
         anchor: anchor,
         destination: .focusedForeground
-      )
+      ),
+      caretMarker: AccessibilityTextMarker("caret" as CFString)
     )
 
     let guarded = try target.guardedDeliveryCopy()
@@ -74,6 +75,7 @@ struct FocusedTextTargetTests {
         )
     )
     #expect(guarded.guardsCapturedCaret)
+    #expect(guarded.caretMarker == target.caretMarker)
   }
 
   @Test
@@ -117,29 +119,73 @@ struct FocusedTextTargetTests {
     )
   }
 
-  /// Exercises semantic web-target capture against a real focused field.
-  @Test(
-    .enabled(
-      if:
-        ProcessInfo.processInfo.environment[
-          "HC_RUN_WEB_TARGET_INTEGRATION"
-        ] == "1"
+  @Test
+  func captureSettlingWakesOnceThenWaitsForAnEditableField() throws {
+    var clock = SettlingClock()
+    var reads = 0
+    var wakes = 0
+    let target = try FocusedTextCaptureSettling.standard.capture(
+      now: { clock.now },
+      sleep: { clock.advance($0) },
+      wake: { wakes += 1 },
+      attempt: { () -> FocusedTextCaptureAttempt<Int> in
+        reads += 1
+        return reads < 4 ? .settling : .captured(reads)
+      }
     )
-  )
-  func focusedWebContentUsesForegroundBufferedDelivery()
-    throws
-  {
-    let target =
-      try AccessibilityFocusedTextTargeting().capture()
-    guard
-      case .bufferedEvent(_, .focusedForeground) =
-        target.deliveryCapability
-    else {
-      Issue.record(
-        "The focused target was not editable web content."
+
+    #expect(target == 4)
+    #expect(wakes == 1)
+    #expect(clock.slept == .milliseconds(20))
+  }
+
+  @Test
+  func captureSettlingNeverWakesAReadyField() throws {
+    var clock = SettlingClock()
+    var wakes = 0
+    let target = try FocusedTextCaptureSettling.standard.capture(
+      now: { clock.now },
+      sleep: { clock.advance($0) },
+      wake: { wakes += 1 },
+      attempt: { () -> FocusedTextCaptureAttempt<Int> in .captured(1) }
+    )
+
+    #expect(target == 1)
+    #expect(wakes == 0)
+    #expect(clock.slept == .zero)
+  }
+
+  @Test
+  func captureSettlingFailsOnceTheBoundPasses() {
+    var clock = SettlingClock()
+    #expect(throws: TranscriptionFailure.noFocusedTextField) {
+      try FocusedTextCaptureSettling.standard.capture(
+        now: { clock.now },
+        sleep: { clock.advance($0) },
+        wake: {},
+        attempt: { () -> FocusedTextCaptureAttempt<Int> in .settling }
       )
-      return
     }
+    #expect(clock.slept == FocusedTextCaptureSettling.standard.timeout)
+  }
+
+  @Test
+  func captureSettlingNeverRetriesADefinitiveFailure() {
+    var clock = SettlingClock()
+    var reads = 0
+    #expect(throws: TranscriptionFailure.secureTextField) {
+      try FocusedTextCaptureSettling.standard.capture(
+        now: { clock.now },
+        sleep: { clock.advance($0) },
+        wake: {},
+        attempt: { () throws -> FocusedTextCaptureAttempt<Int> in
+          reads += 1
+          throw TranscriptionFailure.secureTextField
+        }
+      )
+    }
+    #expect(reads == 1)
+    #expect(clock.slept == .zero)
   }
 
   @Test
@@ -177,5 +223,19 @@ struct FocusedTextTargetTests {
     )
 
     #expect(point == CGPoint(x: 122, y: 572))
+  }
+}
+
+/// A manual clock: only the settle loop's own sleeps move time forward.
+private struct SettlingClock {
+  let start = ContinuousClock.now
+  var slept: Duration = .zero
+
+  var now: ContinuousClock.Instant {
+    start + slept
+  }
+
+  mutating func advance(_ duration: Duration) {
+    slept += duration
   }
 }

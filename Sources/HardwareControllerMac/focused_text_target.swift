@@ -13,6 +13,28 @@ public struct FocusedTextRange: Equatable, Sendable {
   }
 }
 
+/// An opaque caret position from `AXSelectedTextMarkerRange`.
+///
+/// Web engines number a caret by text offsets that also count text around
+/// the field, such as a placeholder, so an empty Gemini prompt reports 10
+/// and then 38 while its caret never moves. Text markers name the caret's
+/// node and offset instead; they stay equal across those page changes and
+/// change when the caret moves. Equality is `CFEqual`.
+public struct AccessibilityTextMarker: Equatable, @unchecked Sendable {
+  let value: CFTypeRef
+
+  init(_ value: CFTypeRef) {
+    self.value = value
+  }
+
+  public static func == (
+    lhs: AccessibilityTextMarker,
+    rhs: AccessibilityTextMarker
+  ) -> Bool {
+    CFEqual(lhs.value, rhs.value)
+  }
+}
+
 public enum BufferedTextEventDestination:
   Equatable,
   Sendable
@@ -166,6 +188,9 @@ public final class FocusedTextTarget:
   public let supportsMultilineText: Bool
   public let selectedRange: FocusedTextRange?
   public let deliveryCapability: FocusedTextDeliveryCapability
+  /// The caret as a text marker, when the target exposes one; delivery
+  /// revalidates it in place of the numeric anchor.
+  let caretMarker: AccessibilityTextMarker?
   let guardsCapturedCaret: Bool
   let element: AXUIElement
 
@@ -179,6 +204,7 @@ public final class FocusedTextTarget:
     selectedRange: FocusedTextRange? = nil,
     deliveryCapability:
       FocusedTextDeliveryCapability = .finalOnly,
+    caretMarker: AccessibilityTextMarker? = nil,
     guardsCapturedCaret: Bool = false
   ) {
     self.element = element
@@ -189,6 +215,7 @@ public final class FocusedTextTarget:
     self.supportsMultilineText = supportsMultilineText
     self.selectedRange = selectedRange
     self.deliveryCapability = deliveryCapability
+    self.caretMarker = caretMarker
     self.guardsCapturedCaret = guardsCapturedCaret
   }
 
@@ -231,6 +258,7 @@ public final class FocusedTextTarget:
       supportsMultilineText: supportsMultilineText,
       selectedRange: selectedRange,
       deliveryCapability: deliveryCapability,
+      caretMarker: caretMarker,
       guardsCapturedCaret: true
     )
   }
@@ -252,17 +280,99 @@ extension FocusedTextTargeting {
   }
 }
 
+/// One read of the focused element during capture.
+enum FocusedTextCaptureAttempt<Target> {
+  case captured(Target)
+  /// No editable field is exposed yet; a later read may find one.
+  case settling
+}
+
+/// Wakes on-demand page accessibility, then bounds the wait for an editor.
+///
+/// Chromium-family browsers build a page's accessibility tree only after an
+/// application-level request and expose it asynchronously. Until then the
+/// app reports no focus, a bare group, or the page's web area, so the first
+/// press after the browser started, or after it dropped an idle tree, found
+/// no field while the next press worked. The first settling read therefore
+/// calls `wake` once, then capture re-reads until an editor appears or
+/// `timeout` passes. Definitive failures, such as a secure field or an
+/// existing selection, still throw at once.
+struct FocusedTextCaptureSettling {
+  static let standard = FocusedTextCaptureSettling(
+    timeout: .milliseconds(500),
+    pollInterval: .milliseconds(10)
+  )
+
+  let timeout: Duration
+  let pollInterval: Duration
+
+  func capture<Target>(
+    now: () -> ContinuousClock.Instant = { ContinuousClock.now },
+    sleep: (Duration) -> Void = { Thread.sleep(forTimeInterval: $0.seconds) },
+    wake: () -> Void,
+    attempt: () throws -> FocusedTextCaptureAttempt<Target>
+  ) throws -> Target {
+    let deadline = now() + timeout
+    var hasWoken = false
+    while true {
+      if case .captured(let target) = try attempt() {
+        return target
+      }
+      if !hasWoken {
+        hasWoken = true
+        wake()
+        continue
+      }
+      guard now() < deadline else {
+        throw TranscriptionFailure.noFocusedTextField
+      }
+      sleep(pollInterval)
+    }
+  }
+}
+
+extension Duration {
+  fileprivate var seconds: TimeInterval {
+    TimeInterval(components.seconds)
+      + TimeInterval(components.attoseconds) / 1e18
+  }
+}
+
 public struct AccessibilityFocusedTextTargeting:
   FocusedTextTargeting
 {
   public init() {}
 
+  /// Captures synchronously so commands queued behind a press still run in
+  /// order; the bounded settle wait is no longer than a slow Accessibility
+  /// call already is.
   public func capture() throws -> FocusedTextTarget {
     guard AccessibilityPermission.isTrusted else {
       throw TranscriptionFailure.noFocusedTextField
     }
+    return try FocusedTextCaptureSettling.standard.capture(
+      wake: wakeOnDemandAccessibility,
+      attempt: captureOnce
+    )
+  }
+
+  /// Asks the frontmost app for its role, the application-level request
+  /// that makes Chromium-family browsers build page accessibility; asking
+  /// for the focused element alone never does. Other apps answer it as a
+  /// plain read.
+  private func wakeOnDemandAccessibility() {
+    guard let application = NSWorkspace.shared.frontmostApplication else {
+      return
+    }
+    _ = attribute(
+      kAXRoleAttribute,
+      from: AXUIElementCreateApplication(application.processIdentifier)
+    )
+  }
+
+  private func captureOnce() throws -> FocusedTextCaptureAttempt<FocusedTextTarget> {
     guard let element = focusedElement() else {
-      throw TranscriptionFailure.noFocusedTextField
+      return .settling
     }
     if attribute(
       kAXSubroleAttribute,
@@ -302,16 +412,24 @@ public struct AccessibilityFocusedTextTargeting:
       contextLabels: context.labels,
       contextRoles: context.roles
     )
+    let destination = FocusedTextDeliveryPolicy.bufferedEventDestination(
+      for: metadata
+    )
+    // A terminal consumes events without exposing settable text. Everything
+    // else, including web content, must expose an editable selection: a web
+    // area or group without one is a page that has no editable focus yet.
+    guard
+      destination == .capturedProcess
+        || isSettable(kAXSelectedTextAttribute, on: element)
+    else {
+      return .settling
+    }
     let deliveryCapability: FocusedTextDeliveryCapability
-    if let destination =
-      FocusedTextDeliveryPolicy.bufferedEventDestination(
-        for: metadata
-      )
-    {
-      guard
-        let range = selectedTextRange(from: element),
-        range.length == 0
-      else {
+    if let destination {
+      guard let range = selectedTextRange(from: element) else {
+        return .settling
+      }
+      guard range.length == 0 else {
         throw TranscriptionFailure.noFocusedTextField
       }
       deliveryCapability = .bufferedEvent(
@@ -319,17 +437,6 @@ public struct AccessibilityFocusedTextTargeting:
         destination: destination
       )
     } else {
-      var isSettable = DarwinBoolean(false)
-      guard
-        AXUIElementIsAttributeSettable(
-          element,
-          kAXSelectedTextAttribute as CFString,
-          &isSettable
-        ) == .success,
-        isSettable.boolValue
-      else {
-        throw TranscriptionFailure.noFocusedTextField
-      }
       deliveryCapability =
         liveCompositionAnchor(from: element).map {
           FocusedTextDeliveryCapability
@@ -337,20 +444,48 @@ public struct AccessibilityFocusedTextTargeting:
         } ?? .finalOnly
     }
 
-    return FocusedTextTarget(
-      element: element,
-      processIdentifier: processIdentifier,
-      applicationName: applicationName,
-      applicationBundleIdentifier: metadata.applicationBundleIdentifier,
-      role: metadata.role,
-      supportsMultilineText:
-        metadata.role == kAXTextAreaRole as String
-        && FocusedTextDeliveryPolicy.bufferedEventDestination(
-          for: metadata
-        ) == nil,
-      selectedRange: selectedTextRange(from: element),
-      deliveryCapability: deliveryCapability
-    )
+    return .captured(
+      FocusedTextTarget(
+        element: element,
+        processIdentifier: processIdentifier,
+        applicationName: applicationName,
+        applicationBundleIdentifier: metadata.applicationBundleIdentifier,
+        role: metadata.role,
+        supportsMultilineText:
+          metadata.role == kAXTextAreaRole as String
+          && destination == nil,
+        selectedRange: selectedTextRange(from: element),
+        deliveryCapability: deliveryCapability,
+        caretMarker: destination == .focusedForeground
+          ? AccessibilityFocusedTextTargeting.caretMarker(of: element) : nil
+      ))
+  }
+
+  static func caretMarker(of element: AXUIElement) -> AccessibilityTextMarker? {
+    var value: CFTypeRef?
+    guard
+      AXUIElementCopyAttributeValue(
+        element,
+        "AXSelectedTextMarkerRange" as CFString,
+        &value
+      ) == .success,
+      let value
+    else {
+      return nil
+    }
+    return AccessibilityTextMarker(value)
+  }
+
+  private func isSettable(
+    _ attribute: String,
+    on element: AXUIElement
+  ) -> Bool {
+    var isSettable = DarwinBoolean(false)
+    return AXUIElementIsAttributeSettable(
+      element,
+      attribute as CFString,
+      &isSettable
+    ) == .success && isSettable.boolValue
   }
 
   public func isStillFocused(
@@ -541,19 +676,10 @@ public struct AccessibilityFocusedTextTargeting:
   private func liveCompositionAnchor(
     from element: AXUIElement
   ) -> FocusedTextRange? {
-    var isSettable = DarwinBoolean(false)
     guard
-      AXUIElementIsAttributeSettable(
-        element,
-        kAXSelectedTextRangeAttribute as CFString,
-        &isSettable
-      ) == .success,
-      isSettable.boolValue
+      isSettable(kAXSelectedTextRangeAttribute, on: element),
+      let range = selectedTextRange(from: element)
     else {
-      return nil
-    }
-
-    guard let range = selectedTextRange(from: element) else {
       return nil
     }
     guard range.length == 0 else {
