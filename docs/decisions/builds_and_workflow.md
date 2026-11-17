@@ -1,7 +1,7 @@
 # Builds, versions, and workflow
 
 - **Status:** Accepted
-- **Updated:** 2026-11-06 (added serial landing and toolchain drift policy)
+- **Updated:** 2026-11-17 (Markdown-only changes skip the install)
 - **Replaces:** 0019, 0023, 0051, 0052, 0059
 
 ## Context
@@ -33,7 +33,9 @@ passed locally and failed only in CI.
 - After every repository change, `scripts/install_app.sh` builds with the
   approved Apple Development identity, quits and replaces the single
   `/Applications/Hardware Controller.app`, verifies it, and launches that
-  bundle. Ad-hoc signatures are for disposable local builds only.
+  bundle. A change that touches only Markdown skips it: no Markdown enters
+  the bundle, so the install would be identical. Ad-hoc signatures are for
+  disposable local builds only.
 - `scripts/local_env.sh` resolves `.env.local`: `HC_ENV_FILE`, else the
   checkout's own, else the main checkout's, so builds from linked worktrees
   sign without copying private values.
