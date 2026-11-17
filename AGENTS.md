@@ -196,7 +196,8 @@
   verified against `HC_EXPECTED_TEAM_ID`; never install an ad-hoc build.
 - After every repository change, run `scripts/install_app.sh`. It replaces the
   single canonical `/Applications/Hardware Controller.app`, verifies it, and
-  launches that exact bundle; do not install any other way.
+  launches that exact bundle; do not install any other way. Skip it for a
+  change that touches only Markdown, which never enters the bundle.
 - Never change `CFBundleShortVersionString` or `CFBundleVersion`, run
   `scripts/build_release.sh`, or create a tag, DMG, GitHub Release, or release
   record without explicit approval of that exact version.
