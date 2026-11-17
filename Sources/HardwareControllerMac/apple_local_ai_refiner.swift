@@ -117,7 +117,9 @@ public actor AppleFoundationModelRefiner: TranscriptRefining {
           to: prompt.prompt,
           generating: AppleRefinementOutput.self,
           options: Self.greedyOptions(
-            maximumResponseTokens: Self.maximumTokens(for: request.transcript)
+            maximumResponseTokens: LocalAIOutputTokenBudget.maximumTokens(
+              for: request.transcript
+            )
           )
         )
         guard response.content.blocks.count == 1,
@@ -233,10 +235,6 @@ public actor AppleFoundationModelRefiner: TranscriptRefining {
     #else
       GenerationOptions(sampling: .greedy, maximumResponseTokens: maximumResponseTokens)
     #endif
-  }
-
-  static func maximumTokens(for transcript: String) -> Int {
-    min(2_048, max(128, transcript.count / 2 + 128))
   }
 }
 

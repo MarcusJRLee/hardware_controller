@@ -45,6 +45,15 @@ public struct LocalAIPrompt: Equatable, Sendable {
   }
 }
 
+/// Every provider caps generated tokens so a repetition loop ends as a typed
+/// failure at a size-proportional cost instead of running until a transport
+/// timeout. The floor covers the block envelope for very short transcripts.
+public enum LocalAIOutputTokenBudget {
+  public static func maximumTokens(for transcript: String) -> Int {
+    min(2_048, max(128, transcript.count / 2 + 128))
+  }
+}
+
 public enum LocalAIPromptBuildingError: Error, Equatable, Sendable {
   case encodingFailed
   case requestTooLarge

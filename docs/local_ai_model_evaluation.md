@@ -13,6 +13,10 @@ HC_LOCAL_AI_EVALUATION_MODEL=qwen3.5:4b \
   swift test --filter LocalAIModelEvaluationTest
 ```
 
+Each run times six corpus rounds (114 warm samples, so p95 and p99 are not the
+maximum) and 20 fresh preparations, and records each outcome's prompt and
+generated token counts.
+
 The sanitized 19-case corpus covers prose, messages, email, typed lists,
 self-correction, fillers, punctuation, technical terms, protected entities,
 code-like text, prompt injection, Spanish, target capability, nearby context,
@@ -47,13 +51,19 @@ Samples include fixed-loopback health and digest validation.
 | Resident model allocation | 5.74 GB | 8.52 GB | OS-managed |
 | Model file | 3.39 GB | 6.59 GB | OS-managed |
 
-The 4B maximum is one fixed-loopback provider timeout. The production controller
-has a separate three-second preparation-plus-generation deadline, so it would
-deliver deterministic Edited fallback earlier. The prompt-6 result does not
+The prompt-6 run below predates the multi-round harness: 19 warm and 5 fresh
+samples, so its p95 is its maximum.
+
+The 4B maximum is one fixed-loopback provider timeout. Ollama requests then
+carried no output cap, so a repetition loop could generate until the 15-second
+transport timeout; every request now carries the shared output budget, which
+ends such a loop as `outputLimitReached`. That fix is not yet measured. The
+production controller has a separate three-second preparation-plus-generation
+deadline, so it would deliver deterministic Edited fallback earlier. The prompt-6 result does not
 meet the legacy one-second p95 refinement target.
 
-Each Ollama preparation distribution uses five
-unloaded-model→new-client→prepare samples and confirms unload between samples.
+Each Ollama preparation sample is
+unloaded-model→new-client→prepare and confirms unload before the next.
 It does not flush the macOS file cache. Apple's row measures five fresh sessions;
 the OS-managed model cannot be explicitly unloaded.
 

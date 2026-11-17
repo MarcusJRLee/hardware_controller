@@ -131,6 +131,57 @@ struct OllamaLocalAIRefinerTests {
     #expect(json["keep_alive"] as? Int == -1)
     let options = try #require(json["options"] as? [String: Any])
     #expect(options["num_ctx"] as? Int == 2_048)
+    #expect(
+      options["num_predict"] as? Int
+        == LocalAIOutputTokenBudget.maximumTokens(for: "um polished text")
+    )
+  }
+
+  @Test
+  func repetitionLoopStopsAtTheOutputBudgetAsATypedFailure() async throws {
+    let transport = RepeatingOllamaTransport()
+    let refiner = OllamaLocalAIRefiner(
+      baseURL: try loopbackURL(),
+      transport: transport
+    )
+    var settings = LocalAISettings.default
+    settings.ollamaModel.expectedDigest = "digest-4b"
+
+    try await refiner.prepare(settings: settings)
+    await #expect(throws: LocalAIRefinementFailure.outputLimitReached) {
+      _ = try await refiner.refine(request(), settings: settings)
+    }
+
+    let budgets = await transport.generationBudgets
+    #expect(
+      budgets == [
+        nil,
+        LocalAIOutputTokenBudget.maximumTokens(for: "format this text"),
+      ]
+    )
+  }
+
+  @Test
+  func transportTimeoutIsATypedTimeout() async throws {
+    let transport = StubOllamaTransport(
+      responses: [
+        response(#"{"version":"0.12.0"}"#),
+        response(
+          #"{"models":[{"name":"qwen3.5:4b","size":3400000000,"digest":"digest-4b"}]}"#
+        ),
+      ],
+      thenFailing: URLError(.timedOut)
+    )
+    let refiner = OllamaLocalAIRefiner(
+      baseURL: try loopbackURL(),
+      transport: transport
+    )
+    var settings = LocalAISettings.default
+    settings.ollamaModel.expectedDigest = "digest-4b"
+
+    await #expect(throws: LocalAIRefinementFailure.timedOut) {
+      _ = try await refiner.refine(request(), settings: settings)
+    }
   }
 
   @Test
@@ -378,15 +429,23 @@ struct OllamaLocalAIRefinerTests {
 
 private actor StubOllamaTransport: OllamaTransporting {
   private var responses: [OllamaHTTPResponse]
+  private let exhaustedFailure: URLError?
   private(set) var requests: [URLRequest] = []
 
-  init(responses: [OllamaHTTPResponse]) {
+  init(
+    responses: [OllamaHTTPResponse],
+    thenFailing exhaustedFailure: URLError? = nil
+  ) {
     self.responses = responses
+    self.exhaustedFailure = exhaustedFailure
   }
 
   func send(_ request: URLRequest) async throws -> OllamaHTTPResponse {
     requests.append(request)
     guard !responses.isEmpty else {
+      if let exhaustedFailure {
+        throw exhaustedFailure
+      }
       throw LocalAIRefinementFailure.providerUnavailable("No response.")
     }
     return responses.removeFirst()
@@ -396,5 +455,63 @@ private actor StubOllamaTransport: OllamaTransporting {
 private actor FailingOllamaTransport: OllamaTransporting {
   func send(_ request: URLRequest) async throws -> OllamaHTTPResponse {
     throw URLError(.cannotConnectToHost)
+  }
+}
+
+/// A model stuck in a repetition loop: generation ends only at `num_predict`,
+/// as Ollama reports with `done_reason` `length`.
+private actor RepeatingOllamaTransport: OllamaTransporting {
+  private(set) var generationBudgets: [Int?] = []
+
+  func send(_ request: URLRequest) async throws -> OllamaHTTPResponse {
+    switch request.url?.path {
+    case "/api/version":
+      return json(#"{"version":"0.12.0"}"#)
+    case "/api/tags":
+      return json(
+        #"{"models":[{"name":"qwen3.5:4b","size":3400000000,"digest":"digest-4b"}]}"#
+      )
+    case "/api/generate":
+      let body = try JSONDecoder().decode(
+        GenerateBody.self,
+        from: request.httpBody ?? Data()
+      )
+      let budget = body.options?.maximumOutputTokens
+      generationBudgets.append(budget)
+      guard body.format != nil else {
+        return json(#"{"response":"","done":true}"#)
+      }
+      guard let budget else {
+        Issue.record("An unbounded request would loop forever.")
+        throw URLError(.timedOut)
+      }
+      let looped = String(repeating: " and", count: budget)
+      return json(
+        #"{"response":"{\"blocks\":[{\"kind\":\"paragraph\",\"items\":[\"\#(looped)","done":true,"done_reason":"length","eval_count":\#(budget)}"#
+      )
+    default:
+      throw URLError(.badURL)
+    }
+  }
+
+  private func json(_ text: String) -> OllamaHTTPResponse {
+    OllamaHTTPResponse(statusCode: 200, data: Data(text.utf8))
+  }
+
+  private struct GenerateBody: Decodable {
+    let format: Format?
+    let options: Options?
+
+    struct Format: Decodable {
+      let type: String
+    }
+
+    struct Options: Decodable {
+      let maximumOutputTokens: Int?
+
+      enum CodingKeys: String, CodingKey {
+        case maximumOutputTokens = "num_predict"
+      }
+    }
   }
 }

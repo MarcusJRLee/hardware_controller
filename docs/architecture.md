@@ -79,7 +79,8 @@ Finalization has a five-second watchdog.
 begin, off the hot path. Raw text → exact spoken edits → Dictionary
 replacements, including `{number}` slots → typed paragraph/list blocks from the provider → casing and list
 normalization → validation of protected tokens and meaning → one rendering for
-the captured target. Preparation plus generation share a three-second deadline;
+the captured target. Preparation plus generation share a three-second deadline,
+and every provider request carries a size-proportional output-token budget;
 on any failure the Edited text is delivered once if the target is still valid.
 A bounded tee writes the CAF on a utility task; after delivery the session
 commits Raw, Edited, Formatted, Delivered, and evidence to SQLite

@@ -285,6 +285,8 @@ public struct LocalAIRefinementResponse: Equatable, Sendable {
   public let modelIdentifier: String
   public let modelLoadNanoseconds: UInt64?
   public let generationNanoseconds: UInt64?
+  public let promptTokenCount: Int?
+  public let promptEvaluationNanoseconds: UInt64?
   public let generatedTokenCount: Int?
   public let tokenGenerationNanoseconds: UInt64?
 
@@ -294,6 +296,8 @@ public struct LocalAIRefinementResponse: Equatable, Sendable {
     modelIdentifier: String,
     modelLoadNanoseconds: UInt64? = nil,
     generationNanoseconds: UInt64? = nil,
+    promptTokenCount: Int? = nil,
+    promptEvaluationNanoseconds: UInt64? = nil,
     generatedTokenCount: Int? = nil,
     tokenGenerationNanoseconds: UInt64? = nil
   ) {
@@ -302,6 +306,8 @@ public struct LocalAIRefinementResponse: Equatable, Sendable {
     self.modelIdentifier = modelIdentifier
     self.modelLoadNanoseconds = modelLoadNanoseconds
     self.generationNanoseconds = generationNanoseconds
+    self.promptTokenCount = promptTokenCount
+    self.promptEvaluationNanoseconds = promptEvaluationNanoseconds
     self.generatedTokenCount = generatedTokenCount
     self.tokenGenerationNanoseconds = tokenGenerationNanoseconds
   }
@@ -313,6 +319,8 @@ public enum LocalAIRefinementFailure: Error, Equatable, Sendable {
   case modelMissing(String)
   case modelDigestChanged(expected: String, actual: String)
   case timedOut
+  /// The provider stopped at its output budget, usually a repetition loop.
+  case outputLimitReached
   case invalidResponse(String)
   case requestTooLarge
   case generationFailed(String)

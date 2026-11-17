@@ -12,5 +12,6 @@ Committed work is one `<slug>.md` per outcome here; the generated, gitignored
 
 | Idea | Trigger |
 | --- | --- |
+| Local AI refinement meets its 1 s warm p95 (pick a model, measure with the ≥100-sample harness). | Ser wants Local AI Dictation fast enough for daily use. |
 | Remote providers for Local AI or speech. | A new privacy decision approves a remote-capable provider ([Local-only boundary](../decisions/local_only_boundary.md)). |
 | Build Android, Windows, or Linux apps on the Rust core. | A platform is chosen ([seams](../decisions/portable_voice_engine.md#platform-seams)). |

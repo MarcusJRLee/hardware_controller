@@ -1230,7 +1230,9 @@ extension LocalAIRefinementFailure {
     case .modelDigestChanged:
       "The selected Ollama model changed and must be approved again."
     case .timedOut:
-      "The selected model exceeded the three-second refinement limit."
+      "The selected model did not finish before its deadline."
+    case .outputLimitReached:
+      "The selected model exceeded its output limit."
     case .invalidResponse(let detail):
       detail
     case .requestTooLarge:
