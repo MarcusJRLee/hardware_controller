@@ -36,6 +36,12 @@ are needed only where the repo's workflow differs from the defaults:
     # `gate_report.py` warns; it never blocks a push. Default: 300.
     budget_seconds = 600
 
+    [repo_health]
+    # mjrlee_setup's daily repo_health job checks every kit repo, opening fix
+    # PRs for Dependabot alerts, a stale kit, and settings drift. `false` opts
+    # this repo out. Default: true.
+    enabled = false
+
 Check it from the repo root (exit 1 on an error, an undeclared phase, or
 undeclared quiet hours):
 
@@ -68,6 +74,7 @@ _TABLES: Final[Mapping[str, frozenset[str] | None]] = {
     "launch": frozenset({"phase"}),
     "quiet_hours": frozenset({"timezone", "windows"}),
     "pre_push": frozenset({"budget_seconds"}),
+    "repo_health": frozenset({"enabled"}),
 }
 PHASES: Final = ("pre_launch", "public")
 # Five minutes: half the 10-minute cap on an agent's foreground shell command,
@@ -119,6 +126,8 @@ class RepoConfig:
     quiet_hours: QuietHours | None = None
     # Soft wall-clock budget for the whole pre-push hook, in seconds.
     pre_push_budget: int = DEFAULT_PRE_PUSH_BUDGET
+    # Whether mjrlee_setup's repo_health job checks and fixes this repo.
+    repo_health: bool = True
 
     @property
     def public(self) -> bool:
@@ -206,6 +215,14 @@ def _budget(table: Mapping[str, object]) -> int:
     return value
 
 
+def _repo_health(table: Mapping[str, object]) -> bool:
+    value = table.get("enabled", True)
+    if not isinstance(value, bool):
+        msg = f"{CONFIG}: `repo_health.enabled` must be true or false"
+        raise RepoConfigError(msg)
+    return value
+
+
 def _check_keys(document: Mapping[str, object]) -> None:
     for table, value in document.items():
         if table not in _TABLES:
@@ -242,6 +259,7 @@ def load(root: Path) -> RepoConfig:
         phase=_phase(document.get("launch")),
         quiet_hours=_quiet_hours(document.get("quiet_hours")),
         pre_push_budget=_budget(document.get("pre_push", {})),
+        repo_health=_repo_health(document.get("repo_health", {})),
     )
 
 
