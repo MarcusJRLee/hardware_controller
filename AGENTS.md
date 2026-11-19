@@ -95,9 +95,14 @@
   roll out through staged releases.
 - [Metrics] Dashboards are code; agents read metrics through an API or CLI.
 - [Git] Deliver every change through a PR from a dedicated branch; touch the
-  default branch or skip the PR only when the user explicitly approves.
-- [Git] A PR may stack on an unmerged PR's branch. Once the base squash-merges,
-  run `git rebase --onto origin/main <old base tip>` and
+  default branch or skip the PR only when the user explicitly approves. Merge a
+  PR only once its branch holds its base's latest commit, so its checks ran on
+  what merging produces; the kit's `tools/merge_pr.py`, named in `[replace]`,
+  enforces it.
+- [Git] A PR may stack on an unmerged PR's branch. Merge the base without
+  `--delete-branch`: GitHub's `delete_branch_on_merge` then retargets the
+  stacked PRs, while the flag closes them. Once the base squash-merges, run
+  `git rebase --onto origin/main <old base tip>` and
   `git push --force-with-lease`; the pre-push hook allows force pushes only to
   unprotected branches whose remote tip the branch already held.
 - [Git] Create worktrees only as `~/.worktrees/<repo>/<name>`, `<repo>` being

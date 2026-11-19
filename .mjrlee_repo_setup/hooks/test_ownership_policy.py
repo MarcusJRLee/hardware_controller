@@ -9,20 +9,18 @@ Every table is optional; unknown tables and keys are errors:
     source = "ios/App/"
     tests = "ios/AppTests/"
 
-    # A test elsewhere owns this source's behavior.
-    [[owner]]
-    source = "web/src/pages/home_page.tsx"
-    tests = ["web/src/prerender/render_site_test.tsx"]
-
     # `*` matches across `/`; a trailing `/` covers a whole directory.
     [[exempt]]
     path = "web/src/testing/"
     kind = "test support"
     reason = "Mocks and builders the tests import."  # Optional.
 
-A header marker exempts one file: within its first lines, after any comment
-prefix, the sentence `Test exemption: <kind>.`, optionally followed by detail.
-A kind is one of `test_conventions.KINDS`.
+Header markers sit in a source's first lines, after any comment prefix:
+
+- `Test exemption: <kind>.`, optionally followed by detail, exempts the file.
+  A kind is one of `test_conventions.KINDS`.
+- `Tested by: <repo-relative test path>.`, one line per test, names tests
+  elsewhere that cover the file, so the claim moves with the file.
 """
 
 from __future__ import annotations
@@ -39,9 +37,19 @@ from test_conventions import KINDS, Kind, TestRoot, matches
 
 CONFIG: Final = PurePosixPath(".mjrlee_repo_setup/test_ownership.toml")
 HEADER_LINES: Final = 15
-_MARKER: Final = re.compile(
-    r"^\s*(?:#|//|/\*+|\*|--)?\s*Test exemption:\s*(?P<kind>[^.]*)\.?"
+_PREFIX: Final = r"^\s*(?:#|//|/\*+|\*|--)?\s*"
+_MARKER: Final = re.compile(_PREFIX + r"Test exemption:\s*(?P<kind>[^.]*)\.?")
+# A path never ends in `.`, so the sentence's period is never part of it.
+_TESTED_BY: Final = re.compile(
+    _PREFIX + r"Tested by:\s*(?P<test>\S+?)\.?\s*(?:\*/)?\s*$"
 )
+# The kit replaced this table with `Tested by:` header lines.
+_MOVED_TABLES: Final[Mapping[str, str]] = {
+    "owner": (
+        "`[[owner]]` became `Tested by: <test>.` header lines; run the"
+        " mjrlee-repo-setup skill's scripts/owners_to_markers.py on this repo"
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -55,15 +63,8 @@ class Exemption:
 
 
 @dataclass(frozen=True)
-class Owner:
-    source: PurePosixPath
-    tests: tuple[PurePosixPath, ...]
-
-
-@dataclass(frozen=True)
 class Policy:
     roots: tuple[TestRoot, ...] = ()
-    owners: tuple[Owner, ...] = ()
     exemptions: tuple[Exemption, ...] = ()
     errors: tuple[str, ...] = ()
 
@@ -74,6 +75,14 @@ class MarkerError:
 
 
 @dataclass(frozen=True)
+class Header:
+    """What a source's header markers declare."""
+
+    kind: Kind | MarkerError | None = None
+    tests: tuple[PurePosixPath, ...] = ()
+
+
+@dataclass(frozen=True)
 class _Table:
     required: frozenset[str]
     optional: frozenset[str] = frozenset()
@@ -81,7 +90,6 @@ class _Table:
 
 _TABLES: Final[Mapping[str, _Table]] = {
     "test_root": _Table(frozenset({"source", "tests"})),
-    "owner": _Table(frozenset({"source", "tests"})),
     "exempt": _Table(frozenset({"path", "kind"}), frozenset({"reason"})),
 }
 
@@ -94,21 +102,26 @@ def unknown_kind(text: str) -> str:
     return f'unknown kind "{text}"; use one of: {", ".join(KINDS)}'
 
 
-def read_marker(path: Path) -> Kind | MarkerError | None:
-    """The file's header marker kind, an error for an unknown kind, or None."""
+def read_header(path: Path) -> Header:
+    """The markers in the file's first lines; empty when it is unreadable."""
 
     try:
         with path.open(encoding="utf-8", errors="replace") as handle:
             head = list(islice(handle, HEADER_LINES))
     except OSError:
-        return None
+        return Header()
+    kind: Kind | MarkerError | None = None
     for line in head:
         found = _MARKER.match(line)
-        if found is None:
-            continue
-        kind = found.group("kind").strip()
-        return kind if is_kind(kind) else MarkerError(unknown_kind(kind))
-    return None
+        if found is not None and kind is None:
+            text = found.group("kind").strip()
+            kind = text if is_kind(text) else MarkerError(unknown_kind(text))
+    tests = tuple(
+        PurePosixPath(found.group("test"))
+        for line in head
+        if (found := _TESTED_BY.match(line)) is not None
+    )
+    return Header(kind, tests)
 
 
 def _text(value: object) -> str | None:
@@ -152,7 +165,9 @@ def _entries(
 
 def parse_policy(document: Mapping[str, object]) -> Policy:
     errors = [
-        f"{CONFIG}: unknown table `{key}`"
+        f"{CONFIG}: {_MOVED_TABLES[key]}"
+        if key in _MOVED_TABLES
+        else f"{CONFIG}: unknown table `{key}`"
         for key in sorted(set(document) - set(_TABLES))
     ]
     roots: list[TestRoot] = []
@@ -166,21 +181,6 @@ def parse_policy(document: Mapping[str, object]) -> Policy:
             )
         else:
             roots.append(TestRoot(source, tests))
-    owners: list[Owner] = []
-    for index, entry in enumerate(_entries(document, "owner", errors)):
-        source = _text(entry["source"])
-        tests = _texts(entry["tests"])
-        if source is None or tests is None:
-            errors.append(
-                f"{CONFIG}: owner[{index}] needs a `source` path and a"
-                " non-empty `tests` list of paths"
-            )
-        elif any(owner.source == PurePosixPath(source) for owner in owners):
-            errors.append(f"{CONFIG}: owner {source} is listed twice")
-        else:
-            owners.append(
-                Owner(PurePosixPath(source), tuple(map(PurePosixPath, tests)))
-            )
     exemptions: list[Exemption] = []
     for index, entry in enumerate(_entries(document, "exempt", errors)):
         path = _text(entry["path"])
@@ -194,7 +194,7 @@ def parse_policy(document: Mapping[str, object]) -> Policy:
             errors.append(f"{CONFIG}: exempt {path} has an empty `reason`")
         else:
             exemptions.append(Exemption(path, kind, _text(reason)))
-    return Policy(tuple(roots), tuple(owners), tuple(exemptions), tuple(errors))
+    return Policy(tuple(roots), tuple(exemptions), tuple(errors))
 
 
 def load_policy(root: Path) -> Policy:

@@ -7,7 +7,7 @@ Every checked file is a test or a source. A source is tested by, in order:
 - test_root: a same-stem test under SwiftPM's `Tests/`, Cargo's `tests/`, or a
   `[[test_root]]` (Swift also takes `_tests` and `Tests` stems).
 - inline: a Rust `#[cfg(test)]` module in the source itself.
-- owner: an `[[owner]]` entry naming the tests that cover it.
+- owner: `Tested by: <test>.` header lines naming the tests that cover it.
 
 Otherwise it needs an exemption naming a kind: a header marker, an `[[exempt]]`
 glob, or a built-in path rule (declarations, generated, vendoring tools, tool
@@ -52,14 +52,14 @@ from test_ownership_policy import (
     MarkerError,
     Policy,
     load_policy,
-    read_marker,
+    read_header,
 )
 
 REPORT_VERSION: Final = 1
 GUIDANCE: Final = (
-    "Test ownership: add a test named for the source, or declare an owner, a"
-    f" test root, or an exemption in {CONFIG} or a `Test exemption: <kind>.`"
-    " header line"
+    "Test ownership: add a test named for the source, a `Tested by: <test>.`"
+    " or `Test exemption: <kind>.` header line, or a test root or exemption"
+    f" in {CONFIG}"
 )
 
 Role = Literal["test", "source"]
@@ -126,7 +126,6 @@ class _Context:
                 if matches(test_root.tests, rel):
                     stems[rel.stem].append(rel)
             self.stems[test_root] = stems
-        self.owners = {owner.source: owner for owner in policy.owners}
 
     def _is_test(self, rel: PurePosixPath) -> bool:
         return is_test_name(rel) or any(
@@ -165,28 +164,35 @@ def _source_decision(
     used: set[Exemption],
     problems: list[str],
 ) -> Decision:
-    marker = read_marker(context.root / rel)
+    header = read_header(context.root / rel)
+    marker = header.kind
     if isinstance(marker, MarkerError):
         problems.append(f"{rel}: test exemption marker has {marker.text}")
         marker = None
+    owned = header.tests
+    problems.extend(
+        f"{rel}: `Tested by:` names {test}, which is not a test file"
+        for test in owned
+        if test not in context.tests
+    )
     exemption = next(
         (e for e in context.policy.exemptions if e.covers(rel)), None
     )
     built_in = built_in_exemption(rel)
-    owner = context.owners.get(rel)
     natural = context.natural_tests(rel)
-    if marker is not None and (natural is not None or owner is not None):
+    if marker is not None and (natural is not None or owned):
         problems.append(
             f"{rel}: has a test, so its test exemption marker is redundant"
         )
     if natural is not None:
-        if owner is not None:
+        if owned:
             problems.append(
-                f"{CONFIG}: owner {rel} has its own test; remove it"
+                f"{rel}: has its own test, so its `Tested by:` lines are"
+                " redundant"
             )
         return Decision(rel, "source", "tested", natural[0], tests=natural[1])
-    if owner is not None:
-        return Decision(rel, "source", "tested", "owner", tests=owner.tests)
+    if owned:
+        return Decision(rel, "source", "tested", "owner", tests=owned)
     if marker is not None:
         if exemption is not None or built_in is not None:
             problems.append(
@@ -216,16 +222,6 @@ def _stale_declarations(context: _Context, used: set[Exemption]) -> list[str]:
             problems.append(
                 f"{CONFIG}: test_root {test_root.tests} holds no test; remove it"
             )
-    for owner in context.policy.owners:
-        if owner.source not in context.checked or owner.source in context.tests:
-            problems.append(
-                f"{CONFIG}: owner {owner.source} is not a source file; remove it"
-            )
-        problems.extend(
-            f"{CONFIG}: owner {owner.source} names {test}, which is not a test file"
-            for test in owner.tests
-            if test not in context.tests
-        )
     problems.extend(
         f"{CONFIG}: exempt {e.path} excuses no untested source; remove it"
         for e in context.policy.exemptions

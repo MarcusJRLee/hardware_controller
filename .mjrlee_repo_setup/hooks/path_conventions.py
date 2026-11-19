@@ -1,3 +1,5 @@
+# Tested by: agents/skills/mjrlee-repo-setup/kit/hooks/markdown_placement_test.py.
+# Tested by: agents/skills/mjrlee-repo-setup/kit/hooks/warn_dashed_names_test.py.
 """Path layouts a spec fixes, shared so the naming and Markdown rules agree."""
 
 from __future__ import annotations
