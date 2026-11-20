@@ -1,3 +1,5 @@
+// Tested by: Tests/HardwareControllerCoreTests/profile_edit_test.swift.
+// Tested by: Tests/HardwareControllerAppTests/application_runtime_test.swift.
 import Foundation
 import HardwareControllerCore
 import SwiftUI

@@ -1,3 +1,4 @@
+// Tested by: Tests/HardwareControllerMacTests/transcript_writer_tests.swift.
 import AppKit
 @preconcurrency import ApplicationServices
 import Foundation

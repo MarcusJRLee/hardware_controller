@@ -1,3 +1,4 @@
+// Tested by: Tests/HardwareControllerAppTests/speech_engine_model_test.swift.
 import HardwareControllerCore
 import SwiftUI
 

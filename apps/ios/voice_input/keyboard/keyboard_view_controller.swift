@@ -1,3 +1,5 @@
+// Tested by: apps/ios/voice_input/tests/voice_input_keyboard_policy_test.swift.
+// Tested by: apps/ios/voice_input/tests/voice_input_keyboard_layout_test.swift.
 import UIKit
 import VoiceInputShared
 

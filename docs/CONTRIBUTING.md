@@ -22,8 +22,10 @@ opening the package in Xcode, run `scripts/build_rust_ffi.sh` once.
 - A same-stem test for every file with behavioral logic: colocated
   `FILENAME_test.EXT`, `<stem>_test(s).swift` in a SwiftPM or Voice Input test
   target, or Rust `#[cfg(test)]`. The kit's `test_ownership.py` enforces it;
-  `.mjrlee_repo_setup/test_ownership.toml` names a differently named owning
-  test (`[[owner]]`) or an exemption kind (`[[exempt]]`) for the rest.
+  for the rest, a source names a differently named owning test with a
+  `// Tested by: <test>.` header line, or
+  `.mjrlee_repo_setup/test_ownership.toml` names an exemption kind
+  (`[[exempt]]`).
   `scripts/check_conventions.sh` rejects dashed paths, non-Foundation imports
   in the domain, and network APIs outside the Ollama adapter. `.swift-format` rejects force unwraps, `try!`, and
   implicitly unwrapped optionals.

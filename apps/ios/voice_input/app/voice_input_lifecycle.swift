@@ -1,3 +1,4 @@
+// Tested by: apps/ios/voice_input/tests/voice_input_lifecycle_policy_test.swift.
 import Foundation
 
 enum VoiceInputCaptureInterruptionReason: String, Codable, Equatable, Sendable {

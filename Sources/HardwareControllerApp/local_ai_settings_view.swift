@@ -1,3 +1,5 @@
+// Tested by: Tests/HardwareControllerAppTests/application_preferences_test.swift.
+// Tested by: Tests/HardwareControllerAppTests/local_ai_pipeline_presentation_test.swift.
 import HardwareControllerCore
 import SwiftUI
 

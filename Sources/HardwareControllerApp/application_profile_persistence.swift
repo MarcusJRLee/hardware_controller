@@ -1,3 +1,4 @@
+// Tested by: Tests/HardwareControllerCoreTests/profile_store_tests.swift.
 import Foundation
 import HardwareControllerCore
 

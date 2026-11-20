@@ -1,3 +1,4 @@
+// Tested by: Tests/HardwareControllerAppTests/application_preferences_test.swift.
 import HardwareControllerCore
 import SwiftUI
 

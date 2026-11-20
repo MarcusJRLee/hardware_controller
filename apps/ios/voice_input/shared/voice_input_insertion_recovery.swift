@@ -1,3 +1,4 @@
+// Tested by: apps/ios/voice_input/tests/voice_input_insertion_recovery_policy_test.swift.
 import Foundation
 
 public enum VoiceInputInsertionRecoveryAction: Equatable, Sendable {

@@ -1,3 +1,4 @@
+// Tested by: Tests/HardwareControllerCoreTests/voice_casing_policy_test.swift.
 import Foundation
 
 public enum VoiceCasingPolicy:

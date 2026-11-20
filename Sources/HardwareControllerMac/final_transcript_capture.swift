@@ -1,3 +1,5 @@
+// Tested by: Tests/HardwareControllerMacTests/ask_gemini_controller_test.swift.
+// Tested by: Tests/HardwareControllerMacTests/local_ai_dictation_controller_test.swift.
 import Foundation
 import HardwareControllerCore
 

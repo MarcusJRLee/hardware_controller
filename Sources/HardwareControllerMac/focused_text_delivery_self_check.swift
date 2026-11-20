@@ -1,3 +1,4 @@
+// Tested by: Tests/HardwareControllerMacTests/focused_text_target_tests.swift.
 import AppKit
 @preconcurrency import ApplicationServices
 import Foundation

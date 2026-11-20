@@ -1,3 +1,4 @@
+// Tested by: Tests/HardwareControllerMacTests/transcribe_cpp_speech_engine_test.swift.
 import Darwin
 import Foundation
 import HardwareControllerASRProtocol
