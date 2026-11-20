@@ -6,8 +6,8 @@
     ... roadmap.py claim [<slug>]             # Claim it (default: `next`'s).
     ... roadmap.py list|next|claim --area apps/mac  # One area plus repo-wide.
     ... roadmap.py claim <slug> --base origin/<branch>  # Stack on an open PR.
-    ... roadmap.py new <slug> --title T [--priority P2] [--executor human]
-                          [--area <dir>] [--before <slug> | --after <slug>]
+    ... roadmap.py new <slug> --title T [--executor human] [--area <dir>]
+                          [--priority P2 | --before <slug> | --after <slug>]
     ... roadmap.py move <slug> (--before <slug> | --after <slug>)
     ... roadmap.py check                      # Validate; for the repo gate.
 
@@ -875,12 +875,15 @@ def run(root: Path, argv: Sequence[str]) -> str:
     for name in ("new", "move"):
         p = sub.add_parser(name)
         p.add_argument("slug")
+        # Placing next to an item takes that item's priority, so `new` rejects
+        # `--priority` alongside an anchor instead of silently dropping it.
         where = p.add_mutually_exclusive_group(required=name == "move")
-        where.add_argument("--before")
-        where.add_argument("--after")
+        anchor_help = "place next to this item, taking its priority"
+        where.add_argument("--before", help=anchor_help)
+        where.add_argument("--after", help=anchor_help)
         if name == "new":
             p.add_argument("--title", required=True)
-            p.add_argument("--priority", choices=PRIORITIES, default="P2")
+            where.add_argument("--priority", choices=PRIORITIES, default="P2")
             p.add_argument("--executor", choices=EXECUTORS, default="agent")
             p.add_argument("--area", help="the directory the item belongs to")
     args = parser.parse_args(argv)
