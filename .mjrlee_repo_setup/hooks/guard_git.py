@@ -4,6 +4,7 @@ The [Git] rules run as git hooks (`push_rules.py`, `worktree_rules.py`), where
 git supplies the real refs and paths, so no shell parsing is needed there. This
 hook only denies, by plain text match, the few ways to switch those hooks off;
 merging a PR through GitHub's API, which would skip the repo's merge command;
+`gh pr merge --delete-branch`, which closes PRs stacked on the merged branch;
 renaming or deleting the default branch locally (`default_branch_rule.py`);
 and the commands `repo.toml` (`repo_config.py`) `[replace]`s, such as
 `gh pr merge` where the repo merges through its own script. Where `repo.toml`
@@ -87,6 +88,12 @@ API_MERGES: Final = (
     ),
 )
 MERGE: Final = "gh pr merge"
+# `--delete-branch`, or `-d` alone or among the boolean short flags (`-sd`).
+# `--delete-branch=false` deletes nothing, so it passes.
+DELETE_BRANCH_MERGE: Final = re.compile(
+    r"\bgh\s+pr\s+merge\b[^\n;&|]*?\s"
+    r"(?:--delete-branch(?!=f)\b|-[mrs]*d[mrs]*(?![\w-]))"
+)
 
 
 def _config(cwd: Path) -> RepoConfig | None:
@@ -133,6 +140,25 @@ def find_api_merge(cwd: Path, command: str) -> str | None:
         f"repo's merge command. Merge with `{merge}`; to check whether a PR "
         "merged, run `gh pr view <n> --json state,mergedAt`. If this is only "
         "text, pass it from a file."
+    )
+
+
+def find_delete_branch_merge(command: str) -> str | None:
+    """Return why `command` is denied for deleting the merged branch, or None.
+
+    Kit repos set `delete_branch_on_merge` (`github_settings.py`): GitHub then
+    deletes the branch itself and first retargets PRs stacked on it to the
+    base. `--delete-branch` deletes the ref from the client instead, racing
+    that retarget, and GitHub closes the stacked PRs for good.
+    """
+
+    if not DELETE_BRANCH_MERGE.search(command):
+        return None
+    return (
+        "Blocked: `gh pr merge --delete-branch` deletes the branch before "
+        "GitHub retargets PRs stacked on it, which closes them. Merge without "
+        "it; the repo's `delete_branch_on_merge` deletes the branch and "
+        "retargets stacked PRs. If this is only text, pass it from a file."
     )
 
 
@@ -190,6 +216,7 @@ def main() -> int:
         or find_api_merge(event.cwd, command)
         or find_default_branch_change(event.cwd, command)
         or find_replaced(event.cwd, command)
+        or find_delete_branch_merge(command)
     )
     if denied is not None:
         print(deny_output(event, denied))

@@ -1,3 +1,4 @@
+// Tested by: Tests/HardwareControllerCoreTests/voice_spoken_edit_engine_test.swift.
 public enum VoiceSpokenEditOperationKind:
   String,
   Codable,

@@ -1,3 +1,4 @@
+// Tested by: Tests/hardware_controller_voice_ffi_tests/voice_history_retention_planner_test.swift.
 import Foundation
 
 public enum VoiceHistoryRetentionValidationError:

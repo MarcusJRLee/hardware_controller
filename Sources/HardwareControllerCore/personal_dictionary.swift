@@ -1,3 +1,4 @@
+// Tested by: Tests/HardwareControllerCoreTests/local_ai_dictation_tests.swift.
 import Foundation
 
 public struct PersonalDictionaryReplacement:

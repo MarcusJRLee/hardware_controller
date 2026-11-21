@@ -1,3 +1,5 @@
+// Tested by: Tests/HardwareControllerCoreTests/binding_engine_tests.swift.
+// Tested by: Tests/HardwareControllerCoreTests/profile_tests.swift.
 import Foundation
 
 /// Stable identity for one physical attachment.

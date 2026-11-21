@@ -1,3 +1,5 @@
+// Tested by: apps/ios/voice_input/tests/voice_input_dictation_presentation_test.swift.
+// Tested by: apps/ios/voice_input/ui_tests/voice_input_ui_test.swift.
 import SwiftUI
 import VoiceInputShared
 

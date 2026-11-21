@@ -1,3 +1,4 @@
+// Tested by: Tests/HardwareControllerCoreTests/voice_formatted_document_builder_test.swift.
 public enum VoiceStyleKind:
   String,
   CaseIterable,

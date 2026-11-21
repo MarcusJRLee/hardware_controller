@@ -1,3 +1,4 @@
+// Tested by: apps/ios/voice_input/tests/voice_input_delivery_target_policy_test.swift.
 import Foundation
 
 public struct VoiceInputDeliveryTarget: Equatable, Sendable {

@@ -1,3 +1,4 @@
+// Tested by: Tests/HardwareControllerCoreTests/profile_tests.swift.
 import AppKit
 import HardwareControllerCore
 import SwiftUI

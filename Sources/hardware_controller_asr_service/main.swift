@@ -1,3 +1,4 @@
+// Tested by: Tests/hardware_controller_asr_service_kit_tests/asr_service_core_test.swift.
 import Foundation
 import HardwareControllerASRServiceKit
 

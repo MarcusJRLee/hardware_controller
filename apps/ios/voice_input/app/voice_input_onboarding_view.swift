@@ -1,3 +1,4 @@
+// Tested by: apps/ios/voice_input/tests/voice_input_onboarding_policy_test.swift.
 import SwiftUI
 import VoiceInputShared
 

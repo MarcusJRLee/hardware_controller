@@ -1,3 +1,4 @@
+// Tested by: Tests/HardwareControllerAppTests/voice_history_model_test.swift.
 import AppKit
 import HardwareControllerCore
 import HardwareControllerMac

@@ -1,3 +1,5 @@
+// Tested by: Tests/HardwareControllerCoreTests/ask_gemini_panel_layout_test.swift.
+// Tested by: Tests/HardwareControllerMacTests/ask_gemini_chat_test.swift.
 import AppKit
 import CoreGraphics
 import HardwareControllerCore

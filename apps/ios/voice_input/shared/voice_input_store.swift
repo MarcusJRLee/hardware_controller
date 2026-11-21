@@ -1,3 +1,4 @@
+// Tested by: apps/ios/voice_input/tests/voice_input_keychain_store_test.swift.
 import Foundation
 
 public struct VoiceInputCommand: Codable, Equatable, Sendable {

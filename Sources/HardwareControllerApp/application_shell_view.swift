@@ -1,3 +1,5 @@
+// Tested by: Tests/HardwareControllerAppTests/app_model_test.swift.
+// Tested by: Tests/HardwareControllerAppTests/application_navigation_test.swift.
 import SwiftUI
 
 /// Hosts the three durable destinations in one native macOS window.

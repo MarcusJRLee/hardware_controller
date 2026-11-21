@@ -1,3 +1,4 @@
+// Tested by: apps/ios/voice_input/tests/voice_input_host_field_policy_test.swift.
 import UIKit
 
 public enum VoiceInputHostFieldKind:

@@ -1,3 +1,4 @@
+// Tested by: Tests/HardwareControllerAppTests/app_model_test.swift.
 import AppKit
 import HardwareControllerCore
 import HardwareControllerMac
