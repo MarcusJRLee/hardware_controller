@@ -1,5 +1,5 @@
 {
-  "kit_version": "748bb66ce2435f67",
+  "kit_version": "2c56137b98587e88",
   "units": {
     "file:.mjrlee_repo_setup/hooks/default_branch_rule.py": "b7f677ba552a7536e40e9b3c59fa8adf8147836544045d0d80c9c7b12f975bc7",
     "file:.mjrlee_repo_setup/hooks/docker_labels.py": "2f0ad0482683b780f13b2455529291aed8a51087b2a38215f7b6befe6cda730f",
@@ -13,7 +13,7 @@
     "file:.mjrlee_repo_setup/hooks/guard_git.py": "0a8dd3963db466107741050d599d6f898bf10d0def7624948ab47bdb9b793899",
     "file:.mjrlee_repo_setup/hooks/guard_pr_body.py": "305e67d8c5b4756e2301c798331ecb252e455e7426a00fb6898d4a0ac2043838",
     "file:.mjrlee_repo_setup/hooks/hook_event.py": "9a53be7450b22340eface88c79a53da075d4dacff50b127ee986b5f0e2330c40",
-    "file:.mjrlee_repo_setup/hooks/kit_drift.py": "695c579e33557d28720119135de68d915c5810abb350beabf23a057b778aaa60",
+    "file:.mjrlee_repo_setup/hooks/kit_drift.py": "f960d9257b3bddcf9f44cc00f1f306f556db73be29053003625733f18be9a19b",
     "file:.mjrlee_repo_setup/hooks/launch_rule.py": "b17353f1dcd15249b1cb7103f0627c5088301bb025adc80df6afb1dff1029aa9",
     "file:.mjrlee_repo_setup/hooks/lefthook_rc.sh": "0977a9dce5bc73711997ca8837ef647bf4691ca91b7f251bac0b8c724379522c",
     "file:.mjrlee_repo_setup/hooks/machine_load.py": "56a2113477b367c659d592ceba7adf771ffa825519d724e3b83f5e8cd3e421a5",
@@ -36,7 +36,7 @@
     "file:.mjrlee_repo_setup/hooks/warn_markdown_placement.py": "48aaf4e88c228e72814189532378c3538f6108df1f9b6eac51e303bf51a9eed1",
     "file:.mjrlee_repo_setup/hooks/worktree_home.py": "c77c6b22a59ee290fa1c62ceae02cec55af7a6801602895118be6dd92a22c36d",
     "file:.mjrlee_repo_setup/hooks/worktree_rules.py": "5d4a6ff9077f082ec3ce42b29f7b7329ac5bdd5afadeaa8f40b8dbe16065ad93",
-    "file:.mjrlee_repo_setup/tools/merge_pr.py": "2150c259103d17e280b20afe4cb23c78bc761c319a692842b7fca15bd7daab2f",
+    "file:.mjrlee_repo_setup/tools/merge_pr.py": "ffdd4e9ba71977251cdd60f2b06699bc062e0ca18c78e4744ae19e52645a7af5",
     "file:.mjrlee_repo_setup/tools/roadmap.py": "b174804b663b313f408a4edac6c0510c8f5168a8d6c43ab6525e0e68016c810a",
     "file:.mjrlee_repo_setup/lefthook.yml": "bcb0b17a36da14517af8b9fe3b9c29f1488edd0923896ebfadbf0a0e8b74a72b",
     "file:.lefthook/post-checkout/mjrlee_setup_checkout.sh": "e9731d3280c42fb9246927581be2449726e7a9d83d45c90954ed83242b9657a2",
