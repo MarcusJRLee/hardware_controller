@@ -9,8 +9,11 @@ renaming or deleting the default branch locally (`default_branch_rule.py`);
 and the commands `repo.toml` (`repo_config.py`) `[replace]`s, such as
 `gh pr merge` where the repo merges through its own script. Where `repo.toml`
 declares quiet hours, it also denies commits, pushes, and GitHub writes inside
-them, and hand-set commit dates at any time (`quiet_commands.py`). Blocks by printing
-an explicit JSON deny decision, which Claude Code and Codex both honor.
+them, and hand-set commit dates at any time (`quiet_commands.py`). Rules that read
+`repo.toml` or git apply in the session's directory and in each one the command
+moves to (`shell_split.target_dirs`), so `cd <repo> && …` and `git -C <repo>`
+meet that repo's rules. Blocks by printing an explicit JSON deny decision,
+which Claude Code and Codex both honor.
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ from hook_event import deny_output, parse_event
 from quiet_commands import date_override, recorded_write
 from quiet_hours_rule import DATED_HINT, now_blocked
 from repo_config import CONFIG, RepoConfig, RepoConfigError, load
+from shell_split import target_dirs
 
 # (pattern, what it does). Matching is textual, so a commit message or PR body
 # that merely mentions one is caught too; BYPASS_HINT says how to pass it.
@@ -204,6 +208,27 @@ def find_replaced(cwd: Path, command: str) -> str | None:
     )
 
 
+def find_repo_rule(cwd: Path, command: str, now: datetime) -> str | None:
+    """Return why a repo-specific rule denies `command`, or None.
+
+    The whole command is checked in every directory it reaches, not each part
+    in its own: a rule then never misses text that splitting drops, such as a
+    heredoc body, at the cost of denying a command that only reads one repo
+    while writing another.
+    """
+
+    for where in target_dirs(cwd, command):
+        denied = (
+            find_quiet(where, command, now)
+            or find_api_merge(where, command)
+            or find_default_branch_change(where, command)
+            or find_replaced(where, command)
+        )
+        if denied is not None:
+            return denied
+    return None
+
+
 def main() -> int:
     event = parse_event(sys.stdin.read())
     command = event.command or ""
@@ -211,13 +236,9 @@ def main() -> int:
     if why is not None:
         print(deny_output(event, f"Blocked: {why}. {BYPASS_HINT}"))
         return 0
-    denied = (
-        find_quiet(event.cwd, command, datetime.now(UTC))
-        or find_api_merge(event.cwd, command)
-        or find_default_branch_change(event.cwd, command)
-        or find_replaced(event.cwd, command)
-        or find_delete_branch_merge(command)
-    )
+    denied = find_repo_rule(
+        event.cwd, command, datetime.now(UTC)
+    ) or find_delete_branch_merge(command)
     if denied is not None:
         print(deny_output(event, denied))
     return 0
