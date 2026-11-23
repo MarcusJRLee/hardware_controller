@@ -1,7 +1,7 @@
 # Builds, versions, and workflow
 
 - **Status:** Accepted
-- **Updated:** 2026-11-17 (Markdown-only changes skip the install)
+- **Updated:** 2026-11-23 (CI targets PR feedback in under 5 minutes)
 - **Replaces:** 0019, 0023, 0051, 0052, 0059
 
 ## Context
@@ -25,6 +25,22 @@ passed locally and failed only in CI.
 | -------------------------- | ------------------------------------ | ------------------------------ |
 | Drift caught before push   | 🟠 Known patterns only.              | 🟢 All.                        |
 | Local disk and upkeep      | 🟢 None added.                       | 🔴 A second install to update.  |
+
+On 2026-11-23 a full-lane PR waited 19 to 51 minutes for CI. Measured from 40
+runs: CodeQL (macos) p50 23.5 min (20 of it the traced `swift build`), CodeQL
+(ios) 22.9, iOS 17.9 (Rust 3.5, `build-for-testing` 3, tests 8), macOS Verify
+6 to 8 (debug build 1.7, release build 1.6 and again 1.3 in `build_app.sh`),
+and macOS queueing 0.8. Free macOS runners have 3 cores, and an account runs
+at most 5 macOS jobs at once.
+
+| Criterion                     | Warm, parallel, change-scoped free runners | Larger paid runners | Self-hosted runner on the maintainer's Mac | Slow checks after merge only |
+| ----------------------------- | ------------------------------------------ | ------------------- | ------------------------------------------ | ---------------------------- |
+| Reaches 5 minutes             | 🟡 Plausible; CodeQL needs proof.          | 🔴 CodeQL ~12 min.  | 🟢 Fast, always warm.                      | 🟢 Yes.                      |
+| Cost                          | 🟢 None.                                   | 🔴 ~$0.16/min.      | 🟢 None.                                   | 🟢 None.                     |
+| Public-repo safety            | 🟢 Isolated VMs.                           | 🟢 Isolated VMs.    | 🔴 PR code runs on a personal machine.     | 🟢 Isolated VMs.             |
+| Every merged tree verified    | 🟢 Yes.                                    | 🟢 Yes.             | 🟢 Yes.                                    | 🔴 Main can break.           |
+| Self-contained, reproducible  | 🟢 Clean VM per job.                       | 🟢 Clean VM.        | 🔴 One machine's state.                    | 🟢 Clean VM.                 |
+| Upkeep                        | 🟠 Caches and lane scripts.                | 🟢 Config only.     | 🔴 A machine to keep online.               | 🟡 A second pipeline.        |
 
 ## Decision
 
@@ -118,6 +134,12 @@ passed locally and failed only in CI.
   35 minutes or not gated by `changes`, an Ubuntu job over 15 minutes, or a
   workflow that does not cancel superseded runs. A weekly health workflow fails
   when a job's p50 passes 70% of its timeout (`scripts/ci_durations.sh`).
+- Every PR gets full CI feedback, from its run's creation to its last CI or
+  CodeQL job, in under 5 minutes at p95, on free runners: builds start from
+  caches saved on `main`, Verify splits into parallel lanes, and Swift CodeQL
+  on a PR traces only changed targets. Each macOS job gets 3.5 minutes, leaving
+  1.5 for classification and queueing, and a full-lane PR uses at most 5 macOS
+  jobs. Until the `ci_*` roadmap items land, current durations exceed this.
 
 ## Consequences
 
