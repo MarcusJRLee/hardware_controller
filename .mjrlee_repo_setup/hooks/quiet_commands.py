@@ -16,6 +16,8 @@ from collections.abc import Iterator, Sequence
 from pathlib import PurePosixPath
 from typing import Final
 
+from shell_split import Tool, drop_global_options
+
 # Shell operators that start a new simple command.
 _SEPARATORS: Final = re.compile(r"&&|\|\||[;|&\n()]")
 # Git subcommands that create a commit object, dated now.
@@ -36,11 +38,6 @@ GIT_WRITES: Final = frozenset(
 _ANNOTATED_TAG: Final = frozenset(
     {"-a", "-s", "-m", "-F", "--annotate", "--sign", "--message", "--file"}
 )
-# Global options that take a separate value: `git -C dir`, `gh -R repo`.
-_GIT_VALUE_OPTIONS: Final = frozenset(
-    {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}
-)
-_GH_VALUE_OPTIONS: Final = frozenset({"-R", "--repo", "--hostname"})
 # `gh` groups that never write to a repository's GitHub record.
 GH_READ_GROUPS: Final = frozenset(
     {
@@ -98,17 +95,13 @@ def _words(command: str) -> Iterator[list[str]]:
             yield words
 
 
-def _after(words: Sequence[str], tool: str) -> Iterator[list[str]]:
+def _after(words: Sequence[str], tool: Tool) -> Iterator[list[str]]:
     """Yield the arguments after each `tool` word, global options dropped."""
 
-    takes_value = _GIT_VALUE_OPTIONS if tool == "git" else _GH_VALUE_OPTIONS
     for n, word in enumerate(words):
         if PurePosixPath(word).name != tool:
             continue
-        rest = list(words[n + 1 :])
-        while rest and rest[0].startswith("-"):
-            rest = rest[2:] if rest[0] in takes_value else rest[1:]
-        if rest:
+        if rest := drop_global_options(tool, words[n + 1 :]):
             yield rest
 
 

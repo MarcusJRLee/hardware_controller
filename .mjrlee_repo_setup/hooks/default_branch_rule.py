@@ -16,15 +16,12 @@ from pathlib import Path
 from typing import Final
 
 import git_queries
+from shell_split import GIT_VALUE_OPTIONS
 
 SEPARATORS: Final = ";&|()\n"
 # Words that run the command after them, with their own options.
 WRAPPERS: Final = frozenset(
     {"command", "env", "exec", "nice", "nohup", "sudo", "time"}
-)
-# Git's global options that take the next word as their value.
-GIT_VALUE_OPTIONS: Final = frozenset(
-    {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"}
 )
 # `git branch` options that take the next word as their value.
 BRANCH_VALUE_OPTIONS: Final = frozenset(
