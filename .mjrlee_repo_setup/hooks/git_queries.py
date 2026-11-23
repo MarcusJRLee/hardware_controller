@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -45,6 +46,22 @@ def run_git(cwd: Path, *args: str, timeout: float | None = None) -> str | None:
 def repo_root(cwd: Path) -> Path | None:
     root = run_git(cwd, "rev-parse", "--show-toplevel")
     return Path(root).resolve() if root else None
+
+
+# `owner/name` at the end of a remote URL or a `gh -R` value, `.git` dropped.
+_SLUG: Final = re.compile(r"(?:^|[:/])([^/:]+/[^/:]+?)(?:\.git)?/?$")
+
+
+def slug(value: str) -> str | None:
+    """`owner/name`, lowercased, from a remote URL, `HOST/owner/name`, or itself."""
+
+    match = _SLUG.search(value.strip())
+    return str(match[1]).lower() if match else None
+
+
+def origin_slug(cwd: Path) -> str | None:
+    url = run_git(cwd, "remote", "get-url", "origin")
+    return slug(url) if url else None
 
 
 def main_checkout(cwd: Path) -> Path | None:

@@ -37,9 +37,9 @@ LOCK_PATH: Final = ".mjrlee_repo_setup/kit.lock"
 FILE_KEY: Final = "file:"
 FIX: Final = (
     "Kit files are generated, so never edit them in place: restore each one"
-    " (`git restore --source=HEAD --staged --worktree -- <path>` when HEAD is"
-    " clean), or re-install the kit from the mjrlee-repo-setup skill with"
-    " `uv run python scripts/sync_repo_kit.py <repo> --force`. A formatter or"
+    " from a commit where it matches the lock"
+    " (`git restore --source=HEAD --staged --worktree -- <path>`, or"
+    " `--source=origin/HEAD` when HEAD has the edit). A formatter or"
     " linter given explicit paths may skip its excludes: pass its"
     " force-exclude flag (ruff: `--force-exclude`)."
 )

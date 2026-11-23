@@ -9,13 +9,18 @@ renaming or deleting the default branch locally (`default_branch_rule.py`);
 and the commands `repo.toml` (`repo_config.py`) `[replace]`s, such as
 `gh pr merge` where the repo merges through its own script. Where `repo.toml`
 declares quiet hours, it also denies commits, pushes, and GitHub writes inside
-them, and hand-set commit dates at any time (`quiet_commands.py`). Blocks by printing
-an explicit JSON deny decision, which Claude Code and Codex both honor.
+them, and hand-set commit dates at any time (`quiet_commands.py`). Rules that read
+`repo.toml` or git apply in the session's directory and in each one the command
+moves to (`shell_split.target_dirs`), so `cd <repo> && …` and `git -C <repo>`
+meet that repo's rules; a GitHub write aimed at another repo with `gh -R` or
+`GH_REPO` must run from that repo's checkout. Blocks by printing an explicit JSON deny decision,
+which Claude Code and Codex both honor.
 """
 
 from __future__ import annotations
 
 import re
+import shlex
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -27,6 +32,12 @@ from hook_event import deny_output, parse_event
 from quiet_commands import date_override, recorded_write
 from quiet_hours_rule import DATED_HINT, now_blocked
 from repo_config import CONFIG, RepoConfig, RepoConfigError, load
+from shell_split import (
+    bare_commands,
+    command_args,
+    simple_commands,
+    target_dirs,
+)
 
 # (pattern, what it does). Matching is textual, so a commit message or PR body
 # that merely mentions one is caught too; BYPASS_HINT says how to pass it.
@@ -194,7 +205,11 @@ def find_replaced(cwd: Path, command: str) -> str | None:
     """Return why `command` is denied in favor of the repo's own, or None."""
 
     config = _config(cwd)
-    replacement = config.replacement_for(command) if config else None
+    if config is None:
+        return None
+    replacement = config.replacement_for(command) or next(
+        filter(None, map(config.replacement_for, bare_commands(command))), None
+    )
     if replacement is None:
         return None
     return (
@@ -202,6 +217,85 @@ def find_replaced(cwd: Path, command: str) -> str | None:
         f"`{' '.join(replacement.words)}` ({CONFIG}). If this is only "
         "text, pass it from a file."
     )
+
+
+def _gh_repo(words: list[str], exported: str | None) -> str | None:
+    """The repo a `gh` call names with `-R`, `--repo`, or `GH_REPO`, or None."""
+
+    args = command_args(words, "gh")
+    if args is None:
+        return None
+    value = exported
+    for word in words[: len(words) - len(args)]:
+        if word.startswith("GH_REPO="):
+            value = word.partition("=")[2]
+    rest = iter(args)
+    for word in rest:
+        if word in ("-R", "--repo"):
+            value = next(rest, "")
+        elif word.startswith("--repo="):
+            value = word.partition("=")[2]
+        elif word.startswith("-R") and len(word) > 2:
+            value = word[2:]
+    return git_queries.slug(value) if value else None
+
+
+def find_foreign_write(cwd: Path, command: str) -> str | None:
+    """Return why a GitHub write aimed at another repo is denied, or None.
+
+    `gh -R <owner>/<name>` and `GH_REPO` send a write to a repo whose
+    `repo.toml` is in no directory the command reaches, so its quiet hours and
+    `[replace]` would go unread. Reads pass; a write passes from a directory
+    whose origin is that repo, where `find_repo_rule` reads its rules.
+    """
+
+    try:
+        commands = list(simple_commands(command))
+    except ValueError:
+        return None
+    exported: str | None = None
+    for words in commands:
+        if words[0] == "export":
+            for word in words[1:]:
+                if word.startswith("GH_REPO="):
+                    exported = word.partition("=")[2]
+            continue
+        target = _gh_repo(words, exported)
+        write = recorded_write(shlex.join(words)) if target else None
+        if target is None or write is None:
+            continue
+        reached = {
+            git_queries.origin_slug(d) for d in target_dirs(cwd, command)
+        }
+        if target not in reached:
+            return (
+                f"Blocked: {write} in {target}, a repo this command does not "
+                f"run in, so its {CONFIG} rules go unchecked. Run it from that "
+                "repo's checkout (`cd <checkout> && …`). If this is only text, "
+                "pass it from a file."
+            )
+    return None
+
+
+def find_repo_rule(cwd: Path, command: str, now: datetime) -> str | None:
+    """Return why a repo-specific rule denies `command`, or None.
+
+    The whole command is checked in every directory it reaches, not each part
+    in its own: a rule then never misses text that splitting drops, such as a
+    heredoc body, at the cost of denying a command that only reads one repo
+    while writing another.
+    """
+
+    for where in target_dirs(cwd, command):
+        denied = (
+            find_quiet(where, command, now)
+            or find_api_merge(where, command)
+            or find_default_branch_change(where, command)
+            or find_replaced(where, command)
+        )
+        if denied is not None:
+            return denied
+    return None
 
 
 def main() -> int:
@@ -212,10 +306,8 @@ def main() -> int:
         print(deny_output(event, f"Blocked: {why}. {BYPASS_HINT}"))
         return 0
     denied = (
-        find_quiet(event.cwd, command, datetime.now(UTC))
-        or find_api_merge(event.cwd, command)
-        or find_default_branch_change(event.cwd, command)
-        or find_replaced(event.cwd, command)
+        find_repo_rule(event.cwd, command, datetime.now(UTC))
+        or find_foreign_write(event.cwd, command)
         or find_delete_branch_merge(command)
     )
     if denied is not None:
